@@ -1,0 +1,16 @@
+[workspace]
+members = ["crates/launcher-core", "src-tauri"]
+default-members = ["crates/launcher-core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+panic = "abort"
+strip = true
+codegen-units = 1

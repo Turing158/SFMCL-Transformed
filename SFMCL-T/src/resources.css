@@ -1,0 +1,2127 @@
+@font-face {
+  font-family: StarFallMinecraftTypes;
+  src: url("/assets/icons/starfall-types.ttf") format("truetype");
+  font-display: block;
+}
+.minecraft-type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: StarFallMinecraftTypes, "Microsoft YaHei", sans-serif;
+  font-size: 28px;
+  font-weight: normal;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--soft);
+}
+.resource-center {
+  container: resource-center / inline-size;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100%;
+}
+.resource-center-tabs {
+  margin: 0 0 20px;
+}
+.modpack-source {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.modpack-source > .helper {
+  margin: 0;
+  line-height: 1.5;
+}
+.modpack-source-path {
+  margin: 0;
+  min-width: 0;
+  color: var(--muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.modpack-source-path[data-selected] {
+  color: var(--ink);
+}
+.modpack-source-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.modpack-install-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  height: min(760px, calc(100dvh - 48px));
+}
+.modpack-install-dialog > header {
+  flex: 0 0 auto;
+}
+.modpack-install-dialog > .modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.modpack-install-form {
+  width: 100%;
+  min-height: 0;
+}
+.modpack-install-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+.modpack-install-form > .dialog-actions {
+  flex: 0 0 auto;
+}
+.modpack-source-actions > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.modpack-settings {
+  display: grid;
+  gap: 12px;
+}
+.modpack-settings > label:not(.modpack-optional) {
+  display: grid;
+  gap: 6px;
+}
+.modpack-optional {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.modpack-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.modpack-summary dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.modpack-summary dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.resource-center-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+.resource-catalog {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.resource-catalog[hidden],
+.catalog-header[hidden],
+.catalog-header > [hidden] {
+  display: none;
+}
+.resource-subpage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.resource-subpage-header {
+  min-width: 0;
+}
+.resource-subpage-header h1:focus {
+  outline: none;
+}
+.resource-subpage-body {
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-edge: var(--line);
+  --surface-fill: var(--panel);
+  --surface-depth: 1px;
+  min-width: 0;
+  padding: clamp(16px, 3cqw, 28px);
+}
+.resource-subpage-body.minecraft-config {
+  width: 100%;
+  max-width: 760px;
+}
+.resource-page-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+.minecraft-install.catalog-layout {
+  grid-template-areas: "toolbar" "results";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  gap: 18px;
+  min-width: 0;
+  margin: 0;
+}
+.minecraft-catalog-toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.minecraft-version-tabs.tabs {
+  flex: 1;
+  margin: 0;
+}
+.minecraft-source {
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-edge: var(--line);
+  --surface-fill: var(--panel);
+  --surface-depth: 0px;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px 0 38px;
+  font-size: 12px;
+}
+.minecraft-version-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.minecraft-version-heading > .resource-icon {
+  width: 52px;
+  height: 52px;
+}
+.minecraft-version-heading strong {
+  display: block;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.minecraft-version-heading small {
+  display: block;
+  margin-top: 6px;
+}
+.minecraft-install-options {
+  min-width: 0;
+}
+.minecraft-install-basics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.minecraft-install-basics > .field {
+  min-width: 0;
+}
+.minecraft-components-title {
+  margin: 12px 0 16px;
+}
+.minecraft-components-title h2 {
+  font-size: 16px;
+}
+.minecraft-components-title p,
+.minecraft-install-summary p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.minecraft-components-title p {
+  color: var(--muted);
+}
+.minecraft-components {
+  margin-inline: -3px;
+  overflow-anchor: none;
+}
+.install-component-presence {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-6px);
+  visibility: hidden;
+  transition:
+    grid-template-rows 240ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    visibility 0s 240ms;
+}
+.install-component-presence.is-visible {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+.install-component-presence-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.install-component-presence .install-component {
+  margin: 2px 3px 10px;
+}
+.install-component.has-surface {
+  --surface-fill: var(--panel);
+  --surface-depth: 2px;
+  min-width: 0;
+  transition: translate 180ms ease;
+}
+.install-component > .surface-frame::before,
+.install-component > .surface-frame::after,
+.install-component-option > .surface-frame::before,
+.install-component-option > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.install-component:hover {
+  --surface-edge: var(--surface-strong-line);
+  translate: 0 -2px;
+}
+.install-component.is-selected {
+  --surface-edge: var(--accent);
+  --surface-fill: var(--soft);
+}
+.install-component.is-blocked {
+  --surface-fill: var(--surface-well);
+}
+.install-component-heading {
+  display: flex;
+  align-items: center;
+}
+.install-component-toggle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  min-height: 86px;
+  padding: 14px 18px;
+  color: var(--ink);
+  text-align: left;
+}
+.install-component-toggle:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.install-component-toggle > img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  transition: transform 180ms ease;
+}
+.install-component-toggle:not(:disabled):hover > img {
+  transform: rotate(5deg) scale(1.08);
+}
+.install-component-copy {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.install-component-copy strong {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+.install-component-copy strong > svg {
+  color: var(--accent);
+}
+.install-component-copy small,
+.install-component-status {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.install-component.is-selected .install-component-copy small {
+  color: var(--ink);
+}
+.install-component-chevron {
+  flex-shrink: 0;
+  transition: transform 220ms ease;
+}
+.install-component-toggle[aria-expanded="true"] .install-component-chevron {
+  transform: rotate(180deg);
+}
+.install-component-clear.button {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px;
+  margin-right: 16px;
+}
+.install-component-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 220ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    opacity 180ms,
+    visibility 0s 220ms;
+}
+.install-component-expand.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.install-component-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.install-component-content {
+  padding: 0 14px 16px;
+}
+.install-component-content > .search-field {
+  margin: 4px 4px 10px;
+  width: auto;
+}
+.install-component-versions {
+  display: grid;
+  gap: 6px;
+  max-height: 270px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  scrollbar-width: thin;
+}
+.install-component-option.has-surface {
+  --surface-edge: transparent;
+  --surface-fill: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  min-height: 40px;
+  min-width: 0;
+  color: var(--ink);
+  text-align: left;
+}
+.install-component-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition: translate 180ms ease;
+}
+.install-component-option strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.install-component-option small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.install-component-option > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+  opacity: 0;
+  transition:
+    opacity 180ms,
+    transform 180ms;
+}
+.install-component-option[aria-checked="true"] {
+  --surface-fill: var(--panel);
+  --surface-edge: var(--accent);
+}
+.install-component-option[aria-checked="true"] > svg {
+  opacity: 1;
+}
+.install-component-option:is(:hover, :focus-visible) {
+  --surface-fill: var(--panel);
+  --surface-edge: var(--surface-strong-line);
+}
+.install-component-option:hover > span {
+  translate: 2px 0;
+}
+.install-component-option:active > svg {
+  transform: scale(0.85);
+}
+.install-component-loading,
+.install-component-error {
+  padding: 12px 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.install-component-loading {
+  animation: catalog-skeleton-pulse 1.6s ease-in-out infinite;
+}
+.install-component-more {
+  margin: 10px 4px 0;
+}
+.minecraft-install-summary {
+  margin-top: 24px;
+  overflow-wrap: anywhere;
+}
+.minecraft-install-summary > strong {
+  font-size: 13px;
+}
+.minecraft-install-summary > small {
+  display: block;
+  margin-top: 8px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+@container (max-width: 540px) {
+  .minecraft-install-basics {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .install-component-toggle {
+    padding: 12px;
+    gap: 10px;
+  }
+  .install-component-toggle > img {
+    width: 26px;
+    height: 26px;
+  }
+  .install-component-content {
+    padding-inline: 8px;
+  }
+}
+.minecraft-directory-empty {
+  flex-wrap: wrap;
+}
+.minecraft-directory-empty > .button {
+  margin-left: auto;
+}
+.catalog-header {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) 158px;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 20px;
+}
+.catalog-search {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  --surface-edge: var(--line);
+  --surface-fill: var(--panel);
+  --surface-depth: 0px;
+  filter: none;
+}
+/* Keep the shadow on decoration so transparent input text stays crisp. */
+.catalog-search > .surface-frame {
+  background: none;
+  clip-path: none;
+  filter: var(--pixel-search-shadow);
+  transition: filter 180ms ease;
+}
+.catalog-search:not(:has(input:disabled)):is(:hover, :focus-within) {
+  --surface-edge: var(--accent);
+}
+.catalog-search > .surface-frame::before,
+.catalog-search > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.catalog-search .pixel-search {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  border: 0 !important;
+  border-image: none !important;
+  background: none !important;
+  box-shadow: none;
+}
+/* The complete search bar owns motion; its nested field must not move twice. */
+.catalog-search .pixel-search,
+.catalog-search .pixel-search:is(:hover, :focus-within, :active) {
+  outline: none;
+  filter: none;
+  transform: none;
+}
+.catalog-search .pixel-search-input {
+  font-size: 12px;
+}
+.catalog-shortcut {
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 2px 5px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.catalog-search-submit {
+  display: grid;
+  place-items: center;
+  flex: 0 0 var(--button-height);
+  height: var(--button-height);
+  margin-left: 10px;
+  color: var(--muted);
+  border-left: 1px solid var(--line);
+}
+.catalog-search-submit:hover {
+  color: var(--accent);
+}
+.catalog-source {
+  position: relative;
+  min-width: 0;
+}
+.catalog-source > .resource-icon {
+  position: absolute;
+  width: 17px;
+  height: 17px;
+  z-index: 1;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 13px;
+  pointer-events: none;
+  background: none;
+  border-radius: 0;
+}
+.catalog-source .pixel-select-trigger {
+  padding-left: 38px;
+  font-size: 12px;
+}
+.catalog-view {
+  transition:
+    translate 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    transform 180ms ease,
+    color 180ms ease;
+}
+.catalog-view:is(:hover, :focus-visible):not(:disabled) {
+  --surface-fill: var(--soft);
+  --surface-edge: var(--accent);
+  color: var(--accent);
+  translate: 0 -2px;
+}
+.catalog-view:active:not(:disabled) {
+  translate: 0 0;
+  transition-duration: 90ms;
+}
+.catalog-view > .surface-frame,
+.catalog-view > .surface-frame::before,
+.catalog-view > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.catalog-view-symbol {
+  display: grid;
+  place-items: center;
+}
+.catalog-view-symbol > svg {
+  transition: transform 180ms ease;
+}
+.catalog-view:is(:hover, :focus-visible) .catalog-view-symbol > svg {
+  transform: rotate(8deg) scale(1.1);
+}
+.catalog-view:active .catalog-view-symbol > svg {
+  transform: scale(0.9);
+}
+.catalog-view-symbol.is-changing {
+  animation: catalog-view-change 220ms ease-out;
+}
+@keyframes catalog-view-change {
+  from {
+    opacity: 0;
+    transform: rotate(-20deg) scale(0.65);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+}
+.catalog-layout {
+  display: grid;
+  flex: 1;
+  grid-template-areas: "toolbar" "filters" "results";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  gap: 0;
+  align-items: start;
+}
+.catalog-sidebar {
+  display: contents;
+}
+.catalog-sidebar > .surface-frame {
+  display: none;
+}
+.catalog-toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin-bottom: 18px;
+}
+.catalog-result-count {
+  position: relative;
+  display: inline-grid;
+  min-width: 88px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  margin-right: auto;
+}
+.catalog-count-incoming {
+  animation: catalog-count-in 220ms cubic-bezier(0.22, 0.8, 0.25, 1) both;
+}
+.catalog-count-outgoing {
+  position: absolute;
+  inset: 0 auto auto 0;
+  pointer-events: none;
+  animation: catalog-count-out 160ms ease-out both;
+}
+@keyframes catalog-count-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes catalog-count-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.catalog-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.catalog-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: var(--button-height);
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.catalog-filter-toggle:hover,
+.catalog-filter-toggle[aria-expanded="true"] {
+  color: var(--accent);
+}
+.catalog-filter-toggle .badge {
+  padding: 0 5px;
+  font-size: 10px;
+}
+.catalog-filter-chevron {
+  transition: transform 240ms cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.catalog-filter-toggle[aria-expanded="true"] .catalog-filter-chevron {
+  transform: rotate(180deg);
+}
+.catalog-sort {
+  width: 128px;
+}
+.catalog-sort .pixel-select-trigger {
+  font-size: 12px;
+}
+.catalog-filters {
+  grid-area: filters;
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-bottom: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    grid-template-rows 240ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    margin-bottom 240ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    opacity 180ms ease,
+    visibility 0s linear 240ms;
+}
+.catalog-filters.is-open {
+  grid-template-rows: 1fr;
+  margin-bottom: 18px;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+.catalog-filters-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.catalog-filter-panel {
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-base: var(--surface-fill);
+  padding: 16px;
+  --surface-edge: var(--line);
+  --surface-fill: var(--surface-well);
+  --surface-depth: 0px;
+}
+.catalog-filter-fields {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.catalog-filter-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 130px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.catalog-filter-fields .pixel-input,
+.catalog-filter-fields .pixel-select-trigger {
+  width: 100%;
+  font-size: 12px;
+  color: var(--ink);
+}
+.catalog-reset {
+  min-height: var(--button-height);
+  color: var(--accent);
+  font-size: 11px;
+  padding: 0 8px;
+}
+.catalog-category-error {
+  color: var(--danger);
+  font-size: 11px;
+  min-height: var(--button-height);
+}
+.catalog-results {
+  grid-area: results;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  scroll-margin-top: 18px;
+}
+.catalog-pagination {
+  /* Sticky keeps its height in the flow so the last row can clear the bar. */
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 14px 8px;
+}
+.catalog-page-indicator {
+  --surface-shape: var(--corner-control);
+  --surface-shape-0: var(--corner-control-inset-0);
+  --surface-shape-1: var(--corner-control-inset-1);
+  --surface-shape-2: var(--corner-control-inset-2);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-fill: var(--surface-well);
+  --surface-edge: color-mix(
+    in srgb,
+    var(--surface-line),
+    var(--surface-well) 65%
+  );
+  --surface-depth: 0px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.catalog-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -2px 0 14px;
+}
+.catalog-active-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 9px;
+  min-height: var(--button-compact-height);
+  background: var(--soft);
+  color: var(--accent);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.catalog-projects {
+  display: grid;
+  gap: 11px;
+}
+.catalog-project {
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  --surface-shape: var(--corner-card);
+  --surface-shape-0: var(--corner-card-inset-0);
+  --surface-shape-1: var(--corner-card-inset-1);
+  --surface-shape-2: var(--corner-card-inset-2);
+  --surface-edge: var(--line);
+  --surface-fill: var(--panel);
+  --surface-depth: 1px;
+  transition: translate 180ms ease;
+}
+.catalog-project > .surface-frame::before,
+.catalog-project > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.catalog-project:hover,
+.catalog-project:has(:focus-visible) {
+  --surface-edge: var(--accent);
+  --surface-fill: color-mix(in srgb, var(--panel), var(--soft) 55%);
+  translate: 0 -2px;
+}
+.catalog-project-info {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  padding: 16px 19px;
+  gap: 16px;
+  min-width: 0;
+}
+.catalog-project-info:focus-visible {
+  outline-offset: -5px;
+}
+.catalog-project-info > .resource-icon {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+.catalog-project-copy {
+  min-width: 0;
+  flex: 1;
+}
+.catalog-project-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.catalog-project-title :is(h2, h3) {
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.catalog-project-title span {
+  color: var(--muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.catalog-project-copy p {
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 5px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.catalog-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+.catalog-tags .badge {
+  font-size: 10px;
+  color: var(--muted);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  transition:
+    transform 180ms ease,
+    color 180ms ease;
+}
+.catalog-tags .badge:hover {
+  transform: translateY(-2px);
+  color: var(--accent);
+}
+.catalog-project-footer {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 13px 19px 13px 6px;
+}
+.catalog-downloads {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.list .catalog-project:has(.catalog-project-meta) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.catalog-project-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 9px;
+}
+.catalog-project-meta .catalog-tags {
+  min-width: 0;
+  margin-top: 0;
+}
+.grid .catalog-project-meta {
+  grid-column: 1 / -1;
+  align-self: end;
+  margin-top: 0;
+}
+.grid .catalog-project-meta .catalog-tags {
+  grid-column: auto;
+}
+.catalog-projects.grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 17px;
+}
+.grid .catalog-project {
+  display: flex;
+  flex-direction: column;
+}
+.grid .catalog-project-info {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  flex: 1;
+  padding: 17px 20px;
+}
+.grid .catalog-project-copy {
+  display: contents;
+}
+.grid .catalog-project-title {
+  display: block;
+  min-width: 0;
+  align-self: center;
+}
+.grid .catalog-project-title span {
+  display: block;
+  margin-top: 5px;
+}
+.grid .catalog-project-copy p {
+  grid-column: 1 / -1;
+  min-height: 41px;
+  margin: 0;
+}
+.grid .catalog-tags {
+  grid-column: 1 / -1;
+  margin: 0;
+  align-self: end;
+}
+.grid .catalog-project-footer {
+  justify-content: space-between;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
+  margin: 0 2px;
+}
+/* Official versions use two short lines with their type tags in the footer. */
+.minecraft-install .catalog-projects {
+  gap: 8px;
+}
+.minecraft-install .catalog-projects.grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.minecraft-install .catalog-project-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  min-height: 64px;
+}
+.minecraft-install .catalog-project-info > .resource-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 23px;
+}
+.minecraft-install .catalog-project-copy {
+  display: block;
+}
+.minecraft-install .catalog-project-title {
+  display: flex;
+  gap: 4px 8px;
+}
+.minecraft-install .catalog-project-title h2 {
+  font-size: 13px;
+  line-height: 20px;
+}
+.minecraft-install .catalog-project-title span {
+  margin: 0;
+}
+.minecraft-install .catalog-project-copy p {
+  min-height: 0;
+  margin: 3px 0 0;
+  font-size: 11px;
+  line-height: 18px;
+}
+.minecraft-install .catalog-project-footer {
+  gap: 12px;
+  padding: 8px 14px 8px 0;
+  justify-content: flex-end;
+}
+.minecraft-install .catalog-tags {
+  margin: 0;
+  gap: 4px;
+}
+.minecraft-install .catalog-tags .badge {
+  min-height: 18px;
+  padding: 1px 6px;
+}
+.minecraft-install .grid .catalog-project-footer {
+  justify-content: space-between;
+  padding: 7px 12px 9px;
+}
+.minecraft-install .catalog-skeleton {
+  min-height: 64px;
+  padding: 10px 14px;
+  gap: 12px;
+}
+.minecraft-install .catalog-skeleton > span {
+  width: 36px;
+  height: 36px;
+}
+.minecraft-install .catalog-skeleton > div > i {
+  height: 8px;
+  margin: 6px 0;
+}
+.minecraft-install .grid .catalog-skeleton {
+  min-height: 109px;
+}
+.catalog-skeleton {
+  display: flex;
+  min-height: 129px;
+  padding: 24px;
+  align-items: center;
+  gap: 16px;
+  --surface-edge: var(--line);
+  --surface-fill: var(--panel);
+}
+.catalog-skeleton > span {
+  width: 52px;
+  height: 52px;
+  background: var(--surface-well);
+  flex-shrink: 0;
+}
+.catalog-skeleton > div {
+  flex: 1;
+}
+.catalog-skeleton > div > i {
+  display: block;
+  height: 10px;
+  background: var(--surface-well);
+  margin: 12px 0;
+  width: 80%;
+}
+.catalog-skeleton > div > i:first-child {
+  width: 45%;
+}
+.catalog-skeleton > span,
+.catalog-skeleton > div > i {
+  background: var(--line);
+  animation: catalog-skeleton-pulse 1100ms ease-in-out infinite alternate;
+}
+.catalog-skeleton > div > i:nth-child(2) {
+  animation-delay: 120ms;
+}
+.catalog-skeleton > div > i:nth-child(3) {
+  animation-delay: 240ms;
+}
+@keyframes catalog-skeleton-pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+.grid .catalog-skeleton {
+  min-height: 238px;
+}
+.project-files {
+  scroll-margin-top: 18px;
+}
+.project-file-pagination {
+  margin-top: 14px;
+  gap: clamp(6px, 2vw, 18px);
+  background: var(--panel);
+}
+.project-file-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+.project-file-filters {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+  gap: 12px 20px;
+}
+.project-file-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.project-file-filters .pixel-select,
+.project-file-filters .pixel-input {
+  width: 100%;
+  min-width: 0;
+}
+.project-file-filters .pixel-input {
+  min-height: var(--button-height);
+  padding-block: 7px;
+}
+.project-file-toolbar > .catalog-view {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.project-file-results {
+  gap: 10px;
+}
+.project-file-results.grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 14px;
+}
+.project-file {
+  align-items: center;
+  gap: 14px 24px;
+  padding: 16px 18px;
+  text-align: left;
+  width: 100%;
+  transition:
+    translate 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    filter 180ms ease;
+}
+.project-file:is(:hover, :focus-visible):not(:disabled) {
+  filter: drop-shadow(
+    0 3px 0 color-mix(in srgb, var(--surface-shadow), transparent 55%)
+  );
+}
+.project-file:active:not(:disabled) {
+  translate: 0 0;
+  filter: none;
+  transition-duration: 90ms;
+}
+.project-file:focus-visible {
+  outline-offset: -5px;
+}
+.project-file:disabled {
+  --surface-edge: var(--line);
+  --surface-fill: var(--panel);
+  opacity: 1;
+  translate: none;
+}
+.project-file-main {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.project-file-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.project-file-title strong {
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  transition: color 180ms ease;
+}
+.project-file:is(:hover, :focus-visible):not(:disabled)
+  .project-file-title
+  strong {
+  color: var(--accent);
+}
+.project-file .badge {
+  max-width: 100%;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.project-file-tag-row {
+  position: relative;
+  min-width: 0;
+  height: 24px;
+  overflow: hidden;
+}
+.project-file .project-file-tags {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-self: stretch;
+  margin: 0;
+  gap: 6px;
+}
+.project-file-tags .badge {
+  flex: 0 0 auto;
+  max-width: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.project-file-tags:not(.project-file-tags-measure) {
+  overflow: hidden;
+}
+.project-file .project-file-tags-measure {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
+}
+.project-file .project-file-tags .badge:hover {
+  transform: none;
+}
+.project-file-more {
+  min-width: 28px;
+}
+.project-file-tag-row[data-overflow] .project-file-more {
+  --surface-edge: var(--accent);
+  color: var(--accent);
+}
+.project-file .project-file-loader,
+.project-file-tooltip .project-file-loader {
+  color: var(--accent);
+}
+.project-file:disabled .badge:hover {
+  transform: none;
+}
+.project-file-tooltip {
+  width: 400px;
+}
+.project-file-tooltip > strong {
+  display: block;
+  flex-shrink: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.project-file-tooltip-tags {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  gap: 6px;
+}
+.project-file-tooltip-tags .badge {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.project-file-dependencies {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.project-file-unavailable {
+  --surface-fill: var(--surface-warning-bg);
+  color: var(--surface-warning);
+  align-self: flex-start;
+}
+.project-file-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.project-file-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.grid .project-file {
+  align-items: stretch;
+  gap: 18px;
+}
+.grid .project-file-meta {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+@container resource-center (max-width: 580px) {
+  .project-file {
+    gap: 12px;
+    padding: 14px;
+  }
+  .project-file-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+  }
+}
+.resource-download-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.resource-download-name {
+  overflow-wrap: anywhere;
+}
+.resource-download-destination {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.resource-download-dependencies {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12px;
+}
+.resource-download-dependency-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.resource-download-dependencies ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.resource-download-dependencies li {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+.resource-dependency-tag {
+  gap: 0;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 5px 10px;
+  color: var(--ink);
+  font-size: 11px;
+  transition:
+    translate 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    color 180ms ease,
+    filter 180ms ease;
+}
+.resource-dependency-tag > .surface-frame::before,
+.resource-dependency-tag > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.resource-dependency-tag:is(:hover, :focus-visible):not(:disabled) {
+  --surface-edge: var(--accent);
+  --surface-fill: var(--soft);
+  color: var(--accent);
+  translate: 0 -2px;
+  filter: drop-shadow(0 2px 0 var(--surface-shadow));
+}
+.resource-dependency-tag:active:not(:disabled) {
+  translate: 0 0;
+  filter: none;
+}
+.resource-dependency-tag:disabled {
+  opacity: 1;
+}
+.resource-dependency-tag[aria-busy="true"] {
+  color: var(--accent);
+  cursor: progress;
+}
+.resource-dependency-tag:disabled:not([aria-busy="true"]) {
+  color: var(--muted);
+}
+.resource-dependency-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resource-dependency-loading {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    width 220ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    opacity 180ms ease;
+}
+.resource-dependency-loading > svg {
+  flex-shrink: 0;
+  animation-play-state: paused;
+}
+.resource-dependency-tag[aria-busy="true"] .resource-dependency-loading {
+  width: 20px;
+  opacity: 1;
+}
+.resource-dependency-tag[aria-busy="true"] .resource-dependency-loading > svg {
+  animation-play-state: running;
+}
+.resource-download-directory {
+  flex-wrap: wrap;
+}
+.resource-download-directory :is(.pixel-input, .button) {
+  height: var(--button-height);
+  min-height: var(--button-height);
+  padding-block: 7px;
+}
+.resource-download-directory .pixel-input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.resource-download-directory .button {
+  flex-shrink: 0;
+}
+.resource-download-form .dialog-actions {
+  margin-top: 0;
+}
+.version-local-link {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--button-height);
+  font-size: 11px;
+}
+.version-local-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.local-resources {
+  min-width: 0;
+}
+.local-resource-page .gamerules {
+  max-height: none;
+  overflow: visible;
+}
+@property --local-version-fill {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+.local-resources-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 18px;
+}
+.local-resources-header .local-version-select {
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 520px;
+}
+.local-resources-header .local-version-select .pixel-select-trigger {
+  --local-version-fill: transparent;
+  --pixel-surface: var(--local-version-fill);
+  --pixel-field-border: transparent;
+  filter: none;
+  font-size: 18px;
+  font-weight: 650;
+  transition:
+    --local-version-fill 220ms ease,
+    --pixel-field-border 220ms ease,
+    color 180ms ease,
+    opacity 220ms ease;
+}
+.local-resources-header
+  .local-version-select
+  .pixel-select-trigger:is(:hover, :focus-visible, [aria-expanded="true"]):not(
+    :disabled
+  ) {
+  --local-version-fill: var(--pixel-well);
+  --pixel-field-border: var(--px-frame-active-color);
+}
+.local-resources-header
+  .local-version-select
+  .pixel-select-trigger
+  > .pixel-icon {
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    color 180ms ease;
+}
+.local-resources-header
+  .local-version-select
+  .pixel-select-trigger:is(:hover, :focus-visible, [aria-expanded="true"])
+  > .pixel-icon {
+  opacity: 1;
+  transform: translateY(0);
+}
+.local-resources-header
+  .local-version-select
+  .pixel-select-trigger[aria-expanded="true"]
+  > .pixel-icon {
+  transform: rotate(180deg);
+}
+.local-resources-header .local-isolation-tag {
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.local-isolation-tag > svg {
+  flex-shrink: 0;
+}
+.local-resources-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.local-resources-toolbar .tabs {
+  margin: 0;
+}
+.local-resources-toolbar .search-field {
+  flex: 1 1 160px;
+}
+.local-resources-toolbar .local-resources-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+  gap: 8px;
+}
+.local-resources .resource-list {
+  gap: 8px;
+}
+.local-resources .local-mod-pagination {
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 0;
+}
+.local-resources .resource-row {
+  margin-bottom: 0;
+  padding: 0;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.local-resources .local-resource-title {
+  padding: 10px 14px;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.local-resources .local-resource-title > .resource-icon {
+  width: 44px;
+  height: 44px;
+}
+.local-resources .catalog-project-title {
+  gap: 2px 8px;
+}
+.local-resources .catalog-project-copy p {
+  margin-top: 3px;
+  line-height: 1.5;
+  -webkit-line-clamp: 1;
+}
+.local-resource-meta {
+  gap: 6px 10px;
+  margin-top: 4px;
+}
+.local-directory-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+.local-resource-meta .badge {
+  min-height: 20px;
+  padding: 1px 7px;
+  line-height: 18px;
+  white-space: normal;
+}
+.local-resource-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.local-resource-error {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.local-resource-error > svg {
+  align-self: flex-start;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.local-resources .local-resource-status {
+  gap: 5px;
+  color: var(--surface-warning);
+}
+.local-resources .disabled-resource {
+  opacity: 1;
+}
+.local-resources .disabled-resource .resource-icon {
+  opacity: 0.6;
+}
+.local-resources .local-resource-actions {
+  flex: none;
+  gap: 6px;
+  margin-left: 0;
+  padding: 10px 14px 10px 0;
+}
+.local-resource-actions > .button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.resource-source {
+  --channel-color: var(--surface-success);
+}
+.resource-source[data-source="curseforge"] {
+  --channel-color: var(--surface-warning);
+}
+.resource-source-badge {
+  --surface-fill: color-mix(in srgb, var(--panel), var(--channel-color) 10%);
+  --surface-edge: color-mix(in srgb, var(--panel), var(--channel-color) 35%);
+  color: var(--channel-color);
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 16px;
+  vertical-align: middle;
+}
+.local-mod-channels {
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-edge: var(--surface-strong-line);
+  --surface-fill: var(--surface-well);
+  flex: none;
+  padding: 1px;
+}
+.local-resource-page .project-heading > .local-resource-detail-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  max-width: 100%;
+  margin-left: auto;
+}
+.local-mod-channel-buttons {
+  display: flex;
+  clip-path: var(--surface-shape-1);
+}
+.local-mod-channel {
+  position: relative;
+  min-height: 30px;
+  padding: 4px 6px;
+  color: var(--channel-color);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+.local-mod-channel + .local-mod-channel {
+  border-left: 1px solid var(--surface-line);
+}
+.local-mod-channel:is(:hover, :focus-visible):not(:disabled) {
+  background: color-mix(in srgb, var(--surface-well), var(--channel-color) 15%);
+}
+.local-mod-channel:focus-visible {
+  outline-offset: -3px;
+}
+.local-resource-detail-actions .local-mod-channel {
+  min-height: calc(var(--button-height) - 2px);
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.local-mod-channel-loading {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  animation: local-mod-channel-spin 900ms linear infinite;
+}
+@keyframes local-mod-channel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (pointer: coarse) {
+  .local-mod-channel,
+  .local-resource-detail-actions .local-mod-channel {
+    min-height: 44px;
+  }
+}
+@media (max-width: 650px) {
+  .local-resources .resource-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+  .local-resources .local-resource-title {
+    align-items: flex-start;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .local-resources .local-resource-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    padding: 0 12px 10px 58px;
+  }
+  .local-resources .local-resource-title > .resource-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .local-resources .catalog-project-copy p {
+    -webkit-line-clamp: 2;
+  }
+  .local-resource-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+@media (pointer: coarse) {
+  .local-resource-actions > .button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+.local-resources .local-compact-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.local-resources .local-compact-row .local-resource-title {
+  min-height: 60px;
+  padding: 6px 12px;
+  gap: 10px;
+  align-items: center;
+}
+.local-resources .local-compact-row .resource-icon {
+  width: 32px;
+  height: 32px;
+}
+.local-resources .local-compact-row .catalog-project-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+}
+.local-resources .local-compact-row .catalog-project-title {
+  grid-column: 1 / -1;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+}
+.local-resources .local-compact-row .catalog-project-title h3 {
+  display: block;
+  min-width: 0;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.local-resources .local-compact-row .catalog-project-title > span {
+  max-width: 30%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.local-resources .local-compact-row .catalog-project-copy p {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.local-resources .local-compact-row .local-resource-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0;
+}
+.local-resources .local-compact-row .local-resource-meta .catalog-tags {
+  min-width: 0;
+  margin: 0;
+}
+.local-resources .local-compact-row .local-resource-meta .badge {
+  display: block;
+  min-height: 18px;
+  max-width: 120px;
+  padding: 0 5px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.local-resources .local-compact-row .local-resource-error {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+.local-resources .local-compact-row .local-resource-actions {
+  padding: 6px 12px 6px 0;
+  flex-wrap: nowrap;
+}
+@media (max-width: 650px) {
+  .local-resources .local-compact-row .catalog-project-copy {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .local-resources .local-compact-row .local-resource-meta {
+    justify-content: space-between;
+  }
+  .local-resources .local-compact-row .local-resource-meta .badge {
+    max-width: 100px;
+  }
+}
+.local-resources .local-shader-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.local-resources .local-shader-row .local-shader-info {
+  min-height: 44px;
+  padding: 6px 12px;
+  gap: 10px;
+  align-items: center;
+}
+.local-shader-symbol {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.local-shader-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.local-shader-copy h3 {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.local-shader-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.local-shader-name h3 {
+  min-width: 0;
+}
+.local-shader-name .badge {
+  flex-shrink: 0;
+  min-height: 18px;
+  padding: 0 5px;
+  line-height: 16px;
+}
+.local-resources .local-shader-row .local-resource-actions {
+  padding: 6px 12px 6px 0;
+}
+@container resource-center (min-width: 1100px) {
+  .catalog-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-areas: "sidebar results";
+    grid-template-rows: 1fr;
+    column-gap: 24px;
+  }
+  .catalog-sidebar {
+    --surface-stroke: 1px;
+    --surface-inset-shape: var(--surface-shape-1);
+    --surface-base: var(--surface-fill);
+    --surface-edge: var(--line);
+    --surface-fill: var(--surface-well);
+    --surface-depth: 0px;
+    grid-area: sidebar;
+    display: block;
+    position: sticky;
+    top: 0;
+    min-width: 0;
+    max-height: calc(100dvh - 112px);
+    overflow: auto;
+    scrollbar-width: thin;
+    padding: 18px;
+  }
+  .catalog-sidebar > .surface-frame {
+    display: block;
+  }
+  .catalog-filters,
+  .catalog-filters.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    margin: 0;
+    transition: none;
+  }
+  .catalog-filters-clip {
+    overflow: visible;
+  }
+  .catalog-filter-panel {
+    --surface-fill: transparent;
+    padding: 0;
+  }
+  .catalog-filter-panel > .surface-frame {
+    display: none;
+  }
+  .catalog-filter-fields {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+  }
+  .catalog-filter-fields label {
+    flex: none;
+  }
+  .catalog-filter-toggle {
+    display: none;
+  }
+  .catalog-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding-bottom: 22px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  .catalog-result-count {
+    grid-area: 1 / 1;
+    margin: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .catalog-actions {
+    display: contents;
+  }
+  .catalog-sort {
+    grid-area: 2 / 1 / 3 / -1;
+    width: 100%;
+  }
+  .catalog-view {
+    grid-area: 1 / 2;
+  }
+  .catalog-reset {
+    text-align: left;
+    padding: 0;
+  }
+}
+@container resource-center (max-width: 760px) {
+  .catalog-header {
+    gap: 14px;
+    grid-template-columns: auto minmax(150px, 1fr) 145px;
+  }
+  .catalog-shortcut {
+    display: none;
+  }
+  .catalog-toolbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .catalog-actions {
+    margin-left: auto;
+  }
+  .catalog-project-footer {
+    gap: 12px;
+    padding-right: 16px;
+  }
+}
+@container resource-center (max-width: 420px) {
+  .catalog-header {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .catalog-header > .page-title,
+  .catalog-header > .catalog-search {
+    flex: 1 1 100%;
+  }
+  .catalog-header > .catalog-source {
+    width: 145px;
+    margin-left: auto;
+  }
+}
+@container resource-center (max-width: 580px) {
+  .catalog-header {
+    grid-template-columns: minmax(0, 1fr) 145px;
+  }
+  .catalog-search {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+  .catalog-source {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .catalog-result-count {
+    margin-left: 0;
+    margin-right: auto;
+  }
+  .catalog-actions {
+    gap: 8px;
+  }
+  .catalog-sort {
+    width: 120px;
+  }
+  .catalog-filter-toggle {
+    padding: 0;
+  }
+  .catalog-project {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .catalog-project-info {
+    padding: 13px 16px;
+    gap: 12px;
+  }
+  .catalog-project-footer {
+    padding: 0 16px 14px;
+    justify-content: space-between;
+  }
+  .catalog-projects.grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .minecraft-install .catalog-projects.grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .minecraft-install .list .catalog-project-footer {
+    justify-content: space-between;
+    padding: 0 14px 10px;
+  }
+  .catalog-filter-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

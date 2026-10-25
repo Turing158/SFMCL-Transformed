@@ -1,0 +1,639 @@
+/* Shared Minecraft frames. Layout remains in styles.css; form controls in controls.css. */
+/* One interpolated depth keeps the shadow, border and fill moving together. */
+@property --surface-depth {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+:root {
+  --surface-depth-transition: --surface-depth 180ms
+    cubic-bezier(0.22, 0.8, 0.25, 1);
+  --surface-line: color-mix(in srgb, var(--muted), var(--panel) 65%);
+  --surface-strong-line: color-mix(in srgb, var(--muted), var(--accent) 25%);
+  --surface-shadow: color-mix(in srgb, var(--line), var(--muted) 12%);
+  --surface-well: color-mix(in srgb, var(--bg), var(--soft) 45%);
+  --surface-danger-bg: #f9eded;
+  --surface-success: #32785b;
+  --surface-success-bg: #eaf3ec;
+  --surface-warning: #815d19;
+  --surface-warning-bg: #f8f0dd;
+  --surface-info: #376982;
+  --surface-info-bg: #eaf1f7;
+}
+:root[data-theme="dark"] {
+  --surface-shadow: color-mix(in srgb, var(--bg), black 40%);
+  --surface-danger-bg: #3b2529;
+  --surface-success: #9ad4aa;
+  --surface-success-bg: #253b2c;
+  --surface-warning: #e5c578;
+  --surface-warning-bg: #393323;
+  --surface-info: #a4cae2;
+  --surface-info-bg: #25343e;
+}
+
+:where(.has-surface) {
+  position: relative;
+  isolation: isolate;
+}
+.has-surface {
+  --surface-shape: var(--corner-control);
+  --surface-shape-0: var(--corner-control-inset-0);
+  --surface-shape-1: var(--corner-control-inset-1);
+  --surface-shape-2: var(--corner-control-inset-2);
+  --surface-stroke: 2px;
+  --surface-inset-shape: var(--surface-shape-2);
+  --surface-edge: var(--surface-line);
+  --surface-fill: var(--panel);
+  --surface-base: var(--surface-shadow);
+  --surface-depth: 0px;
+  --surface-highlight: transparent;
+  --surface-marker: transparent;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  transition: var(--surface-depth-transition);
+}
+/* Only decoration is clipped. The fill uses the generated eroded contour,
+   so every border layer has equal four-neighbour thickness at the corners. */
+.surface-frame {
+  position: absolute;
+  inset: 0 0 calc(-1 * var(--surface-depth));
+  display: block;
+  margin: 0;
+  padding: 0;
+  background: var(--surface-base);
+  clip-path: var(--surface-shape);
+  z-index: -1;
+  pointer-events: none;
+}
+.surface-frame::before,
+.surface-frame::after {
+  content: "";
+  position: absolute;
+  clip-path: var(--surface-shape);
+}
+.surface-frame::before {
+  inset: 0 0 var(--surface-depth);
+  background: var(--surface-edge);
+}
+.surface-frame::after {
+  clip-path: var(--surface-inset-shape);
+  inset: var(--surface-stroke) var(--surface-stroke)
+    calc(var(--surface-stroke) + var(--surface-depth));
+  background:
+    linear-gradient(var(--surface-highlight) 0 2px, transparent 2px),
+    linear-gradient(transparent calc(100% - 2px), var(--surface-marker) 0),
+    var(--surface-fill);
+}
+.has-surface:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.has-surface > svg {
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.button,
+.icon-button {
+  --surface-edge: var(--surface-strong-line);
+  --surface-base: color-mix(in srgb, var(--surface-edge), #000 22%);
+  --surface-depth: 2px;
+  --surface-highlight: color-mix(in srgb, var(--surface-fill), #fff 14%);
+  min-height: var(--button-height);
+  line-height: 20px;
+  transition:
+    var(--surface-depth-transition),
+    transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    color 220ms ease,
+    opacity 220ms ease;
+}
+:is(.button, .icon-button) > .surface-frame,
+:is(.button, .icon-button) > .surface-frame::before,
+:is(.button, .icon-button) > .surface-frame::after {
+  transition: background-color 220ms ease;
+}
+.button {
+  padding: 7px 16px;
+  font-weight: 600;
+}
+.icon-button {
+  width: var(--button-height);
+  height: var(--button-height);
+  padding: 7px;
+}
+:is(.button, .icon-button):hover:not(:disabled) {
+  --surface-fill: var(--soft);
+  --surface-edge: var(--accent);
+  color: var(--accent);
+}
+:is(.button, .icon-button):active:not(:disabled) {
+  --surface-depth: 0px;
+  --surface-highlight: transparent;
+  transform: translateY(2px);
+  transition-duration: 90ms;
+}
+.button.primary {
+  --surface-fill: var(--accent);
+  --surface-edge: color-mix(in srgb, var(--accent), #000 24%);
+  color: var(--pixel-on-accent);
+}
+.button.primary:is(:hover, :active):not(:disabled) {
+  --surface-fill: var(--accent-hover);
+  --surface-edge: color-mix(in srgb, var(--accent), #000 24%);
+  color: var(--pixel-on-accent);
+}
+:is(.button.danger, .icon-button.danger-text) {
+  --surface-fill: var(--surface-danger-bg);
+  --surface-edge: color-mix(in srgb, var(--danger), var(--panel) 40%);
+  color: var(--danger);
+}
+:is(.button.danger, .icon-button.danger-text):is(:hover, :active):not(
+    :disabled
+  ) {
+  --surface-fill: color-mix(
+    in srgb,
+    var(--surface-danger-bg),
+    var(--danger) 7%
+  );
+  --surface-edge: var(--danger);
+  color: var(--danger);
+}
+:root :is(.button, .icon-button):disabled {
+  --surface-depth: 0px;
+  --surface-highlight: transparent;
+  --surface-edge: var(--surface-line);
+  --surface-fill: var(--surface-well);
+  color: var(--muted);
+  opacity: 1;
+  transform: none;
+}
+.button[aria-busy="true"] {
+  cursor: progress;
+}
+.version-card-bottom .button,
+.pagination .button {
+  min-height: var(--button-height);
+}
+:root .pagination > :is(.button, .page-indicator) {
+  opacity: 0.55;
+  transition:
+    var(--surface-depth-transition),
+    transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    opacity 180ms ease,
+    color 220ms ease;
+}
+:root .pagination > :is(.button, .page-indicator):is(:hover, :focus-visible) {
+  opacity: 1;
+}
+.row-actions {
+  gap: 8px;
+}
+.character-actions,
+.launch-actions,
+.dialog-actions {
+  gap: 10px;
+}
+
+:is(
+  .panel,
+  .launch-card,
+  .player-row,
+  .theme-option,
+  .modal,
+  .save-bar,
+  .toast
+) {
+  --surface-shape: var(--corner-card);
+  --surface-shape-0: var(--corner-card-inset-0);
+  --surface-shape-1: var(--corner-card-inset-1);
+  --surface-shape-2: var(--corner-card-inset-2);
+  --surface-depth: 2px;
+}
+:is(.version-card, .character-panel, .player-row) {
+  overflow: visible;
+}
+:is(button.resource-row, .theme-option):hover,
+.player-row:has(.player-select:hover),
+.manifest-list > button:not(.button):hover {
+  --surface-edge: var(--accent);
+  --surface-fill: color-mix(in srgb, var(--panel), var(--soft) 45%);
+}
+:is(.version-card, .player-row, .theme-option).selected,
+.manifest-list > button.selected {
+  --surface-edge: var(--accent);
+  --surface-fill: color-mix(in srgb, var(--panel), var(--soft) 68%);
+  --surface-marker: var(--accent);
+}
+.version-card.selected::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  top: 6px;
+  right: 6px;
+  background: var(--accent);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% 100%,
+    75% 100%,
+    75% 75%,
+    50% 75%,
+    50% 50%,
+    25% 50%,
+    25% 25%,
+    0 25%
+  );
+  pointer-events: none;
+}
+.player-select:focus-visible {
+  outline-offset: -5px;
+}
+.player-row .row-actions {
+  padding-right: 12px;
+}
+:is(
+  .resource-icon,
+  .skin-face,
+  .theme-preview,
+  .theme-preview i,
+  .theme-preview span
+) {
+  border-radius: 0;
+  clip-path: var(--corner-badge);
+}
+:is(.empty-icon, .download-icon) {
+  --surface-edge: color-mix(in srgb, var(--accent), var(--panel) 78%);
+  --surface-fill: var(--soft);
+}
+:is(.info-note, .world-details) {
+  --surface-fill: var(--surface-well);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+}
+.modal {
+  overflow: visible;
+}
+.modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+.modal header {
+  flex: 0 0 auto;
+  position: relative;
+  background: transparent;
+  margin: 2px 2px 0;
+}
+.modal-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0 2px 2px;
+}
+.save-bar,
+.device-code {
+  --surface-edge: var(--accent);
+}
+.device-code,
+.preview-banner {
+  --surface-fill: var(--soft);
+}
+
+.tabs {
+  --surface-fill: var(--surface-well);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  display: block;
+  padding: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.tab-items {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 7px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scroll-padding-inline: 7px;
+}
+.tab-indicator {
+  --surface-edge: var(--accent);
+  --surface-fill: var(--panel);
+  /* Keep the selection border equally thick on every side. */
+  --surface-depth: 0px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tab-items > button {
+  --surface-stroke: 2px;
+  --surface-inset-shape: var(--surface-shape-2);
+  --surface-edge: color-mix(
+    in srgb,
+    var(--surface-line),
+    var(--surface-well) 35%
+  );
+  --surface-fill: color-mix(in srgb, var(--panel), var(--surface-well) 55%);
+  isolation: auto;
+  flex: 0 0 auto;
+  justify-content: center;
+  min-height: var(--button-height);
+  padding: 6px 14px;
+  margin: 0;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    color 180ms ease,
+    opacity 220ms ease;
+}
+.tab-content {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+}
+.tab-content > svg {
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+.tab-items > button > .surface-frame {
+  z-index: 0;
+}
+.tab-items > button > .surface-frame::before,
+.tab-items > button > .surface-frame::after,
+.tab-indicator > .surface-frame::before,
+.tab-indicator > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.tab-items > button.active {
+  color: var(--accent);
+}
+@media (hover: hover) {
+  .tab-items > button:hover,
+  .tab-items:has(> button.active:hover) > .tab-indicator {
+    --surface-fill: var(--soft);
+    --surface-edge: var(--accent);
+  }
+}
+.tab-items > button:focus-visible {
+  outline-offset: 2px;
+}
+.tabs.compact {
+  margin: 12px 0 14px;
+}
+.tabs.compact .tab-items {
+  gap: 5px;
+}
+.tabs.compact button {
+  padding-inline: 11px;
+}
+.tab-panel {
+  min-width: 0;
+}
+.tab-panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.section-heading > .tabs {
+  flex: 0 1 auto;
+}
+.section-heading:has(> .tabs) > span {
+  flex-shrink: 0;
+}
+.resource-navigation {
+  border: 0;
+  gap: 14px;
+}
+.resource-navigation .subtle {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.resource-kinds > button {
+  min-height: var(--button-height);
+  line-height: 20px;
+  padding: 7px 14px;
+}
+.resource-kinds > button:hover {
+  --surface-edge: var(--accent);
+}
+.resource-kinds > button.active {
+  --surface-edge: var(--accent);
+  --surface-fill: var(--soft);
+  --surface-marker: var(--accent);
+  font-weight: 600;
+}
+.manifest-list {
+  padding: 4px 7px 4px 4px;
+  overscroll-behavior: contain;
+}
+
+:is(.badge, .count, .nav-count, .step-number) {
+  --surface-shape: var(--corner-badge);
+  --surface-shape-0: var(--corner-badge-inset-0);
+  --surface-shape-1: var(--corner-badge-inset-1);
+  --surface-shape-2: var(--corner-badge-inset-2);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-edge: var(--surface-line);
+  --surface-fill: var(--surface-well);
+  --surface-base: var(--surface-edge);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  vertical-align: middle;
+  color: var(--muted);
+  line-height: 18px;
+  min-height: 24px;
+}
+.badge {
+  padding: 3px 9px;
+  font-weight: 600;
+}
+.count,
+.badge.tab-count {
+  padding: 0 6px;
+  min-width: 22px;
+  min-height: 20px;
+  font:
+    10px/20px "Cascadia Code",
+    Consolas,
+    monospace;
+}
+.tabs .tab-count {
+  margin-left: 2px;
+}
+.tab-items > button.active .tab-count {
+  --surface-edge: var(--accent);
+  --surface-fill: var(--soft);
+  color: var(--accent);
+}
+.badge.completed {
+  --surface-edge: color-mix(in srgb, var(--surface-success), var(--panel) 60%);
+  --surface-fill: var(--surface-success-bg);
+  color: var(--surface-success);
+}
+.badge.running {
+  --surface-edge: color-mix(in srgb, var(--surface-info), var(--panel) 55%);
+  --surface-fill: var(--surface-info-bg);
+  color: var(--surface-info);
+}
+.badge:is(.paused, .pausing) {
+  --surface-edge: color-mix(in srgb, var(--surface-warning), var(--panel) 55%);
+  --surface-fill: var(--surface-warning-bg);
+  color: var(--surface-warning);
+}
+.badge.failed {
+  --surface-edge: color-mix(in srgb, var(--danger), var(--panel) 55%);
+  --surface-fill: var(--surface-danger-bg);
+  color: var(--danger);
+}
+.resource-tags .badge {
+  --surface-fill: var(--bg);
+  font-size: 10px;
+}
+.step-number {
+  min-height: 22px;
+  width: 22px;
+  height: 22px;
+}
+.steps :is(.completed, .running) .step-number {
+  --surface-edge: var(--accent);
+  --surface-fill: var(--soft);
+}
+.steps .failed .step-number {
+  --surface-edge: var(--danger);
+}
+:is(.status-dot, .unsaved-dot) {
+  border-radius: 0;
+}
+.progress {
+  height: 6px;
+  border-radius: 0;
+  clip-path: var(--corner-micro);
+}
+
+/* Remaining unframed UI shapes share the same rasterized corner families. */
+:is(.inline-error, .log-view, .markdown pre, .markdown img) {
+  clip-path: var(--corner-control);
+}
+:is(.status-dot, .unsaved-dot) {
+  clip-path: var(--corner-micro);
+}
+.character-shadow {
+  clip-path: var(--corner-circle);
+}
+.theme-preview {
+  clip-path: var(--corner-menu);
+}
+:is(.theme-preview i, .theme-preview span) {
+  clip-path: var(--corner-badge);
+}
+
+.sidebar :is(nav button, .profile-button, .sidebar-collapse) {
+  --surface-edge: color-mix(in srgb, var(--sidebar), #fff 18%);
+  --surface-fill: var(--sidebar);
+  --surface-base: var(--surface-edge);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+}
+.sidebar nav button.active,
+.sidebar :is(nav button, .profile-button, .sidebar-collapse):hover {
+  --surface-edge: var(--sidebar-muted);
+  --surface-fill: color-mix(in srgb, var(--sidebar), #fff 10%);
+}
+.sidebar nav button.active {
+  --surface-marker: var(--sidebar-muted);
+}
+.sidebar .has-surface:focus-visible {
+  outline-color: var(--sidebar-muted);
+}
+.profile-button {
+  margin-bottom: 10px;
+  padding-inline: 10px;
+}
+.sidebar .nav-count {
+  --surface-edge: var(--sidebar-muted);
+  --surface-fill: color-mix(in srgb, var(--sidebar), #fff 14%);
+  color: #fff;
+  padding: 0 5px;
+}
+
+@media (max-width: 700px) {
+  .tabs {
+    width: 100%;
+  }
+  .tab-items > button {
+    padding-inline: 12px;
+  }
+  .resource-kinds > button {
+    padding-inline: 10px;
+  }
+  .player-row {
+    flex-wrap: wrap;
+  }
+  .player-row .row-actions {
+    margin: 0 0 10px auto;
+  }
+  .player-select {
+    flex-basis: 100%;
+  }
+  .section-heading:has(> .tabs) {
+    flex-wrap: wrap;
+  }
+  .dialog-actions {
+    flex-wrap: wrap;
+  }
+  .theme-option > span {
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+}
+@media (forced-colors: active) {
+  .tab-indicator {
+    display: none;
+  }
+  .surface-frame {
+    display: none;
+  }
+  .has-surface {
+    outline: 1px solid ButtonText;
+    outline-offset: -1px;
+    color: CanvasText;
+    background: Canvas;
+  }
+  :is(button.has-surface, .badge, .count) {
+    color: ButtonText;
+  }
+  .has-surface:is(
+    .selected,
+    [aria-selected="true"],
+    [aria-pressed="true"],
+    [aria-current="page"]
+  ) {
+    outline: 3px solid Highlight;
+    outline-offset: -3px;
+  }
+  .has-surface:focus-visible,
+  .tab-panel:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 3px;
+  }
+  :root :is(.button, .icon-button):disabled {
+    color: GrayText;
+    outline-color: GrayText;
+  }
+}

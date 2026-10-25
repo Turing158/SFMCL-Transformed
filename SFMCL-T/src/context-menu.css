@@ -1,0 +1,213 @@
+.pixel-context-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: visible;
+  pointer-events: none;
+  --context-fill: color-mix(in srgb, var(--panel) 94%, var(--soft));
+  --context-edge: color-mix(in srgb, var(--ink) 78%, var(--accent));
+  --context-shadow: color-mix(in srgb, var(--sidebar) 22%, transparent);
+  --context-highlight: var(--soft);
+  --context-text: var(--ink);
+}
+.pixel-context-menu {
+  position: fixed;
+  width: 258px;
+  margin: 0;
+  padding: 0;
+  color: var(--context-text);
+  pointer-events: auto;
+  filter: drop-shadow(5px 5px 0 var(--context-shadow));
+  transform-origin: top left;
+  animation: context-menu-in 280ms steps(6, end) both;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.pixel-context-menu.covered {
+  visibility: hidden;
+}
+.favorite-context-menu {
+  width: 128px;
+}
+.favorite-context-menu .pixel-context-item {
+  min-height: 34px;
+  padding: 6px 8px;
+  gap: 8px;
+}
+.pixel-context-frame {
+  padding: 2px;
+  background: var(--context-edge);
+  clip-path: var(--corner-menu);
+}
+.pixel-context-face {
+  padding: 5px;
+  background: var(--context-fill);
+  clip-path: var(--corner-menu-inset-2);
+}
+.pixel-context-heading {
+  padding: 8px 10px 10px;
+  margin: -2px -2px 5px;
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pixel-context-title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pixel-context-description {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pixel-context-item {
+  display: flex;
+  position: relative;
+  isolation: isolate;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  margin: 0;
+  padding: 7px 10px;
+  border: 0;
+  background: none;
+  color: var(--context-text);
+  font-size: 12px;
+  text-align: left;
+  animation: context-menu-row-in 240ms steps(4, end) both;
+  animation-delay: calc(var(--menu-order, 0) * 20ms);
+  transition: color 100ms steps(2, end);
+}
+.pixel-context-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  clip-path: var(--corner-control);
+  background: var(--context-highlight);
+  opacity: 0;
+  translate: -5px 0;
+  transition:
+    opacity 100ms steps(2, end),
+    translate 160ms steps(3, end);
+}
+.pixel-context-item:is(:hover, :focus-visible, [aria-expanded="true"]):not(
+    :disabled
+  ) {
+  color: var(--accent);
+  outline: none;
+}
+.pixel-context-item:is(:hover, :focus-visible, [aria-expanded="true"]):not(
+    :disabled
+  )::before {
+  opacity: 1;
+  translate: 0 0;
+}
+.pixel-context-item:focus-visible::before {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.pixel-context-item.danger {
+  color: var(--danger);
+}
+.pixel-context-item.danger:is(:hover, :focus-visible):not(:disabled) {
+  --context-highlight: var(--surface-danger-bg);
+  color: var(--danger);
+}
+.pixel-context-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pixel-context-label {
+  flex: 1;
+  white-space: nowrap;
+}
+.pixel-context-icon,
+.pixel-context-arrow {
+  display: flex;
+  flex: none;
+}
+.pixel-context-arrow {
+  margin-left: 10px;
+}
+.pixel-context-separator {
+  height: 1px;
+  margin: 5px 9px;
+  background: var(--line);
+}
+.pixel-context-submenu {
+  width: 208px;
+  animation: context-submenu-in 220ms steps(5, end) both;
+}
+.pixel-context-submenu .pixel-context-item {
+  animation-delay: 0ms;
+}
+.pixel-context-back {
+  margin-bottom: 5px;
+  border-bottom: 1px solid var(--line);
+}
+.pixel-context-back svg {
+  rotate: 180deg;
+}
+.pixel-context-layer.closing .pixel-context-menu {
+  animation: context-menu-out 160ms steps(4, end) both;
+  pointer-events: none;
+}
+@keyframes context-menu-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.94);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes context-menu-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes context-submenu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes context-menu-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+@media (pointer: coarse) {
+  .pixel-context-item,
+  .favorite-context-menu .pixel-context-item {
+    min-height: 44px;
+  }
+}

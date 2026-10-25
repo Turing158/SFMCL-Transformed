@@ -1,0 +1,94 @@
+.sfmcl-t-tooltip {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 1100;
+  display: flex;
+  width: max-content;
+  flex-direction: column;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow:
+    0 2px 0 var(--shadow-color),
+    0 6px 18px var(--shadow-color);
+  font:
+    13px/1.65 "Segoe UI",
+    "Microsoft YaHei",
+    system-ui,
+    sans-serif;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity 140ms cubic-bezier(0.4, 0, 1, 1),
+    transform 140ms cubic-bezier(0.4, 0, 1, 1);
+}
+.sfmcl-t-tooltip[data-open="true"] {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sfmcl-t-tooltip::after {
+  content: "";
+  position: absolute;
+  top: calc(100% - 3px);
+  left: calc(var(--tooltip-tail-x, 50%) - 4px);
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.sfmcl-t-tooltip[data-placement="bottom"]::after {
+  top: -5px;
+  transform: rotate(225deg);
+}
+.sfmcl-t-tooltip[data-placement="right"][data-open="false"] {
+  transform: translateX(-4px);
+}
+.sfmcl-t-tooltip[data-placement="right"]::after {
+  top: calc(var(--tooltip-tail-y, 50%) - 4px);
+  left: -5px;
+  transform: rotate(135deg);
+}
+.sfmcl-t-tooltip-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  white-space: pre-line;
+}
+.sfmcl-t-tooltip-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sfmcl-t-tooltip kbd {
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  font:
+    11px/1.5 "Cascadia Code",
+    Consolas,
+    monospace;
+  white-space: nowrap;
+}
+@media (forced-colors: active) {
+  .sfmcl-t-tooltip,
+  .sfmcl-t-tooltip::after {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+}

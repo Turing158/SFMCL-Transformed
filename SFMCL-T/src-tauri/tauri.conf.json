@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SFMCL-T",
+  "mainBinaryName": "SFMCL-T",
+  "version": "0.1.0",
+  "identifier": "com.sfmcl-t.minecraft-launcher",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist",
+    "windows": { "staticVCRuntime": true }
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'",
+      "assetProtocol": { "enable": true, "scope": [] }
+    }
+  },
+  "bundle": {
+    "shortDescription": "StarFall Minecraft Launcher-Transformed",
+    "longDescription": "StarFall Minecraft Launcher-Transformed (SFMCL-T), a Minecraft launcher built with Rust and Tauri.",
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "resources": ["resources/*"],
+    "windows": {
+      "webviewInstallMode": { "type": "skip" },
+      "nsis": {
+        "languages": ["SimpChinese"],
+        "installerHooks": "installer/webview2-hooks.nsh"
+      }
+    }
+  }
+}

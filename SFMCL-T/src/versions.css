@@ -1,0 +1,515 @@
+.versions-local {
+  min-width: 0;
+  container: local-versions / inline-size;
+}
+.versions-heading {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.versions-tools > .count {
+  flex-shrink: 0;
+  margin-left: 0;
+}
+.versions-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.versions-heading > .search-field {
+  width: 250px;
+  max-width: 250px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.versions-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.versions-type-filter {
+  width: 100px;
+}
+.versions-loader-filter {
+  width: 124px;
+}
+.versions-filters .pixel-select-trigger {
+  padding-inline: 10px;
+  gap: 6px;
+  font-size: 11px;
+}
+.versions-filters .pixel-select-trigger[data-active] {
+  --pixel-field-border: var(--px-frame-active-color);
+  color: var(--accent);
+}
+.versions-favorite-filter {
+  gap: 6px;
+  padding-inline: 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.versions-favorite-filter[aria-pressed="true"] {
+  --surface-edge: var(--accent);
+  --surface-fill: var(--soft);
+  color: var(--accent);
+}
+.versions-local .version-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(255px, 100%), 1fr));
+}
+.versions-local .version-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 48px auto auto;
+  gap: 20px 10px;
+  min-width: 0;
+  padding: 20px;
+}
+.versions-local .version-card > .resource-icon {
+  width: 48px;
+  height: 48px;
+  grid-column: 1;
+  grid-row: 1;
+}
+.version-copy {
+  min-width: 0;
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+.version-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.versions-local .version-name {
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.versions-local .version-meta {
+  margin: 6px 0 0;
+}
+.versions-local .version-directory {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.versions-directory-errors {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.versions-directory-errors .inline-error {
+  overflow-wrap: anywhere;
+}
+.versions-directory-errors .button {
+  justify-self: start;
+}
+.versions-loading-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 104px;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.versions-loading-spinner {
+  color: var(--accent);
+  animation: versions-loading-spin 1s linear infinite;
+}
+.versions-skeleton {
+  pointer-events: none;
+}
+.versions-skeleton-block {
+  display: block;
+  background: var(--line);
+  animation: versions-skeleton-pulse 1.4s ease-in-out infinite alternate;
+}
+.versions-skeleton-copy {
+  display: grid;
+  gap: 8px;
+}
+.versions-skeleton-title {
+  width: 66%;
+  height: 14px;
+}
+.versions-skeleton-meta {
+  width: 48%;
+  height: 10px;
+  animation-delay: 120ms;
+}
+.versions-skeleton-directory {
+  width: 34%;
+  height: 10px;
+  animation-delay: 240ms;
+}
+.versions-skeleton-action {
+  width: 38px;
+  height: 38px;
+}
+@keyframes versions-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes versions-skeleton-pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 0.8;
+  }
+}
+.version-kind {
+  position: absolute;
+  z-index: 2;
+  top: 20px;
+  right: 20px;
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.version-kind .badge {
+  white-space: nowrap;
+  transition:
+    transform 180ms ease,
+    color 180ms ease;
+}
+.version-kind:hover .badge {
+  transform: translateY(-2px);
+  color: var(--accent);
+}
+.version-card:has(.version-select:disabled) .version-kind {
+  cursor: default;
+}
+.version-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  grid-column: 2;
+  grid-row: 3;
+  position: static;
+}
+.version-actions .icon-button {
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+}
+.version-actions > button {
+  position: relative;
+  z-index: 2;
+}
+.version-actions .version-favorite {
+  position: absolute;
+  top: 25px;
+  left: 80px;
+}
+.version-favorite[aria-pressed="true"] {
+  color: var(--accent);
+}
+.version-selection {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  grid-column: 1;
+  grid-row: 3;
+  font-size: 10px;
+  color: var(--accent);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 180ms;
+}
+.selected .version-selection {
+  opacity: 1;
+}
+.versions-local .version-card.selected {
+  --surface-marker: transparent;
+  box-shadow: none;
+}
+.versions-local .version-card.selected::after {
+  display: none;
+}
+.version-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.version-select:disabled {
+  cursor: default;
+}
+.version-card:has(.version-select:hover:not(:disabled)) {
+  --surface-edge: var(--accent);
+  --surface-fill: color-mix(in srgb, var(--panel), var(--soft) 60%);
+}
+.versions-local .version-card > .surface-frame::before,
+.versions-local .version-card > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.version-card:has(.version-select:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.version-select:focus-visible {
+  outline: none;
+}
+.versions-local .version-card .inline-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.versions-local .version-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.versions-local .version-list .version-card {
+  grid-template-columns: 48px minmax(0, 1fr) auto auto;
+  grid-template-rows: auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+.version-list .version-copy {
+  grid-column: 2;
+  grid-row: 1;
+}
+.version-list .version-kind {
+  position: static;
+}
+.version-list .version-selection {
+  grid-column: 3;
+  grid-row: 1;
+}
+.version-list .version-actions {
+  grid-column: 4;
+  grid-row: 1;
+}
+.versions-local .version-list .version-favorite {
+  position: relative;
+  top: auto;
+  left: auto;
+}
+
+/* Keep the folder and path stable while the frame fades into view. */
+.versions-directory-toolbar {
+  gap: 10px;
+  padding-inline: 16px;
+}
+.versions-directory-select .pixel-select-trigger {
+  --pixel-frame: none;
+  --pixel-field-border: transparent;
+  /* Cover the border's inner area with the toolbar fill while fading out. */
+  --pixel-surface: var(--surface-fill, var(--panel));
+  padding-inline: 14px;
+  filter: none;
+}
+.versions-directory-select .pixel-select-trigger > .pixel-icon {
+  opacity: 0;
+  transition:
+    opacity 180ms,
+    transform 180ms;
+}
+.versions-directory-select
+  .pixel-select-trigger:is(:hover, :focus-visible, [aria-expanded="true"]):not(
+    :disabled
+  ) {
+  --pixel-field-border: var(--px-frame-active-color);
+  --pixel-surface: var(--pixel-well);
+  filter: drop-shadow(2px 2px 0 var(--pixel-shadow));
+}
+.versions-directory-select
+  .pixel-select-trigger:is(:hover, :focus-visible, [aria-expanded="true"])
+  > .pixel-icon {
+  opacity: 1;
+}
+.pixel-select-value.is-changing {
+  animation: version-directory-in 240ms ease-out;
+}
+@keyframes version-directory-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 10px;
+}
+.settings-card-heading h2 {
+  font-size: 15px;
+  margin: 0;
+}
+.settings-card-fields {
+  transition: opacity 220ms ease;
+}
+.settings-card-fields > p {
+  font-size: 11px;
+  margin-bottom: 19px;
+}
+.settings-card-fields > .input-action {
+  flex-wrap: wrap;
+}
+.settings-card-fields > .input-action > .pixel-select {
+  min-width: min(240px, 100%);
+}
+.settings-section[data-independent="false"] .settings-card-fields {
+  opacity: 0.7;
+}
+
+/* Tabs, selects, switches, the shared view toggle and resource cards own their feedback.
+   Transforming/filtering a tab button traps its text underneath the shared sliding indicator. */
+:is(.version-management, .version-settings-page, .local-resources)
+  button:not(
+    .version-select,
+    .pixel-select-trigger,
+    .pixel-switch,
+    .catalog-view,
+    .local-resource-title,
+    [role="tab"]
+  ) {
+  transition:
+    var(--surface-depth-transition),
+    color 180ms,
+    background-color 180ms,
+    opacity 220ms ease,
+    filter 180ms,
+    transform 180ms,
+    scale 180ms;
+}
+:is(.version-management, .version-settings-page, .local-resources)
+  button:not(
+    .version-select,
+    .pixel-select-trigger,
+    .pixel-switch,
+    .catalog-view,
+    .local-resource-title,
+    [role="tab"]
+  )
+  > .surface-frame::before,
+:is(.version-management, .version-settings-page, .local-resources)
+  button:not(
+    .version-select,
+    .pixel-select-trigger,
+    .pixel-switch,
+    .catalog-view,
+    .local-resource-title,
+    [role="tab"]
+  )
+  > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+:is(.version-management, .version-settings-page, .local-resources)
+  button:not(
+    .version-select,
+    .pixel-select-trigger,
+    .pixel-switch,
+    .catalog-view,
+    .local-resource-title,
+    [role="tab"]
+  ):active:not(:disabled) {
+  scale: 0.96;
+  transform: translateY(1px);
+}
+:is(.version-management, .version-settings-page, .local-resources)
+  button:not(.pixel-select-trigger, .catalog-view, [role="tab"])
+  > svg {
+  transition: transform 180ms ease;
+}
+:is(.version-management, .version-settings-page, .local-resources)
+  button:not(.pixel-select-trigger, .catalog-view, [role="tab"]):is(
+    :hover,
+    :focus-visible
+  ):not(:disabled)
+  > svg {
+  transform: rotate(8deg) scale(1.1);
+}
+@container local-versions (max-width: 620px) {
+  .versions-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .versions-heading > .search-field {
+    width: 100%;
+    max-width: none;
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .versions-heading > .versions-tools {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .versions-filters {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .version-list .version-selection {
+    display: none;
+  }
+  .versions-local .version-list .version-card {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+  .versions-local .version-list .version-card > .resource-icon {
+    width: 40px;
+    height: 40px;
+  }
+  .version-list .version-actions {
+    grid-column: 3;
+  }
+  .version-list .version-title {
+    gap: 8px;
+  }
+}
+@container local-versions (max-width: 440px) {
+  .versions-filters > .pixel-select {
+    width: 0;
+    flex: 1;
+  }
+  .versions-favorite-filter {
+    width: 38px;
+    padding-inline: 0;
+  }
+  .versions-favorite-filter > span:not(.surface-frame) {
+    display: none;
+  }
+  .versions-local .version-list .version-card {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .version-list .version-actions {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+  .version-list .version-selection {
+    display: flex;
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 0;
+  }
+}

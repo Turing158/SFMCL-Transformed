@@ -1,0 +1,791 @@
+/* Sidebar B: reuse PixelFrame's three layers; only decoration is clipped. */
+/* One inherited progress value keeps the rail, controls and copy in sync,
+   including when a second toggle reverses an unfinished transition. */
+@property --rail-open {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+.app.collapsed {
+  --rail-open: 0;
+}
+.sidebar {
+  --rail-inset: calc(8px + 4px * var(--rail-open));
+  --rail-edge: color-mix(in srgb, var(--sidebar), white 17%);
+  --rail-fill: color-mix(in srgb, var(--sidebar), white 5.5%);
+  --rail-edge-hover: color-mix(in srgb, var(--sidebar), white 48%);
+  --rail-fill-hover: color-mix(in srgb, var(--sidebar), white 14%);
+  --rail-shadow: color-mix(in srgb, var(--sidebar), #000 55%);
+  --sidebar-tip: color-mix(in srgb, var(--accent), #fff 55%);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 var(--rail-inset) 14px;
+  color: #fff;
+  background: var(--sidebar);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-padding-block: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+}
+:root[data-theme="dark"] .sidebar {
+  --rail-shadow: color-mix(in srgb, var(--sidebar), black 80%);
+  --rail-edge: color-mix(in srgb, var(--sidebar), white 14%);
+  --rail-fill: color-mix(in srgb, var(--sidebar), white 4.5%);
+  --rail-edge-hover: color-mix(in srgb, var(--sidebar), white 44%);
+  --rail-fill-hover: color-mix(in srgb, var(--sidebar), white 12%);
+}
+.sidebar > * {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+.sidebar .surface-frame::before,
+.sidebar .surface-frame::after {
+  transition: background-color 180ms;
+}
+.sidebar button:focus-visible {
+  outline: 3px solid var(--sidebar-tip);
+  outline-offset: 3px;
+}
+
+/* The logo reveals the rail toggle; the wordmark remains a separate home link. */
+.sidebar .brand {
+  --brand-scale: 0.75;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(8px * var(--brand-scale) * var(--rail-open));
+  height: var(--topbar-height);
+  min-height: var(--topbar-height);
+  padding: 0;
+  color: #fff;
+  background: none;
+  text-align: left;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.7px;
+  white-space: nowrap;
+  cursor: default;
+}
+.sidebar .brand button:focus-visible {
+  outline-width: calc(3px * var(--brand-scale));
+  outline-offset: calc(-4px * var(--brand-scale));
+}
+.sidebar .brand-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 calc(var(--topbar-height) * var(--brand-scale));
+  width: calc(var(--topbar-height) * var(--brand-scale));
+  height: calc(var(--topbar-height) * var(--brand-scale));
+}
+.sidebar .brand-home {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: var(--rail-open) 1 auto;
+  min-height: calc(var(--button-height) * var(--brand-scale));
+  padding: 0;
+  line-height: 1.25;
+  text-align: center;
+  color: inherit;
+}
+.sidebar .brand-wordmark {
+  display: block;
+  flex-shrink: 0;
+  font-family: PlayerPixel, monospace;
+  font-size: calc(32px * var(--brand-scale));
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+}
+.sidebar .brand-mark {
+  display: block;
+  flex: 0 0 auto;
+  width: calc(32px * var(--brand-scale));
+  height: calc(32px * var(--brand-scale));
+  object-fit: contain;
+}
+/* Balance the logo with an equal trailing space to center the wordmark. */
+.sidebar .brand::before {
+  content: "";
+  order: 1;
+  flex: 0 0 calc(var(--topbar-height) * var(--brand-scale) * var(--rail-open));
+}
+.sidebar .brand::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    #fff 0 7px,
+    transparent 7px 13px
+  );
+  opacity: 0.16;
+  transition: opacity 220ms;
+}
+.sidebar .brand:hover::after {
+  opacity: 0.44;
+}
+.sidebar nav {
+  display: grid;
+  gap: 7px;
+  padding-block: 2px 3px;
+}
+.sidebar nav button.has-surface,
+.sidebar :is(.profile-button, .sidebar-collapse, .sidebar-task, .sidebar-tip) {
+  --surface-edge: var(--rail-edge);
+  --surface-fill: var(--rail-fill);
+  --surface-base: var(--rail-shadow);
+  --surface-stroke: 2px;
+  --surface-inset-shape: var(--surface-shape-2);
+  --surface-depth: 2px;
+  --surface-marker: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(10px * var(--rail-open));
+  min-width: 0;
+  color: var(--sidebar-muted);
+  text-align: left;
+  transition:
+    --surface-depth 160ms cubic-bezier(0.32, 0.72, 0, 1),
+    color 180ms,
+    opacity 220ms ease,
+    translate 160ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sidebar nav button.has-surface {
+  height: calc(var(--button-height) + 2px * var(--rail-open));
+  min-height: calc(var(--button-height) + 2px * var(--rail-open));
+  width: calc(
+    var(--button-height) + (100% - var(--button-height)) * var(--rail-open)
+  );
+  margin-inline: auto;
+  padding: calc(4px + 4px * var(--rail-open));
+  padding-left: calc(4px + 12px * var(--rail-open));
+  font-size: 13px;
+  font-weight: 600;
+  animation: rail-enter 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.sidebar :is(.nav-copy, .profile-copy, .task-copy) {
+  flex: var(--rail-open) 1 auto;
+}
+.sidebar :is(.brand-copy, .nav-copy, .profile-copy, .task-copy) {
+  min-width: 0;
+  max-width: calc(200px * var(--rail-open));
+  overflow: hidden;
+  white-space: nowrap;
+}
+.sidebar
+  :is(
+    .brand-copy,
+    .nav-copy,
+    .profile-copy,
+    .task-copy,
+    .task-count,
+    .sidebar-tip
+  ) {
+  opacity: var(--rail-open);
+  visibility: visible;
+  transition: visibility 0s;
+}
+.sidebar nav button > svg {
+  opacity: 0.92;
+}
+.sidebar nav button.has-surface:hover,
+.sidebar
+  :is(.profile-button, .sidebar-collapse, .sidebar-task):hover:not(:disabled) {
+  --surface-edge: var(--rail-edge-hover);
+  --surface-fill: var(--rail-fill-hover);
+  color: #fff;
+}
+.sidebar nav button[aria-current="page"] {
+  --surface-edge: color-mix(in srgb, var(--accent), #000 34%);
+  --surface-fill: var(--accent);
+  --surface-base: color-mix(in srgb, var(--accent), #000 58%);
+  --surface-depth: 3px;
+  color: var(--on-accent);
+  translate: 0 -2px;
+}
+.sidebar nav button[aria-current="page"]:hover {
+  --surface-edge: color-mix(in srgb, var(--accent), #000 42%);
+  --surface-fill: var(--accent);
+  color: var(--on-accent);
+}
+.sidebar nav button[aria-current="page"] > .surface-frame::after {
+  background-image: linear-gradient(
+    100deg,
+    transparent 24%,
+    rgba(255, 255, 255, 0.07) 50%,
+    transparent 76%
+  );
+  background-repeat: no-repeat;
+  background-size: 240% 100%;
+  animation: rail-sheen 4.6s ease-in-out infinite;
+}
+.sidebar nav button.has-surface:active,
+.sidebar
+  :is(.profile-button, .sidebar-collapse, .sidebar-task):active:not(:disabled) {
+  --surface-depth: 0px;
+  translate: 0 2px;
+}
+.sidebar nav button:nth-child(2) {
+  animation-delay: 35ms;
+}
+.sidebar nav button:nth-child(3) {
+  animation-delay: 70ms;
+}
+.sidebar nav button:nth-child(4) {
+  animation-delay: 105ms;
+}
+.sidebar nav button:nth-child(5) {
+  animation-delay: 140ms;
+}
+.sidebar nav button:nth-child(6) {
+  animation-delay: 175ms;
+}
+.sidebar :is(.nav-count, .task-count) {
+  --surface-shape: var(--corner-badge);
+  --surface-shape-0: var(--corner-badge-inset-0);
+  --surface-shape-1: var(--corner-badge-inset-1);
+  --surface-shape-2: var(--corner-badge-inset-2);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-depth: 0px;
+  --surface-edge: color-mix(in srgb, var(--danger), #000 36%);
+  --surface-fill: var(--danger);
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-width: 19px;
+  min-height: 18px;
+  margin-left: auto;
+  padding: 1px 4px;
+  color: var(--on-accent);
+  font:
+    700 10px/16px "Cascadia Code",
+    Consolas,
+    monospace;
+}
+.sidebar .nav-count > .surface-frame::after {
+  animation: rail-badge-pulse 2.4s ease-in-out infinite;
+}
+.sidebar-bottom {
+  display: grid;
+  gap: 0;
+  margin-top: auto;
+  padding-top: 12px;
+}
+/* Reserve one navigation option above the bottom-anchored favorites. */
+.sidebar .sidebar-favorites-space {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  flex: 1 1 0;
+  min-height: 0;
+  padding-top: calc(var(--button-height) + 2px * var(--rail-open) + 7px - 10px);
+}
+.sidebar-favorites-viewport {
+  --favorite-scrollbar-width: 6px;
+  position: relative;
+  isolation: isolate;
+  height: 100%;
+  max-height: 320px;
+  min-height: 0;
+}
+/* Fixed overlays fade options into the rail background at the viewport edges. */
+.sidebar-favorites-viewport::before,
+.sidebar-favorites-viewport::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset-inline: 0;
+  height: 24px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    var(--favorite-fade-direction, to bottom),
+    var(--sidebar),
+    transparent
+  );
+  transition: opacity 280ms ease-in-out;
+}
+.sidebar-favorites-viewport::before {
+  top: 0;
+}
+.sidebar-favorites-viewport::after {
+  --favorite-fade-direction: to top;
+  bottom: 0;
+}
+.sidebar-favorites-viewport[data-scroll-top]::before,
+.sidebar-favorites-viewport[data-scroll-bottom]::after {
+  opacity: 1;
+}
+.sidebar .sidebar-favorites {
+  width: calc(100% + var(--rail-inset));
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  margin-right: calc(-1 * var(--rail-inset));
+  /* Extend only the scrollport to the rail edge; keep option alignment. */
+  padding: 0 var(--rail-inset) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * (1 - var(--rail-open)));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  /* The overlay scrollbar owns its edge space without resizing the options. */
+  scrollbar-width: none;
+  list-style: none;
+}
+.sidebar-favorites::-webkit-scrollbar {
+  display: none;
+  width: 0;
+}
+.sidebar-favorites-scrollbar {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  right: calc(-1 * var(--rail-inset));
+  width: var(--favorite-scrollbar-width);
+  opacity: 0;
+  outline-offset: -1px;
+  touch-action: none;
+  user-select: none;
+  transition: opacity 220ms ease;
+}
+.sidebar-favorites-scrollbar:is(
+  :hover,
+  :focus-visible,
+  [data-scrolling],
+  [data-dragging]
+) {
+  opacity: 1;
+}
+.sidebar-favorites-scrollbar:not([data-scrollable]) {
+  opacity: 0;
+  pointer-events: none;
+}
+.sidebar-favorites-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--sidebar-tip) 40%, transparent);
+  background-clip: padding-box;
+  transition: background-color 180ms ease;
+}
+.sidebar-favorites-scrollbar:is(:hover, :focus-visible)
+  .sidebar-favorites-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--sidebar-tip) 65%, transparent);
+}
+.sidebar-favorites-scrollbar[data-dragging] .sidebar-favorites-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--sidebar-tip) 85%, transparent);
+}
+.sidebar-favorites > li {
+  flex: 0 0 auto;
+}
+.sidebar-favorites > li:first-child {
+  margin-top: auto;
+}
+.sidebar .sidebar-favorite {
+  --surface-edge: transparent;
+  --surface-fill: transparent;
+  --surface-base: transparent;
+  --surface-depth: 0px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(9px * var(--rail-open));
+  width: calc(
+    var(--button-height) + (100% - var(--button-height)) * var(--rail-open)
+  );
+  height: calc(var(--button-height) + 6px * var(--rail-open));
+  min-height: calc(var(--button-height) + 6px * var(--rail-open));
+  margin-inline: auto;
+  padding: calc(4px + 2px * var(--rail-open));
+  border-radius: 0;
+  text-align: left;
+  color: var(--sidebar-muted);
+  background: transparent;
+  transition:
+    color 180ms,
+    opacity 220ms ease;
+}
+.sidebar .sidebar-favorite:not(.active):is(:hover, :focus-visible):not(:disabled) {
+  --surface-edge: color-mix(in srgb, var(--sidebar), #fff 12%);
+  --surface-fill: color-mix(in srgb, var(--sidebar), #fff 12%);
+  color: #fff;
+}
+.sidebar .sidebar-favorite.active {
+  --surface-edge: color-mix(in srgb, var(--sidebar), #fff 26%);
+  --surface-fill: color-mix(in srgb, var(--sidebar), #000 16%);
+  color: #fff;
+}
+.sidebar .sidebar-favorite.active:is(:hover, :focus-visible):not(:disabled) {
+  --surface-edge: color-mix(in srgb, var(--sidebar), #fff 38%);
+}
+.sidebar .sidebar-favorite > .surface-frame {
+  inset-block: calc(2px * var(--rail-open))
+    calc(2px * var(--rail-open) - var(--surface-depth));
+}
+.sidebar .sidebar-favorite:focus-visible {
+  outline-offset: -3px;
+}
+.sidebar-favorite-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+}
+.sidebar-favorite-icon .resource-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.sidebar-favorite-copy {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  flex: var(--rail-open) 1 auto;
+  min-width: 0;
+  max-width: calc(200px * var(--rail-open));
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 16px;
+  opacity: var(--rail-open);
+  visibility: visible;
+  transition: visibility 0s;
+}
+.sidebar.rail-collapsed .sidebar-favorite-copy {
+  visibility: hidden;
+  transition-delay: 240ms;
+}
+.sidebar:has(.sidebar-favorites-space) .sidebar-bottom {
+  /* Together with the sidebar's 10px gap this leaves the normal 12px spacing. */
+  padding-top: 2px;
+}
+.sidebar-downloads {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+.sidebar .sidebar-task {
+  --surface-depth: 1px;
+  height: calc(var(--button-height) + 4px * var(--rail-open));
+  min-height: calc(var(--button-height) + 4px * var(--rail-open));
+  width: calc(
+    var(--button-height) + (100% - var(--button-height)) * var(--rail-open)
+  );
+  margin-inline: auto;
+  padding: calc(4px + 2px * var(--rail-open));
+  gap: calc(7px * var(--rail-open));
+}
+.sidebar .task-count {
+  min-width: calc(19px * var(--rail-open));
+  max-width: calc(64px * var(--rail-open));
+  margin-left: 0;
+  padding: calc(1px * var(--rail-open)) calc(4px * var(--rail-open));
+  overflow: hidden;
+}
+.sidebar .task-copy {
+  min-width: 0;
+}
+.sidebar .task-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+}
+.sidebar .task-copy small {
+  display: block;
+  color: var(--sidebar-muted);
+  font-size: 9px;
+}
+.sidebar-progress-motion {
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
+}
+.sidebar .sidebar-progress {
+  --surface-shape: var(--corner-micro);
+  --surface-shape-0: var(--corner-micro-inset-0);
+  --surface-shape-1: var(--corner-micro-inset-1);
+  --surface-shape-2: var(--corner-micro-inset-2);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-depth: 0px;
+  --surface-base: transparent;
+  --surface-edge: rgba(0, 0, 0, 0.5);
+  --surface-fill: rgba(0, 0, 0, 0.36);
+  height: 8px;
+  width: calc(
+    var(--button-height) + (100% - var(--button-height)) * var(--rail-open)
+  );
+  justify-self: center;
+  margin-top: 8px;
+  padding: 1px;
+}
+.sidebar .sidebar-progress-fill {
+  --surface-shape: var(--corner-micro);
+  --surface-shape-0: var(--corner-micro-inset-0);
+  --surface-shape-1: var(--corner-micro-inset-1);
+  --surface-shape-2: var(--corner-micro-inset-2);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-depth: 0px;
+  --surface-base: transparent;
+  --surface-edge: transparent;
+  --surface-fill: linear-gradient(90deg, var(--accent), var(--sidebar-tip));
+  display: block;
+  height: 100%;
+}
+/* Animate light, never the measured progress. Unknown totals have no numeric value. */
+.sidebar-progress[data-status="running"]
+  .sidebar-progress-fill
+  > .surface-frame::after {
+  background-size: 200% 100%;
+  animation: rail-progress 3.6s ease-in-out infinite alternate;
+}
+.sidebar-progress:not([aria-valuenow]) .sidebar-progress-fill {
+  opacity: 0.55;
+}
+.sidebar .sidebar-tip {
+  --surface-depth: 1px;
+  justify-content: flex-start;
+  height: calc(68px * var(--rail-open));
+  padding: calc(12px * var(--rail-open));
+  margin-bottom: calc(12px * var(--rail-open));
+  overflow: hidden;
+  color: var(--sidebar-tip);
+  transition:
+    color 180ms,
+    translate 180ms ease,
+    visibility 0s;
+}
+.sidebar .sidebar-tip:hover {
+  --surface-edge: var(--rail-edge-hover);
+  --surface-fill: var(--rail-fill-hover);
+  translate: 0 -2px;
+}
+.sidebar .sidebar-tip > svg {
+  transition: transform 180ms ease;
+}
+.sidebar .sidebar-tip:hover > svg {
+  transform: rotate(8deg) scale(1.1);
+}
+.sidebar .sidebar-tip p {
+  color: var(--sidebar-muted);
+  font-size: 11px;
+  line-height: 1.9;
+  white-space: nowrap;
+}
+.sidebar .profile-button {
+  height: calc(var(--button-height) + 6px * var(--rail-open));
+  min-height: calc(var(--button-height) + 6px * var(--rail-open));
+  width: calc(
+    var(--button-height) + (100% - var(--button-height)) * var(--rail-open)
+  );
+  padding: calc(4px + 2px * var(--rail-open));
+  margin: 0 auto;
+}
+.sidebar .profile-chev {
+  width: calc(16px * var(--rail-open));
+  opacity: var(--rail-open);
+}
+.sidebar .avatar {
+  --surface-shape: var(--corner-menu);
+  --surface-shape-0: var(--corner-menu-inset-0);
+  --surface-shape-1: var(--corner-menu-inset-1);
+  --surface-shape-2: var(--corner-menu-inset-2);
+  --surface-stroke: 2px;
+  --surface-inset-shape: var(--surface-shape-2);
+  --surface-depth: 0px;
+  --surface-edge: rgba(0, 0, 0, 0.45);
+  --surface-fill: var(--sidebar);
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 4px;
+}
+.sidebar .avatar canvas {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+.sidebar .profile-copy {
+  min-width: 0;
+}
+.sidebar .profile-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 550;
+}
+.sidebar .profile-copy small {
+  display: block;
+  color: var(--sidebar-muted);
+  font-size: 10px;
+}
+.sidebar .sidebar-collapse {
+  position: absolute;
+  inset: calc(
+    (var(--topbar-height) - var(--button-height)) * var(--brand-scale) / 2
+  );
+  display: grid;
+  place-items: center;
+  width: calc(var(--button-height) * var(--brand-scale));
+  min-width: calc(var(--button-height) * var(--brand-scale));
+  height: calc(var(--button-height) * var(--brand-scale));
+  padding: calc(8px * var(--brand-scale));
+  color: var(--sidebar-tip);
+  background: none;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 160ms,
+    color 180ms;
+}
+.sidebar .brand-logo:hover .sidebar-collapse:not(:disabled),
+.sidebar .sidebar-collapse:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sidebar .brand-logo:has(.sidebar-collapse:enabled):hover .brand-mark,
+.sidebar .brand-logo:has(.sidebar-collapse:focus-visible) .brand-mark {
+  opacity: 0;
+}
+.sidebar .sidebar-collapse:disabled {
+  opacity: 0;
+  cursor: default;
+}
+.sidebar .collapse-chev {
+  width: calc(22px * var(--brand-scale));
+  height: calc(22px * var(--brand-scale));
+  transform: rotate(0deg);
+}
+.sidebar :is(.brand-mark, .avatar, .sidebar-favorite-icon),
+.sidebar button > svg,
+.favorite-context-menu .pixel-context-icon {
+  transform-origin: center;
+  rotate: 0deg;
+  scale: 1;
+  transition:
+    transform 200ms cubic-bezier(0.32, 0.72, 0, 1),
+    rotate 180ms cubic-bezier(0.32, 0.72, 0, 1),
+    scale 180ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 160ms;
+}
+.sidebar .brand:hover .brand-mark,
+.sidebar .profile-button:hover:not(:disabled) .avatar,
+.sidebar .sidebar-favorite:hover:not(:disabled) .sidebar-favorite-icon,
+.sidebar button:hover:not(:disabled) > svg,
+.favorite-context-menu .pixel-context-item:hover:not(:disabled) .pixel-context-icon {
+  rotate: 8deg;
+  scale: 1.1;
+}
+
+@media (max-width: 1100px) {
+  .sidebar .brand {
+    font-size: 19px;
+  }
+  .sidebar nav button.has-surface {
+    gap: calc(8px * var(--rail-open));
+    padding-inline: calc(4px + 10px * var(--rail-open))
+      calc(4px + 4px * var(--rail-open));
+  }
+}
+/* The effective class includes both the manual preference and the media query. */
+.sidebar.rail-collapsed
+  :is(
+    .sidebar-tip,
+    .profile-copy,
+    .task-copy,
+    .task-count,
+    .brand-copy,
+    .nav-copy
+  ) {
+  visibility: hidden;
+  transition-delay: 240ms;
+}
+.sidebar.rail-collapsed .nav-count {
+  position: absolute;
+  right: 0;
+  top: 0;
+  margin: 0;
+  min-width: 15px;
+  min-height: 16px;
+  font-size: 9px;
+}
+.sidebar.rail-collapsed .collapse-chev {
+  transform: rotate(180deg);
+}
+@media (max-width: 650px) {
+  .sidebar.rail-collapsed {
+    --rail-inset: 6px;
+  }
+  .sidebar .brand-mark {
+    width: calc(28px * var(--brand-scale));
+    height: calc(28px * var(--brand-scale));
+  }
+}
+@keyframes rail-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes rail-badge-pulse {
+  0%,
+  100% {
+    background-color: var(--danger);
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--danger), #fff 16%);
+  }
+}
+@keyframes rail-sheen {
+  0%,
+  48% {
+    background-position: -140% 0;
+  }
+  88%,
+  100% {
+    background-position: 240% 0;
+  }
+}
+@keyframes rail-progress {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}

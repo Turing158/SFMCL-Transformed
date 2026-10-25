@@ -1,0 +1,1013 @@
+/* Frames and fill spans are generated together in pixel-geometry.css. */
+@property --pixel-field-border {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+@property --pixel-switch-fill {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+:root {
+  --pixel-well: color-mix(in srgb, var(--bg), var(--panel) 25%);
+  --pixel-shadow: var(--shadow-color);
+  --pixel-on-accent: var(--on-accent);
+  --pixel-thumb: color-mix(in srgb, var(--accent), var(--panel) 68%);
+  --pixel-check-shadow: var(--sidebar);
+}
+:root[data-theme="dark"] {
+  --pixel-check-shadow: #3d7752;
+}
+:root[data-theme="dark"][data-accent="puce"] {
+  --pixel-check-shadow: #895b66;
+}
+:root[data-theme="dark"][data-accent="ebony"] {
+  --pixel-check-shadow: #4f738e;
+}
+
+.pixel-surface {
+  --pixel-background: var(--pixel-background-control);
+  --pixel-background-size: var(--pixel-background-size-control);
+  --pixel-surface: var(--pixel-well);
+  --pixel-frame: var(--px-frame-line);
+  --pixel-frame-slice: var(--pixel-frame-slice-control);
+  border-radius: 0;
+  border-color: transparent !important;
+  border-image-source: var(--pixel-frame) !important;
+  border-image-slice: var(--pixel-frame-slice) !important;
+  border-image-width: calc(var(--pixel-frame-slice) * 1px) !important;
+  border-image-outset: 0 !important;
+  border-image-repeat: stretch !important;
+  background-color: transparent !important;
+  background-image: var(--pixel-background) !important;
+  background-size: var(--pixel-background-size) !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-origin: border-box !important;
+  background-clip: border-box !important;
+  box-shadow: none !important;
+  filter: drop-shadow(2px 2px 0 var(--pixel-shadow));
+}
+.pixel-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+/* Native inputs cannot host decorative pseudo-elements. Draw their eroded
+   fill over a color-animated outer contour, keeping the same pixel geometry. */
+input.pixel-input,
+textarea.pixel-input,
+.pixel-select-trigger,
+.pixel-search {
+  --pixel-frame: none;
+  --pixel-background: var(--pixel-field-background);
+  --pixel-background-size: var(--pixel-field-background-size);
+  --pixel-field-border: var(--px-frame-line-color);
+  transition:
+    --pixel-field-border 180ms ease,
+    color 180ms ease,
+    opacity 220ms ease,
+    filter 180ms ease;
+}
+input.pixel-input,
+textarea.pixel-input,
+.pixel-select-trigger {
+  min-height: 44px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-width: 2px;
+  border-style: solid;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 20px;
+}
+input.pixel-input:hover:not(:disabled),
+textarea.pixel-input:hover:not(:disabled),
+.pixel-select-trigger:hover:not(:disabled) {
+  --pixel-field-border: var(--px-frame-active-color);
+}
+input.pixel-input:focus,
+textarea.pixel-input:focus,
+.pixel-select-trigger:focus-visible,
+.pixel-select-trigger[aria-expanded="true"] {
+  --pixel-field-border: var(--px-frame-active-color);
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+  filter: drop-shadow(2px 2px 0 var(--pixel-shadow))
+    drop-shadow(0 2px 0 var(--accent));
+}
+input.pixel-input::placeholder,
+textarea.pixel-input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+input.pixel-input[aria-invalid="true"],
+textarea.pixel-input[aria-invalid="true"],
+input.pixel-input:user-invalid {
+  --pixel-field-border: var(--px-frame-error-color);
+}
+input.pixel-input:disabled,
+textarea.pixel-input:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+input.pixel-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+input.pixel-input::-webkit-inner-spin-button,
+input.pixel-input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+textarea.pixel-textarea {
+  min-height: 102px;
+  resize: vertical;
+}
+
+input.pixel-checkbox {
+  --pixel-background: var(--pixel-background-badge);
+  --pixel-background-size: var(--pixel-background-size-badge);
+  --pixel-frame-slice: var(--pixel-frame-slice-badge);
+  --pixel-frame: var(--px-frame-line-small);
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid transparent;
+  vertical-align: middle;
+  cursor: pointer;
+}
+input.pixel-checkbox:checked,
+input.pixel-checkbox:indeterminate {
+  --pixel-frame: var(--px-frame-active-small);
+  --pixel-surface: var(--accent);
+}
+input.pixel-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  width: 3px;
+  height: 3px;
+  background: var(--pixel-on-accent);
+  box-shadow:
+    3px 3px 0 var(--pixel-on-accent),
+    6px 0 0 var(--pixel-on-accent),
+    9px -3px 0 var(--pixel-on-accent);
+}
+input.pixel-checkbox:indeterminate::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  width: 10px;
+  height: 3px;
+  background: var(--pixel-on-accent);
+  box-shadow: none;
+}
+input.pixel-checkbox:hover:not(:disabled) {
+  --pixel-frame: var(--px-frame-active-small);
+}
+input.pixel-checkbox:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+input.pixel-checkbox:focus-visible {
+  outline: 2px solid transparent;
+  filter: drop-shadow(2px 0 0 var(--accent)) drop-shadow(-2px 0 0 var(--accent))
+    drop-shadow(0 2px 0 var(--accent)) drop-shadow(0 -2px 0 var(--accent));
+}
+.skin-options label:has(.pixel-checkbox) {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.pixel-switch {
+  --switch-duration: 240ms;
+  --switch-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  display: grid;
+  place-items: center;
+  width: 48px;
+  min-width: 48px;
+  height: var(--button-height);
+  padding: 0;
+}
+.pixel-switch-track {
+  --pixel-background: var(--pixel-background-badge);
+  --pixel-background-size: var(--pixel-background-size-badge);
+  --pixel-frame-slice: var(--pixel-frame-slice-badge);
+  --pixel-frame: var(--px-frame-line-small);
+  --pixel-switch-fill: var(--pixel-well);
+  --pixel-surface: var(--pixel-switch-fill);
+  display: block;
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border: 2px solid transparent;
+  transition:
+    --pixel-switch-fill var(--switch-duration) var(--switch-easing),
+    filter 180ms ease;
+}
+/* Crossfade the pixel outline without moving or resizing the switch. */
+.pixel-switch-track::before,
+.pixel-switch-thumb::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border: 2px solid transparent;
+  border-image: var(--px-frame-active-small) 4 / 4px / 0 stretch;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--switch-duration) var(--switch-easing);
+}
+.pixel-switch-thumb {
+  --pixel-background: var(--pixel-background-badge);
+  --pixel-background-size: var(--pixel-background-size-badge);
+  --pixel-frame-slice: var(--pixel-frame-slice-badge);
+  --pixel-frame: var(--px-frame-line-small);
+  --pixel-switch-fill: var(--pixel-thumb);
+  --pixel-surface: var(--pixel-switch-fill);
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid transparent;
+  transform: translateX(0);
+  transition:
+    transform var(--switch-duration) var(--switch-easing),
+    --pixel-switch-fill var(--switch-duration) var(--switch-easing),
+    scale 120ms ease;
+}
+.pixel-switch[aria-checked="true"] .pixel-switch-track {
+  --pixel-switch-fill: var(--soft);
+}
+.pixel-switch[aria-checked="true"] .pixel-switch-thumb {
+  --pixel-switch-fill: var(--accent);
+  transform: translateX(18px);
+}
+.pixel-switch[aria-checked="true"] .pixel-switch-track::before,
+.pixel-switch[aria-checked="true"] .pixel-switch-thumb::before {
+  opacity: 1;
+}
+.pixel-switch:hover:not(:disabled) .pixel-switch-track,
+.pixel-switch:focus-visible:not(:disabled) .pixel-switch-track {
+  --pixel-switch-fill: color-mix(in srgb, var(--soft), var(--accent) 12%);
+  filter: drop-shadow(2px 2px 0 var(--pixel-shadow))
+    drop-shadow(0 0 3px color-mix(in srgb, var(--accent), transparent 65%));
+}
+.pixel-switch:is(:hover, :focus-visible):not(:disabled)
+  .pixel-switch-track::before {
+  opacity: 1;
+}
+.pixel-switch:active:not(:disabled) .pixel-switch-thumb {
+  scale: 0.94;
+}
+.pixel-switch:focus-visible {
+  outline: 2px solid transparent;
+}
+.pixel-switch:focus-visible .pixel-switch-track {
+  filter: drop-shadow(2px 0 0 var(--accent)) drop-shadow(-2px 0 0 var(--accent))
+    drop-shadow(0 2px 0 var(--accent)) drop-shadow(0 -2px 0 var(--accent));
+}
+
+/* Both labels reserve the same track, so its size stays fixed while toggling. */
+.pixel-switch-labeled {
+  width: auto;
+  min-width: 80px;
+  flex-shrink: 0;
+  padding-inline: 2px;
+}
+.pixel-switch-labeled .pixel-switch-track {
+  display: grid;
+  align-items: center;
+  min-width: 76px;
+  width: auto;
+  height: 30px;
+}
+.pixel-switch-label {
+  grid-area: 1 / 1;
+  padding: 0 32px 0 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 26px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(4px);
+  transition:
+    opacity var(--switch-duration) var(--switch-easing),
+    transform var(--switch-duration) var(--switch-easing);
+}
+.pixel-switch-label[data-state="unchecked"] {
+  padding-inline: 32px 8px;
+  color: var(--text);
+  transform: translateX(-4px);
+}
+.pixel-switch[aria-checked="true"] .pixel-switch-label[data-state="checked"],
+.pixel-switch[aria-checked="false"]
+  .pixel-switch-label[data-state="unchecked"] {
+  opacity: 1;
+  transform: translateX(0);
+}
+.pixel-switch-labeled .pixel-switch-thumb {
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  transform: none;
+  transition:
+    left var(--switch-duration) var(--switch-easing),
+    --pixel-switch-fill var(--switch-duration) var(--switch-easing),
+    scale 120ms ease;
+}
+.pixel-switch-labeled[aria-checked="true"] .pixel-switch-thumb {
+  left: calc(100% - 24px);
+  transform: none;
+}
+
+.pixel-range {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  height: 44px;
+  transition: opacity 220ms ease;
+}
+.pixel-range-track {
+  --pixel-background: var(--pixel-background-badge);
+  --pixel-background-size: var(--pixel-background-size-badge);
+  --pixel-frame-slice: var(--pixel-frame-slice-badge);
+  --pixel-frame: var(--px-frame-line-small);
+  position: absolute;
+  top: 16px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  border: 2px solid transparent;
+  pointer-events: none;
+  transition:
+    transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    filter 180ms ease;
+}
+.pixel-range:has(.pixel-range-input:is(:hover, :focus-visible):not(:disabled))
+  .pixel-range-track {
+  --pixel-frame: var(--px-frame-active-small);
+  transform: scaleY(1.1);
+}
+.pixel-range:has(.pixel-range-input:active:not(:disabled)) .pixel-range-track {
+  transform: scaleY(1.18);
+  transition-duration: 90ms;
+}
+.pixel-range-fill {
+  display: block;
+  width: var(--range-progress);
+  height: 100%;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--accent) 0 10px,
+    var(--accent-hover) 10px 12px
+  );
+  clip-path: var(--corner-micro);
+}
+input.pixel-range-input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+}
+input.pixel-range-input:focus-visible {
+  outline: 2px solid transparent;
+}
+input.pixel-range-input::-webkit-slider-runnable-track {
+  height: 12px;
+  background: transparent;
+}
+input.pixel-range-input::-moz-range-track {
+  height: 12px;
+  background: transparent;
+}
+input.pixel-range-input::-webkit-slider-thumb {
+  --pixel-background: var(--pixel-background-control);
+  --pixel-background-size: var(--pixel-background-size-control);
+  --pixel-surface: var(--pixel-well);
+  --pixel-frame: var(--px-frame-line);
+  --pixel-frame-slice: var(--pixel-frame-slice-control);
+  border-radius: 0;
+  border-color: transparent !important;
+  border-image-source: var(--pixel-frame) !important;
+  border-image-slice: var(--pixel-frame-slice) !important;
+  border-image-width: calc(var(--pixel-frame-slice) * 1px) !important;
+  border-image-outset: 0 !important;
+  border-image-repeat: stretch !important;
+  background-color: transparent !important;
+  background-image: var(--pixel-background) !important;
+  background-size: var(--pixel-background-size) !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-origin: border-box !important;
+  background-clip: border-box !important;
+  box-shadow: none !important;
+  filter: drop-shadow(2px 2px 0 var(--pixel-shadow));
+
+  --pixel-background: var(--pixel-background-badge);
+  --pixel-background-size: var(--pixel-background-size-badge);
+  --pixel-frame-slice: var(--pixel-frame-slice-badge);
+  --pixel-frame: var(--px-frame-line-small);
+  --pixel-surface: var(--pixel-thumb);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 26px;
+  border: 2px solid transparent;
+  border-radius: 0;
+  box-sizing: border-box;
+  margin-top: -7px;
+  transition:
+    transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    filter 180ms ease;
+}
+input.pixel-range-input:is(:hover, :focus-visible):not(
+    :disabled
+  )::-webkit-slider-thumb {
+  --pixel-frame: var(--px-frame-active-small);
+  --pixel-surface: var(--accent);
+  transform: scale(1.12);
+}
+input.pixel-range-input:active:not(:disabled)::-webkit-slider-thumb {
+  transform: scale(1.04, 0.94);
+  transition-duration: 90ms;
+}
+input.pixel-range-input:focus-visible::-webkit-slider-thumb {
+  --pixel-frame: var(--px-frame-active-small);
+  filter: drop-shadow(2px 0 0 var(--accent)) drop-shadow(-2px 0 0 var(--accent))
+    drop-shadow(0 2px 0 var(--accent)) drop-shadow(0 -2px 0 var(--accent));
+}
+input.pixel-range-input::-moz-range-thumb {
+  --pixel-background: var(--pixel-background-control);
+  --pixel-background-size: var(--pixel-background-size-control);
+  --pixel-surface: var(--pixel-well);
+  --pixel-frame: var(--px-frame-line);
+  --pixel-frame-slice: var(--pixel-frame-slice-control);
+  border-radius: 0;
+  border-color: transparent !important;
+  border-image-source: var(--pixel-frame) !important;
+  border-image-slice: var(--pixel-frame-slice) !important;
+  border-image-width: calc(var(--pixel-frame-slice) * 1px) !important;
+  border-image-outset: 0 !important;
+  border-image-repeat: stretch !important;
+  background-color: transparent !important;
+  background-image: var(--pixel-background) !important;
+  background-size: var(--pixel-background-size) !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-origin: border-box !important;
+  background-clip: border-box !important;
+  box-shadow: none !important;
+  filter: drop-shadow(2px 2px 0 var(--pixel-shadow));
+
+  --pixel-background: var(--pixel-background-badge);
+  --pixel-background-size: var(--pixel-background-size-badge);
+  --pixel-frame-slice: var(--pixel-frame-slice-badge);
+  --pixel-frame: var(--px-frame-line-small);
+  --pixel-surface: var(--pixel-thumb);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 26px;
+  border: 2px solid transparent;
+  border-radius: 0;
+  box-sizing: border-box;
+  transition:
+    transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    filter 180ms ease;
+}
+input.pixel-range-input:is(:hover, :focus-visible):not(
+    :disabled
+  )::-moz-range-thumb {
+  --pixel-frame: var(--px-frame-active-small);
+  --pixel-surface: var(--accent);
+  transform: scale(1.12);
+}
+input.pixel-range-input:active:not(:disabled)::-moz-range-thumb {
+  transform: scale(1.04, 0.94);
+  transition-duration: 90ms;
+}
+input.pixel-range-input:focus-visible::-moz-range-thumb {
+  --pixel-frame: var(--px-frame-active-small);
+  filter: drop-shadow(2px 0 0 var(--accent)) drop-shadow(-2px 0 0 var(--accent))
+    drop-shadow(0 2px 0 var(--accent)) drop-shadow(0 -2px 0 var(--accent));
+}
+.pixel-range[data-disabled],
+.pixel-range:has(.pixel-range-input:disabled) {
+  opacity: 0.4;
+}
+.pixel-range input:disabled {
+  cursor: not-allowed;
+}
+.pixel-select {
+  display: inline-flex;
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  vertical-align: middle;
+}
+.pixel-select-trigger {
+  display: flex;
+  min-height: var(--button-height);
+  padding-block: 7px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+.pixel-select-trigger > .pixel-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  transition:
+    transform 180ms ease,
+    color 180ms ease;
+}
+.pixel-select-trigger[aria-expanded="true"] {
+  --pixel-surface: var(--soft);
+}
+.pixel-select-trigger[aria-expanded="true"] > .pixel-icon {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+.pixel-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pixel-select-popup {
+  --pixel-surface: var(--panel);
+  --pixel-frame: var(--px-frame-line);
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 4px;
+  border: 2px solid transparent;
+  color: var(--ink);
+  font:
+    12px/1.5 "Segoe UI",
+    "Microsoft YaHei",
+    system-ui,
+    sans-serif;
+  z-index: 1000;
+  overflow: visible;
+  clip-path: inset(-8px);
+  filter: drop-shadow(4px 5px 0 var(--pixel-shadow));
+}
+.pixel-select-popup[data-state="closed"] {
+  pointer-events: none;
+}
+.pixel-select-popup::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  background: var(--accent);
+}
+.pixel-select-popup::backdrop {
+  background: transparent;
+}
+.pixel-select-list {
+  max-height: var(--select-list-height, 304px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 3px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) var(--pixel-well);
+}
+.pixel-select-list::-webkit-scrollbar {
+  width: 8px;
+}
+.pixel-select-list::-webkit-scrollbar-track {
+  background: var(--pixel-well);
+}
+.pixel-select-list::-webkit-scrollbar-thumb {
+  border: 2px solid var(--pixel-well);
+  border-radius: 0;
+  background: var(--muted);
+}
+.pixel-select-option {
+  --pixel-frame-slice: var(--pixel-frame-slice-menu);
+  --pixel-background: var(--pixel-background-menu);
+  --pixel-background-size: var(--pixel-background-size-menu);
+  --pixel-frame: none;
+  --pixel-surface: transparent;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--button-height);
+  margin: 2px 0;
+  padding: 6px 10px;
+  border: 2px solid transparent;
+  filter: none;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    opacity 220ms ease;
+}
+.pixel-select-option::before,
+.pixel-select-option::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border: 2px solid transparent;
+  border-image-source: var(--px-frame-line-menu);
+  border-image-slice: var(--pixel-frame-slice-menu);
+  border-image-width: calc(var(--pixel-frame-slice-menu) * 1px);
+  background: var(--soft);
+  clip-path: var(--corner-menu);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.pixel-select-option::after {
+  border-image-source: var(--px-frame-active-menu);
+}
+.pixel-select-option[aria-selected="true"] {
+  color: var(--accent);
+}
+.pixel-select-option[aria-selected="true"]::before {
+  opacity: 1;
+}
+.pixel-select-option:not([aria-disabled="true"]):hover,
+.pixel-select-option.is-active {
+  color: var(--accent);
+}
+.pixel-select-option:not([aria-disabled="true"]):hover::after,
+.pixel-select-option.is-active::after {
+  opacity: 1;
+}
+.pixel-select-option:not([aria-disabled="true"]):hover .pixel-option-marker {
+  opacity: 1;
+  background: var(--accent);
+}
+.pixel-select-option[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pixel-option-marker {
+  flex: 0 0 5px;
+  height: 5px;
+  background: var(--muted);
+  opacity: 0.6;
+  transition:
+    opacity 180ms ease,
+    background-color 180ms ease;
+}
+.pixel-select-option[aria-selected="true"] .pixel-option-marker {
+  background: var(--accent);
+  opacity: 1;
+}
+.pixel-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pixel-option-label small {
+  display: block;
+  font-size: 10px;
+}
+.pixel-option-check {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  flex: 0 0 16px;
+  color: var(--accent);
+}
+.pixel-option-check .pixel-icon {
+  width: 16px;
+  height: 16px;
+}
+.pixel-select-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 2px;
+}
+.pixel-select-row > [aria-colspan="2"] {
+  grid-column: 1 / -1;
+}
+.pixel-option-action {
+  display: flex;
+  align-items: center;
+}
+.pixel-option-remove {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-height: 36px;
+  padding: 6px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  clip-path: var(--corner-badge);
+  color: var(--muted);
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    opacity 180ms ease;
+}
+.pixel-option-remove:not(:disabled):is(:hover, :focus-visible, .is-active) {
+  background: color-mix(in srgb, var(--danger), transparent 88%);
+  color: var(--danger);
+}
+.pixel-option-remove:not(:disabled):active {
+  background: color-mix(in srgb, var(--danger), transparent 78%);
+}
+.pixel-option-remove .pixel-icon {
+  width: 16px;
+  height: 16px;
+}
+.pixel-select-empty {
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--muted);
+}
+.pixel-search-hint {
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--pixel-well);
+  color: var(--muted);
+  padding: 1px 3px;
+  font:
+    10px Consolas,
+    monospace;
+}
+.input-action > .pixel-select,
+.toolbar > .pixel-select {
+  flex: 1;
+  min-width: 0;
+}
+.toolbar > .pixel-select {
+  width: auto;
+}
+.filter-line .pixel-select-trigger {
+  font-size: 11px;
+}
+
+.search-field.pixel-search {
+  --pixel-surface: var(--panel);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 7px 0 9px;
+  border: 2px solid transparent;
+  color: var(--muted);
+}
+.pixel-search,
+.catalog-search {
+  --pixel-search-shadow: drop-shadow(2px 2px 0 var(--pixel-shadow));
+  transition:
+    --pixel-field-border 180ms ease,
+    opacity 220ms ease,
+    filter 180ms ease,
+    transform 180ms ease;
+  filter: var(--pixel-search-shadow);
+}
+.pixel-search:not([data-disabled]):not(:has(input:disabled)):hover,
+.catalog-search:not(:has(input:disabled)):hover {
+  --pixel-field-border: var(--px-frame-active-color);
+  transform: translateY(-1px);
+  --pixel-search-shadow: drop-shadow(2px 3px 0 var(--pixel-shadow));
+}
+.pixel-search:not([data-disabled]):not(:has(input:disabled)):focus-within,
+.catalog-search:not(:has(input:disabled)):focus-within {
+  --pixel-field-border: var(--px-frame-active-color);
+  transform: translateY(-1px);
+  --pixel-search-shadow: drop-shadow(2px 2px 0 var(--pixel-shadow))
+    drop-shadow(0 2px 0 var(--accent));
+}
+.pixel-search:not([data-disabled]):not(:has(input:disabled)):active,
+.catalog-search:not(:has(input:disabled)):active {
+  transform: translateY(1px);
+}
+.pixel-search-symbol {
+  --pixel-background: var(--pixel-background-badge);
+  --pixel-background-size: var(--pixel-background-size-badge);
+  --pixel-frame-slice: var(--pixel-frame-slice-badge);
+  --pixel-frame: none;
+  --pixel-surface: var(--soft);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  color: var(--accent);
+  border: 1px solid transparent;
+  filter: none;
+  transition: transform 180ms ease;
+}
+.pixel-search:not([data-disabled]):not(:has(input:disabled)):is(
+    :hover,
+    :focus-within
+  )
+  .pixel-search-symbol,
+.catalog-search:not(:has(input:disabled)):is(:hover, :focus-within)
+  .pixel-search-symbol {
+  transform: rotate(-8deg);
+}
+.pixel-search-icon {
+  background-color: currentColor;
+  mask: url("/assets/icons/search1-9x9.png") center / contain no-repeat;
+  image-rendering: pixelated;
+}
+.pixel-search input.pixel-search-input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  height: 44px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  outline: none;
+  box-shadow: none;
+}
+.pixel-search input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+.pixel-search input::-webkit-search-cancel-button,
+.pixel-search input::-webkit-search-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+}
+.pixel-search-count {
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--muted);
+}
+.pixel-search-clear {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  min-height: 34px;
+  padding: 0;
+  color: var(--muted);
+}
+.pixel-search .pixel-search-clear,
+.catalog-search .catalog-search-submit {
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    filter 180ms ease,
+    opacity 220ms ease,
+    transform 180ms ease,
+    scale 180ms ease;
+}
+:is(.pixel-search-clear, .catalog-search-submit):active:not(:disabled) {
+  scale: 0.96;
+  transform: translateY(1px);
+}
+:is(.pixel-search-clear, .catalog-search-submit) > svg {
+  transition: transform 180ms ease;
+}
+:is(.pixel-search-clear, .catalog-search-submit):is(:hover, :focus-visible):not(
+    :disabled
+  )
+  > svg {
+  transform: rotate(8deg) scale(1.1);
+}
+.pixel-search-clear .pixel-icon {
+  width: 13px;
+  height: 13px;
+}
+.pixel-search-clear:hover:not(:disabled) {
+  color: var(--accent);
+}
+.pixel-search-clear:focus-visible {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+}
+.pixel-search-hint {
+  margin-right: 3px;
+}
+.pixel-search[data-disabled],
+.pixel-search:has(input:disabled) {
+  opacity: 0.45;
+}
+.pixel-search-symbol.is-loading .pixel-icon {
+  animation: pixel-search-pulse 700ms steps(2) infinite;
+}
+@keyframes pixel-search-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.section-heading .pixel-search {
+  min-width: 250px;
+}
+.install-layout .pixel-search {
+  width: 100%;
+}
+.radio-dot.pixel-radio-mark {
+  --pixel-background: var(--pixel-background-badge);
+  --pixel-background-size: var(--pixel-background-size-badge);
+  --pixel-frame-slice: var(--pixel-frame-slice-badge);
+  --pixel-frame: var(--px-frame-line-small);
+  width: 16px;
+  height: 16px;
+  border: 1px solid transparent;
+}
+.manifest-list button.selected .pixel-radio-mark {
+  --pixel-frame: var(--px-frame-active-small);
+  --pixel-surface: var(--accent);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 700px) {
+  .toolbar > .pixel-select {
+    width: calc(100% - 35px);
+    flex: auto;
+  }
+  .settings-section > .input-action > .pixel-select {
+    flex-basis: 100%;
+  }
+  .section-heading .pixel-search {
+    width: 100%;
+    min-width: 0;
+  }
+  .pixel-select-popup {
+    max-width: calc(100vw - 24px);
+  }
+  .pixel-search-count {
+    font-size: 9px;
+  }
+}
+@media (forced-colors: active) {
+  .pixel-check-shadow {
+    display: none;
+  }
+  .pixel-search-icon {
+    forced-color-adjust: none;
+    background-color: CanvasText;
+  }
+  .pixel-surface {
+    border-image: none !important;
+    border-color: ButtonText !important;
+    background: Canvas !important;
+    filter: none !important;
+  }
+  input.pixel-checkbox:checked,
+  input.pixel-checkbox:indeterminate {
+    background: Highlight !important;
+    --pixel-on-accent: HighlightText;
+  }
+  .pixel-select-option[aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -3px;
+  }
+  .pixel-input:focus-visible,
+  .pixel-select-trigger:focus-visible,
+  input.pixel-checkbox:focus-visible,
+  .pixel-range-input:focus-visible,
+  .pixel-switch:focus-visible {
+    outline: 2px solid Highlight !important;
+  }
+}

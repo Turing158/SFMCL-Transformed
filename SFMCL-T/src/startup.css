@@ -1,0 +1,260 @@
+/* This stylesheet is linked by index.html, before the React bundle is loaded. */
+html[data-startup] {
+  --startup-bg: #f6f8f5;
+  --startup-ink: #24332c;
+  --startup-accent: #32785b;
+  --startup-brand: #327ec4;
+  background: transparent;
+  /* Chromium paints a dark canvas for color-scheme: dark, even with an alpha
+     background. Only the app surface owns its theme while starting. */
+  color-scheme: light;
+}
+html[data-startup][data-theme] {
+  color-scheme: light;
+}
+html[data-startup][data-theme="dark"] {
+  --startup-bg: #121b17;
+  --startup-ink: #e3eee6;
+  --startup-accent: #81c69b;
+}
+html[data-startup][data-accent="puce"] {
+  --startup-bg: #f9f6f7;
+  --startup-ink: #38292e;
+  --startup-accent: #865c62;
+}
+html[data-startup][data-accent="ebony"] {
+  --startup-bg: #f5f7fa;
+  --startup-ink: #253440;
+  --startup-accent: #446d8a;
+}
+html[data-startup][data-theme="dark"][data-accent="puce"] {
+  --startup-bg: #1d161a;
+  --startup-ink: #f1e4e9;
+  --startup-accent: #d8aab4;
+}
+html[data-startup][data-theme="dark"][data-accent="ebony"] {
+  --startup-bg: #141b22;
+  --startup-ink: #e3edf6;
+  --startup-accent: #9cbdda;
+}
+html[data-startup] body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+html[data-startup="loading"] #root {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+html[data-startup="revealing"] #root {
+  background: var(--bg, var(--startup-bg));
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+.startup-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: transparent;
+  color: var(--ink, var(--startup-ink));
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  user-select: none;
+  isolation: isolate;
+}
+.startup-panel {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+.startup-screen[data-state="error"] .startup-panel {
+  box-sizing: border-box;
+  width: min(368px, calc(100vw - 32px));
+  height: 300px;
+  padding: 24px;
+  align-content: center;
+  gap: 16px;
+  border: 1px solid color-mix(in srgb, currentColor, transparent 84%);
+  border-radius: 12px;
+  background: var(--bg, var(--startup-bg));
+  box-shadow: 0 3px 12px #00000018;
+  animation: startup-panel-enter 180ms ease-out both;
+}
+@keyframes startup-panel-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.startup-screen[data-state="error"] .startup-mark {
+  gap: 6px;
+  transform: none;
+}
+.startup-screen[data-state="error"] .startup-icon {
+  width: 64px;
+  height: 64px;
+}
+.startup-screen[data-state="error"] .startup-wordmark {
+  width: 168px;
+  height: 44px;
+}
+.startup-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transform: translateY(-7px);
+  pointer-events: none;
+}
+.startup-icon {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  opacity: 0.12;
+}
+.startup-icon img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  transform-origin: center;
+}
+.startup-icon-main {
+  z-index: 2;
+  transform: rotate(-90deg) scale(0.8);
+}
+.startup-icon-t {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  z-index: 3;
+  transform-origin: center;
+  pointer-events: none;
+}
+.startup-icon-t image {
+  image-rendering: pixelated;
+}
+.startup-trail {
+  opacity: 0;
+  filter: blur(0.65px);
+}
+.startup-wordmark {
+  width: 247px;
+  height: 64px;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
+  color: var(--startup-brand);
+}
+.startup-ink-stroke {
+  fill: none;
+  stroke-linecap: square;
+  stroke-linejoin: round;
+  stroke: currentColor;
+  stroke-width: 9;
+}
+.startup-erase-stroke {
+  fill: none;
+  stroke: #000;
+  stroke-width: 17;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.startup-pen,
+.startup-wipe {
+  opacity: 0;
+  fill: currentColor;
+}
+.startup-wipe {
+  color: var(--startup-brand);
+}
+.startup-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.startup-error {
+  width: 100%;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.startup-error[hidden],
+.startup-close[hidden] {
+  display: none;
+}
+.startup-error p {
+  margin: 0 auto 14px;
+  overflow-wrap: anywhere;
+  max-height: 64px;
+  overflow: auto;
+}
+.startup-retry {
+  font: inherit;
+  padding: 7px 22px;
+  min-height: 38px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent, var(--startup-accent));
+  cursor: pointer;
+}
+.startup-retry:hover {
+  background: color-mix(
+    in srgb,
+    var(--accent, var(--startup-accent)),
+    transparent 90%
+  );
+}
+.startup-close {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 44px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.startup-close:hover {
+  background: #bd333b;
+  color: white;
+}
+.startup-close svg {
+  width: 15px;
+  height: 15px;
+}
+.startup-retry:focus-visible,
+.startup-close:focus-visible {
+  outline: 2px solid var(--accent, var(--startup-accent));
+  outline-offset: -3px;
+}
+.startup-drag-region {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 44px;
+  height: 40px;
+}
+.startup-screen[data-state="error"] .startup-drag-region {
+  display: block;
+}

@@ -1,0 +1,65 @@
+/* Match labeled selects to the input fields' height and vertical padding. */
+.settings-page .field .pixel-select-trigger {
+  min-height: 44px;
+  padding-block: 10px;
+}
+
+.settings-page .form-grid > .field {
+  margin-top: 17px;
+}
+
+/* Tabs keep their shared indicator; switches animate their own track. */
+.settings-page button:not([role="tab"], .pixel-switch) {
+  transition:
+    var(--surface-depth-transition),
+    transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    scale 180ms ease,
+    color 180ms ease,
+    background-color 180ms ease,
+    opacity 180ms ease,
+    filter 180ms ease,
+    --pixel-field-border 180ms ease;
+}
+.settings-page
+  button:not([role="tab"], .pixel-switch):is(:hover, :focus-visible):not(
+    :disabled
+  ) {
+  transform: translateY(-2px);
+}
+.settings-page button:not([role="tab"], .pixel-switch):active:not(:disabled) {
+  transform: translateY(2px);
+  scale: 0.98;
+  transition-duration: 90ms;
+}
+.settings-page button:disabled {
+  transform: none;
+  scale: 1;
+}
+.settings-page button > svg:not(.spin, .pixel-icon) {
+  transition: transform 180ms ease;
+}
+.settings-page
+  button:is(:hover, :focus-visible):not(:disabled)
+  > svg:not(.spin, .pixel-icon) {
+  transform: rotate(-8deg) scale(1.1);
+}
+.settings-page button:active:not(:disabled) > svg:not(.spin, .pixel-icon) {
+  transform: scale(0.94);
+}
+.settings-page
+  :is(.surface-frame, .surface-frame::before, .surface-frame::after) {
+  transition: background-color 180ms ease;
+}
+.settings-page .theme-option:is(:hover, :focus-visible) {
+  --surface-edge: var(--accent);
+  --surface-fill: color-mix(in srgb, var(--panel), var(--soft) 68%);
+}
+.settings-page .theme-preview {
+  transition: transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.settings-page .theme-option:is(:hover, :focus-visible) .theme-preview {
+  transform: translateY(-1px);
+}
+.settings-page .theme-option:active .theme-preview {
+  transform: scale(0.98);
+}

@@ -1,0 +1,28 @@
+node_modules/
+dist/
+release/
+target/
+.runtime/
+test-results/
+playwright-report/
+*.log
+.env
+.env.*
+!.env.example
+.secrets/
+service-credentials/
+credentials.dat
+curseforge.dat
+curseforge.dat.*
+*.tsbuildinfo
+/SFMCL-T/src-tauri/gen/
+
+# Local design and development documents
+/preview/
+/design-system/
+/docs/plan/
+/docs/internal/
+
+# Local diagnostic tools
+/SFMCL-T/crates/launcher-core/examples/
+/SFMCL-T/scripts/probe-services.mjs

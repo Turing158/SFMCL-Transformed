@@ -1,0 +1,259 @@
+.download-list {
+  overflow-anchor: none;
+}
+.download-row {
+  flex-shrink: 0;
+}
+.download-row[data-exiting="true"] {
+  overflow: clip;
+  pointer-events: none;
+}
+.download-empty {
+  animation: download-empty-enter 220ms ease-out both;
+}
+@keyframes download-empty-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.downloads-page .stat {
+  transition: transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.downloads-page .stat:hover {
+  --surface-edge: var(--accent);
+  --surface-fill: color-mix(in srgb, var(--panel), var(--soft) 45%);
+  transform: translateY(-3px);
+}
+.downloads-page .stat > span > svg {
+  transition: transform 180ms ease;
+}
+.downloads-page .stat:hover > span > svg {
+  transform: translateY(-1px) scale(1.1);
+}
+
+/* Match the existing player-page button feedback without moving tab labels. */
+.downloads-page button:not([role="tab"]) {
+  transition:
+    var(--surface-depth-transition),
+    transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    color 180ms ease,
+    background-color 180ms ease,
+    opacity 180ms ease;
+}
+.downloads-page
+  button:not([role="tab"]):is(:hover, :focus-visible):not(:disabled) {
+  transform: translateY(-2px);
+}
+.downloads-page button:not([role="tab"]):active:not(:disabled) {
+  transform: translateY(2px);
+  transition-duration: 90ms;
+}
+.downloads-page button:disabled {
+  transform: none;
+}
+.downloads-page button > svg:not(.spin),
+.downloads-page .job-chevron > svg {
+  transition: transform 180ms ease;
+}
+.downloads-page
+  button:is(:hover, :focus-visible):not(:disabled)
+  > svg:not(.spin),
+.downloads-page .job-toggle:is(:hover, :focus-visible) .job-chevron > svg {
+  transform: rotate(-8deg) scale(1.1);
+}
+.downloads-page button:active:not(:disabled) > svg:not(.spin),
+.downloads-page .job-toggle:active .job-chevron > svg {
+  transform: scale(0.94);
+}
+.downloads-page
+  :is(.surface-frame, .surface-frame::before, .surface-frame::after) {
+  transition: background-color 180ms ease;
+}
+.downloads-page .badge:not(.tab-count) {
+  transition:
+    transform 180ms ease,
+    color 180ms ease;
+}
+.downloads-page .badge:not(.tab-count):hover {
+  transform: translateY(-1px);
+  --surface-edge: currentColor;
+}
+.downloads-page .job-toggle {
+  min-height: var(--button-compact-height);
+  transition:
+    transform 180ms ease,
+    color 180ms ease;
+}
+.downloads-page .job-toggle:is(:hover, :focus-visible) {
+  color: var(--accent);
+}
+.job-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  transform: rotate(-90deg);
+  transition: transform 240ms cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.job-card[data-open="true"] .job-chevron {
+  transform: rotate(0deg);
+}
+.job-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 240ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    opacity 180ms ease,
+    visibility 0s 240ms;
+}
+.job-card[data-open="true"] .job-body {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.job-body-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.job-card .steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+.job-card .steps li {
+  min-width: 0;
+}
+.job-card .steps li > div {
+  flex: 1;
+  min-width: 0;
+}
+.job-card .step-arrow {
+  flex-shrink: 0;
+}
+.job-card .steps strong,
+.job-card .steps small .animated-swap > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.job-card .steps small {
+  max-width: none;
+  line-height: 1.5;
+}
+.job-card .steps small .animated-swap {
+  display: grid;
+  width: 100%;
+}
+.steps-animated :is(li, strong, small, .step-number) {
+  transition: color 220ms ease;
+}
+.steps-animated .step-number .animated-swap > span {
+  justify-content: center;
+}
+.steps-animated .step-glyph {
+  width: 13px;
+  height: 18px;
+}
+.steps-animated .failed strong {
+  color: var(--danger);
+}
+.steps-animated :is(.paused, .pausing) .step-number {
+  color: var(--surface-warning);
+  --surface-edge: var(--surface-warning);
+  --surface-fill: var(--surface-warning-bg);
+}
+.steps-animated .cancelled {
+  opacity: 0.65;
+  transition:
+    color 220ms ease,
+    opacity 220ms ease;
+}
+.download-files-dialog .modal-body {
+  height: min(520px, calc(100dvh - 150px));
+  padding: 0;
+}
+.download-file-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 0 22px;
+}
+.download-file-content > .inline-error {
+  margin-block: 14px;
+}
+.download-file-content .file-table {
+  max-height: none;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.download-file-content .file-placeholder {
+  height: 100px;
+  text-align: center;
+  color: var(--muted);
+}
+.download-file-content .badge {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.download-file-content th {
+  white-space: nowrap;
+}
+.download-file-content td:first-child {
+  min-width: 120px;
+}
+.download-file-pagination {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: 14px 8px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+.download-file-pagination .page-indicator {
+  --surface-shape: var(--corner-control);
+  --surface-shape-0: var(--corner-control-inset-0);
+  --surface-shape-1: var(--corner-control-inset-1);
+  --surface-shape-2: var(--corner-control-inset-2);
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-depth: 0px;
+  --surface-fill: var(--surface-well);
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 32px;
+  min-width: 110px;
+  padding: 6px 12px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+:root .downloads-page .pagination > button {
+  transition:
+    var(--surface-depth-transition),
+    transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    color 180ms ease,
+    opacity 180ms ease;
+}
+@media (max-width: 650px) {
+  .download-file-content {
+    padding-inline: 10px;
+  }
+  .download-file-content :is(th, td) {
+    padding-inline: 6px;
+  }
+  .download-file-pagination {
+    gap: 8px;
+    padding-inline: 0;
+  }
+  .download-file-pagination :is(.button, .page-indicator) {
+    padding-inline: 8px;
+  }
+}

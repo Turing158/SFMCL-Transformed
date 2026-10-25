@@ -1,0 +1,93 @@
+.modpack-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  width: 100vw;
+  height: 100dvh;
+  margin: 0;
+  padding: clamp(16px, 3vw, 32px);
+  border: 0;
+  background: var(--bg);
+  color: var(--ink);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.modpack-drop-overlay::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+.modpack-drop-overlay[data-phase="checking"] {
+  pointer-events: auto;
+}
+.modpack-drop-overlay[data-exiting] {
+  pointer-events: none;
+}
+.modpack-drop-frame {
+  --surface-shape: var(--corner-card);
+  --surface-inset-shape: var(--corner-card-inset-2);
+  --surface-edge: var(--accent);
+  --surface-fill: var(--panel);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 40px 24px 64px;
+}
+.modpack-drop-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+  text-align: center;
+}
+.modpack-drop-icon {
+  --surface-edge: color-mix(in srgb, var(--accent), var(--panel) 65%);
+  --surface-fill: var(--soft);
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  margin-bottom: 24px;
+  color: var(--accent);
+}
+.modpack-drop-eyebrow {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+.modpack-drop-content h2 {
+  margin: 12px 0;
+  font-size: clamp(24px, 3vw, 32px);
+  line-height: 1.4;
+}
+.modpack-drop-content p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.modpack-drop-filename {
+  max-width: 100%;
+  margin-top: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.modpack-drop-content .modpack-drop-formats {
+  margin-top: 24px;
+  font-size: 12px;
+}
+.modpack-drop-hint {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  left: 24px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}

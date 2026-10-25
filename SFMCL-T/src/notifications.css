@@ -1,0 +1,221 @@
+.notification-deck {
+  --notification-bottom: 24px;
+  --notification-width: clamp(240px, 26vw, 320px);
+  --notification-available-height: calc(
+    100dvh - var(--notification-bottom) - 56px
+  );
+  position: fixed;
+  right: 16px;
+  bottom: var(--notification-bottom);
+  z-index: 100;
+  width: min(calc(var(--notification-width) + 16px), calc(100vw - 32px));
+  pointer-events: none;
+  transition: bottom 260ms cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.notification-deck[hidden] {
+  display: none;
+}
+.notification-viewport {
+  display: flex;
+  flex-direction: column-reverse;
+  height: min(var(--deck-height), var(--notification-available-height));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-line) transparent;
+  pointer-events: auto;
+  transition: height 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.notification-cards {
+  position: relative;
+  flex: 0 0 var(--deck-height);
+  width: 100%;
+}
+.notification-slot {
+  position: absolute;
+  bottom: 8px;
+  right: calc(8px + var(--card-inset));
+  width: calc(100% - 16px - var(--card-inset) * 2);
+  transform: translateY(var(--card-offset));
+  /* Height changes are isolated to this fixed deck; the page never reflows. */
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    right 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
+}
+.notification-slot[data-covered="true"] {
+  pointer-events: none;
+}
+.notification-slot[data-hidden="true"] {
+  opacity: 0;
+}
+.notification-motion {
+  height: 100%;
+  animation: notification-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.notification-motion[data-state="click"] {
+  animation: notification-click-exit var(--notification-exit-duration) ease-in
+    both;
+  pointer-events: none;
+}
+.notification-motion[data-state="timeout"] {
+  animation: notification-timeout-exit var(--notification-exit-duration) ease-in
+    both;
+  pointer-events: none;
+}
+.notification-deck .toast {
+  --notification-tone: var(--surface-success);
+  --notification-tint: var(--surface-success-bg);
+  --surface-edge: color-mix(
+    in srgb,
+    var(--notification-tone),
+    var(--panel) 38%
+  );
+  --surface-fill: var(--panel);
+  --surface-base: color-mix(in srgb, var(--notification-tone), var(--bg) 68%);
+  --surface-depth: 3px;
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 150ms ease;
+}
+.notification-deck .toast.error {
+  --notification-tone: var(--danger);
+  --notification-tint: var(--surface-danger-bg);
+}
+.notification-deck .toast > .surface-frame::before,
+.notification-deck .toast > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.notification-deck .toast:is(:hover, :focus-visible) {
+  --surface-edge: var(--notification-tone);
+  --surface-fill: color-mix(
+    in srgb,
+    var(--panel),
+    var(--notification-tint) 48%
+  );
+}
+.notification-deck .toast:focus-visible {
+  outline-color: var(--notification-tone);
+  outline-offset: 3px;
+}
+.notification-deck .toast:active {
+  transform: translateY(2px);
+}
+.notification-body {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 8px;
+  min-height: 56px;
+  max-height: min(260px, calc(var(--notification-available-height) - 16px));
+  padding: 12px 12px 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  transition: opacity 180ms ease;
+}
+.notification-slot[data-covered="true"] .notification-body,
+.notification-slot[data-covered="true"] .notification-lifetime {
+  opacity: 0;
+}
+.notification-icon.has-surface {
+  --surface-shape: var(--corner-badge);
+  --surface-inset-shape: var(--corner-badge-inset-1);
+  --surface-stroke: 1px;
+  --surface-edge: color-mix(
+    in srgb,
+    var(--notification-tone),
+    var(--panel) 70%
+  );
+  --surface-fill: var(--notification-tint);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--notification-tone);
+}
+.notification-icon > svg {
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+.notification-error-mark {
+  font:
+    bold 18px/1 Consolas,
+    monospace;
+}
+.notification-message {
+  min-width: 0;
+  padding-top: 2px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.notification-lifetime {
+  position: absolute;
+  bottom: 6px;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  background: var(--line);
+  mask-image: repeating-linear-gradient(
+    to right,
+    #000 0 6px,
+    transparent 6px 9px
+  );
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.notification-lifetime > span {
+  display: block;
+  height: 100%;
+  background: var(--notification-tone);
+  transform-origin: left;
+  animation: notification-countdown var(--notification-lifetime) linear forwards;
+}
+.toast[data-paused="true"] .notification-lifetime > span {
+  animation: none;
+}
+@keyframes notification-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes notification-click-exit {
+  to {
+    opacity: 0;
+    transform: translateX(28px) scale(0.96);
+  }
+}
+@keyframes notification-timeout-exit {
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes notification-countdown {
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (max-width: 650px) {
+  .notification-deck {
+    --notification-bottom: 12px;
+    right: 8px;
+    width: min(calc(var(--notification-width) + 16px), calc(100vw - 16px));
+  }
+}
