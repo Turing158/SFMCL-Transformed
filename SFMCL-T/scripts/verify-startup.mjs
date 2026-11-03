@@ -205,6 +205,7 @@ try {
   // Release each real first-screen dependency independently, without sleeping a
   // fixed startup duration. This also exercises a late notice mounted after IPC.
   const page = await fresh();
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(() => {
     const gates = {};
     const waiting = new Map();
@@ -265,12 +266,22 @@ try {
       const animation = root
         .getAnimations()
         .find((item) => item.id === "sfmcl-t-startup-reveal");
+      const exit = document
+        .querySelector("#startup-screen")
+        .getAnimations()
+        .find((item) => item.id === "sfmcl-t-startup-exit");
+      // Hold the first frame so the rendered transition can be checked without
+      // racing the browser's animation clock.
+      animation.pause();
+      exit.pause();
+      animation.currentTime = exit.currentTime = 0;
       const face = root.querySelector(".skin-face");
       window.__startupTest.reveal = {
         frames: animation?.effect
           .getKeyframes()
           .map(({ opacity, transform }) => ({ opacity, transform })),
         duration: animation?.effect.getTiming().duration,
+        exitDuration: exit?.effect.getTiming().duration,
         imagesReady: [...root.querySelectorAll("img")].every(
           (image) => image.complete,
         ),
@@ -356,17 +367,56 @@ try {
   await held(page);
   await transparentCorners(page, `${evidence}/splash-transparent-dark.png`);
   releases.notice();
+  await page.waitForFunction(() => window.__startupTest.reveal);
+  const sampleReveal = (time) =>
+    page.evaluate((time) => {
+      const root = document.querySelector("#root");
+      const splash = document.querySelector("#startup-screen");
+      for (const element of [root, splash]) {
+        for (const animation of element.getAnimations())
+          animation.currentTime = time;
+      }
+      const style = getComputedStyle(root);
+      const matrix = new DOMMatrixReadOnly(style.transform);
+      return {
+        opacity: Number(style.opacity),
+        scale: matrix.a,
+        y: matrix.f,
+        splashOpacity: Number(getComputedStyle(splash).opacity),
+        inert: root.inert,
+      };
+    }, time);
+  const first = await sampleReveal(0);
+  expect(first).toMatchObject({ opacity: 0, scale: 0.94, inert: true });
+  expect(first.y).toBeGreaterThan(0);
+  const middle = await sampleReveal(160);
+  expect(middle.opacity).toBeGreaterThan(0);
+  expect(middle.opacity).toBeLessThan(1);
+  expect(middle.scale).toBeGreaterThan(first.scale);
+  expect(middle.scale).toBeLessThan(1);
+  expect(middle.y).toBeGreaterThan(0);
+  expect(middle.y).toBeLessThan(first.y);
+  expect(middle.splashOpacity).toBe(0);
+  expect(middle.inert).toBe(true);
+  await transparentCorners(page, `${evidence}/reveal-middle-dark.png`);
+  await sampleReveal(480);
+  await page.evaluate(() => {
+    for (const id of ["root", "startup-screen"])
+      for (const animation of document.getElementById(id).getAnimations())
+        animation.finish();
+  });
   await ready(page);
   const reveal = await page.evaluate(() => window.__startupTest.reveal);
   expect(reveal).toMatchObject({
-    duration: 150,
+    duration: 480,
+    exitDuration: 160,
     imagesReady: true,
     fonts: "loaded",
     skinAlpha: 255,
   });
   expect(reveal.frames[0]).toEqual({
     opacity: "0",
-    transform: "translateY(1.25%) scale(0.965)",
+    transform: "translateY(3%) scale(0.94)",
   });
   expect(reveal.frames.at(-1)).toEqual({
     opacity: "1",
@@ -398,7 +448,10 @@ try {
     "Bootstrap, version list, initial tasks/notices, IPC image resolution, background, canvas skin, lazy notice image and font independently block reveal.",
   );
   checks.push(
-    "The fully loaded UI floats into place in 150 ms and becomes opaque before settling; startup never replays on navigation.",
+    "The fully loaded UI visibly fades, scales and floats into place in 480 ms while the splash exits in 160 ms; input stays blocked until settling and startup never replays on navigation.",
+  );
+  checks.push(
+    "System reduced-motion preference preserves the complete startup transition and its visible intermediate frame.",
   );
 
   const failure = await fresh();
@@ -516,7 +569,7 @@ try {
   expect(errors).toEqual([]);
   await writeFile(
     `${evidence}/checks.json`,
-    JSON.stringify({ checks, reveal, errors }, null, 2),
+    JSON.stringify({ checks, reveal, first, middle, errors }, null, 2),
   );
   console.log(JSON.stringify({ checks, reveal, errors }, null, 2));
 } finally {

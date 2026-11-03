@@ -3,12 +3,11 @@ import { closeStartupWork, waitForStartupPaint } from "./startupReadiness";
 import { isTauri } from "@tauri-apps/api/core";
 import { setStartupWindow } from "./startupWindow";
 import { startupTimeout } from "./startupTimeout";
-import {
-  revealDuration,
-  revealSurface,
-  surfaceMotionFrames,
-  visibleSurface,
-} from "./surfaceMotion";
+import { surfaceMotionFrames, visibleSurface } from "./surfaceMotion";
+
+// Startup has a more deliberate entrance than restoring an existing window.
+const startupRevealDuration = 480;
+const startupRevealSurface = { scale: 0.94, y: 3, opacity: 0 };
 
 let animation: StartupAnimation | undefined;
 let revealing = false;
@@ -70,19 +69,26 @@ export async function revealStartup(root: HTMLElement, signal: AbortSignal) {
   document.documentElement.dataset.startup = "revealing";
   const splash = document.getElementById("startup-screen")!;
   const enter = root.animate(
-    surfaceMotionFrames(revealSurface, visibleSurface, true),
+    surfaceMotionFrames(startupRevealSurface, visibleSurface, true),
     {
       id: "sfmcl-t-startup-reveal",
-      duration: revealDuration,
+      duration: startupRevealDuration,
       easing: "linear",
       fill: "both",
     },
   );
-  const exit = splash.animate([{ opacity: 1 }, { opacity: 0 }], {
-    duration: 60,
-    easing: "ease-out",
-    fill: "both",
-  });
+  const exit = splash.animate(
+    [
+      { opacity: 1, transform: "translateY(0) scale(1)" },
+      { opacity: 0, transform: "translateY(-10px) scale(0.96)" },
+    ],
+    {
+      id: "sfmcl-t-startup-exit",
+      duration: 160,
+      easing: "ease-out",
+      fill: "both",
+    },
+  );
   await Promise.allSettled([enter.finished, exit.finished]);
   // Remove the transform so fixed menus/dialogs keep their usual containing block.
   delete document.documentElement.dataset.startup;
