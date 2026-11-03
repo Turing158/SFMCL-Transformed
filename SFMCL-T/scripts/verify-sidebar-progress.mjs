@@ -1,4 +1,5 @@
 import { chromium, expect } from "@playwright/test";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { runtimePath } from "./lib/paths.mjs";
@@ -212,10 +213,7 @@ try {
       .getByRole("combobox", { name: "侧栏下载任务", exact: true })
       .click();
     await page.getByRole("option", { name, exact: true }).click();
-    await page
-      .getByRole("button", { name: "保存设置", exact: true })
-      .first()
-      .click();
+    await waitForAutoSave(page);
   };
   await displayMode("始终");
   await expect(progress).toHaveAttribute("aria-valuenow", "64");

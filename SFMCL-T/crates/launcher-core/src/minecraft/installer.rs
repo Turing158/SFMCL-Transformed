@@ -17,8 +17,7 @@ use std::{
     sync::Arc,
 };
 
-pub const MANIFEST: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
-pub const BMCL: &str = "https://bmclapi2.bangbang93.com";
+pub use super::download_source::{BMCL, MANIFEST};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,10 +82,26 @@ impl Installer {
         Ok(id)
     }
     pub async fn manifest(&self) -> Result<Value> {
-        get_json(&self.client, MANIFEST, None).await
+        self.get_json(MANIFEST, None).await
+    }
+    pub fn sources(&self) -> Arc<crate::download_sources::SourceSelector> {
+        let sources = self.downloads.sources();
+        sources.set_mode(self.settings.get().minecraft_download_source);
+        sources
+    }
+    pub async fn get_json(&self, url: &str, job: Option<&Job>) -> Result<Value> {
+        let cancel = job.map(|job| job.cancel.clone()).unwrap_or_default();
+        let result = self.sources().json(&self.client, url, &cancel).await;
+        if cancel.is_cancelled() {
+            bail!(job.map_or("操作已取消", |job| job.cancellation_message()));
+        }
+        result
+    }
+    pub(crate) fn download_url(&self, url: &str) -> String {
+        self.settings.get().minecraft_download_source.url(url)
     }
     pub async fn base_version(&self, id: &str, job: &Job) -> Result<Value> {
-        let manifest = get_json(&self.client, MANIFEST, Some(job)).await?;
+        let manifest = self.get_json(MANIFEST, Some(job)).await?;
         let item = manifest["versions"]
             .as_array()
             .context("版本清单格式无效")?
@@ -94,14 +109,25 @@ impl Installer {
             .find(|v| v["id"].as_str() == Some(id))
             .context("官方清单没有此 Minecraft 版本")?;
         let url = item["url"].as_str().context("版本缺少元数据地址")?;
-        let bytes = get_bytes(&self.client, url, Some(job)).await?;
-        if let Some(hash) = item["sha1"].as_str() {
-            use sha1::Digest;
-            if hex::encode(sha1::Sha1::digest(&bytes)) != hash {
-                bail!("版本 JSON 哈希校验失败");
-            }
-        }
-        Ok(serde_json::from_slice(&bytes)?)
+        let sources = self.sources();
+        let version = sources
+            .fetch(
+                &self.client,
+                &sources.candidates(url),
+                &job.cancel,
+                |bytes| {
+                    if let Some(hash) = item["sha1"].as_str() {
+                        use sha1::Digest;
+                        if hex::encode(sha1::Sha1::digest(bytes)) != hash {
+                            bail!("版本 JSON 哈希校验失败");
+                        }
+                    }
+                    Ok(serde_json::from_slice(bytes)?)
+                },
+            )
+            .await?;
+        sources.register_minecraft(&version);
+        Ok(version)
     }
     pub(crate) async fn install_in_job(
         &self,
@@ -209,10 +235,16 @@ impl Installer {
         version: &Value,
         job: &Job,
     ) -> Result<Vec<DownloadSpec>> {
+        let source = self.settings.get().minecraft_download_source;
+        self.sources().register_minecraft(version);
         let mut files: Vec<_> = versions::libraries(version)?
             .into_iter()
             .filter(|l| !l.file.url.is_empty())
-            .map(|l| l.file)
+            .map(|l| {
+                let mut file = l.file;
+                file.url = source.url(&file.url);
+                file
+            })
             .collect();
         let id = version["jar"]
             .as_str()
@@ -220,14 +252,18 @@ impl Installer {
             .context("版本缺少 ID")?;
         let client = &version["downloads"]["client"];
         if let Some(url) = client["url"].as_str() {
-            files.push(spec(client, format!("versions/{id}/{id}.jar"), url.into()));
+            files.push(spec(
+                client,
+                format!("versions/{id}/{id}.jar"),
+                source.url(url),
+            ));
         }
         let logging = &version["logging"]["client"]["file"];
         if let (Some(id), Some(url)) = (logging["id"].as_str(), logging["url"].as_str()) {
             files.push(spec(
                 logging,
                 format!("assets/log_configs/{id}"),
-                url.into(),
+                source.url(url),
             ));
         }
         let asset = &version["assetIndex"];
@@ -238,7 +274,7 @@ impl Installer {
                 job,
                 "资源索引".into(),
                 root.into(),
-                vec![spec(asset, path.clone(), url.into())],
+                vec![spec(asset, path.clone(), source.url(url))],
             )
             .await?;
             let index: Value = serde_json::from_slice(&std::fs::read(safe_join(root, path)?)?)?;
@@ -253,10 +289,10 @@ impl Installer {
                 }
                 files.push(DownloadSpec {
                     path: format!("assets/objects/{}/{hash}", &hash[..2]),
-                    url: format!(
+                    url: source.url(&format!(
                         "https://resources.download.minecraft.net/{}/{hash}",
                         &hash[..2]
-                    ),
+                    )),
                     size: object["size"].as_u64(),
                     sha1: Some(hash.into()),
                     sha512: None,

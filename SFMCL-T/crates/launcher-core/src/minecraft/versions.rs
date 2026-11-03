@@ -243,7 +243,11 @@ pub fn libraries(version: &Value) -> Result<Vec<Library>> {
                 });
             if paths.insert(path.clone()) {
                 result.push(Library {
-                    file: spec(artifact, format!("libraries/{path}"), url),
+                    file: spec(
+                        if artifact.is_null() { lib } else { artifact },
+                        format!("libraries/{path}"),
+                        url,
+                    ),
                     native: false,
                     excludes: vec![],
                 });

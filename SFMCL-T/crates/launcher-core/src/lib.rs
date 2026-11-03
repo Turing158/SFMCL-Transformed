@@ -1,12 +1,14 @@
 pub mod accounts;
 pub mod brand;
 pub mod config;
+pub mod download_sources;
 pub mod downloads;
 pub mod jobs;
 pub mod minecraft;
 pub mod notices;
 pub mod paths;
 pub mod resources;
+pub mod updates;
 pub mod vault;
 
 pub fn http_client() -> anyhow::Result<reqwest::Client> {

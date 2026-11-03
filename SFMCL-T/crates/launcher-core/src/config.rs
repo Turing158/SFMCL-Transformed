@@ -1,4 +1,7 @@
-use crate::paths::{atomic_write, minecraft_root};
+use crate::{
+    minecraft::download_source::MinecraftDownloadSource,
+    paths::{atomic_write, minecraft_root},
+};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -23,6 +26,18 @@ pub struct Settings {
     pub height: u32,
     pub window_title: String,
     pub custom_info: String,
+    pub window_mode: String,
+    pub window_monitor: String,
+    pub window_x: i32,
+    pub window_y: i32,
+    pub launcher_action: String,
+    pub restore_launcher: bool,
+    pub server_enabled: bool,
+    pub server_host: String,
+    pub server_port: u16,
+    pub quick_play_enabled: bool,
+    pub quick_play_world: String,
+    pub process_priority: String,
     pub jvm_args_enabled: bool,
     pub jvm_args: String,
     pub game_args: String,
@@ -31,8 +46,15 @@ pub struct Settings {
     pub background_type: String,
     pub background: String,
     pub hardware_acceleration: bool,
-    pub show_notices: bool,
+    pub home_clean_mode: bool,
+    pub home_notice_layout: String,
+    pub player_preview_mode: String,
+    pub player3d_fps: u32,
+    pub player3d_background_type: String,
+    pub player3d_background: String,
+    pub player3d_action: String,
     pub download_task_display: String,
+    pub minecraft_download_source: MinecraftDownloadSource,
     pub download_concurrency: usize,
     pub download_cache_dir: String,
     pub microsoft_client_id: String,
@@ -71,6 +93,18 @@ impl Default for Settings {
             height: 720,
             window_title: String::new(),
             custom_info: crate::brand::PRODUCT_NAME.into(),
+            window_mode: "default".into(),
+            window_monitor: String::new(),
+            window_x: 0,
+            window_y: 0,
+            launcher_action: "keep".into(),
+            restore_launcher: true,
+            server_enabled: false,
+            server_host: String::new(),
+            server_port: 25565,
+            quick_play_enabled: false,
+            quick_play_world: String::new(),
+            process_priority: "normal".into(),
             jvm_args_enabled: false,
             jvm_args: String::new(),
             game_args: String::new(),
@@ -79,8 +113,15 @@ impl Default for Settings {
             background_type: "none".into(),
             background: String::new(),
             hardware_acceleration: true,
-            show_notices: true,
+            home_clean_mode: false,
+            home_notice_layout: "masonry".into(),
+            player_preview_mode: "front".into(),
+            player3d_fps: 30,
+            player3d_background_type: "current".into(),
+            player3d_background: String::new(),
+            player3d_action: "still".into(),
             download_task_display: "off".into(),
+            minecraft_download_source: MinecraftDownloadSource::Auto,
             download_concurrency: 8,
             download_cache_dir: String::new(),
             microsoft_client_id: crate::brand::environment("MICROSOFT_CLIENT_ID")
@@ -132,11 +173,30 @@ impl Settings {
         if !["light", "dark", "system"].contains(&self.theme.as_str()) {
             bail!("未知主题");
         }
+        if !["forest", "nether", "end", "sift"].contains(&self.accent.as_str()) {
+            bail!("未知主题配色");
+        }
         if !["none", "default", "local", "remote"].contains(&self.background_type.as_str()) {
             bail!("未知背景类型");
         }
         if !["active", "always", "off"].contains(&self.download_task_display.as_str()) {
             bail!("未知下载任务显示方式");
+        }
+        if !["single", "parallel", "masonry"].contains(&self.home_notice_layout.as_str()) {
+            bail!("未知开始游戏界面布局");
+        }
+        if !["front", "back", "3d"].contains(&self.player_preview_mode.as_str()) {
+            bail!("未知皮肤预览方式");
+        }
+        if !(1..=144).contains(&self.player3d_fps) {
+            bail!("3D 预览帧数必须在 1–144 之间");
+        }
+        if !["current", "none", "local", "remote"].contains(&self.player3d_background_type.as_str())
+        {
+            bail!("未知 3D 预览背景类型");
+        }
+        if !["still", "walk", "run", "fly", "wave"].contains(&self.player3d_action.as_str()) {
+            bail!("未知 3D 默认动作");
         }
         if !self.active_dir.is_empty() && !self.game_dirs.iter().any(|d| d.path == self.active_dir)
         {
@@ -166,6 +226,10 @@ impl ConfigStore {
         };
         if settings.custom_info == "TMCL" {
             settings.custom_info = crate::brand::PRODUCT_NAME.into();
+        }
+        // Retired palettes use the unchanged Overworld palette on next startup.
+        if ["puce", "ebony"].contains(&settings.accent.as_str()) {
+            settings.accent = "forest".into();
         }
         Ok(Self {
             path,
@@ -281,13 +345,6 @@ pub fn import_legacy(value: &Value, base: &Path) -> Settings {
         .into();
     let launcher = &value["launcher"];
     s.hardware_acceleration = launcher["hardwareAcceleration"].as_bool().unwrap_or(true);
-    s.show_notices = launcher["enableNotice"].as_bool().unwrap_or(true);
-    s.accent = match launcher["theme"].as_str() {
-        Some("Ebony") => "ebony",
-        Some("Puce") => "puce",
-        _ => "forest",
-    }
-    .into();
     s.background_type = match launcher["bg"]["type"].as_str() {
         Some("default") => "default",
         Some("local") => "local",
@@ -302,6 +359,47 @@ pub fn import_legacy(value: &Value, base: &Path) -> Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn home_settings_default_for_old_configs_and_persist_new_layouts() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let mut old = serde_json::to_value(Settings::default()).unwrap();
+        old.as_object_mut().unwrap().remove("homeCleanMode");
+        old.as_object_mut().unwrap().remove("homeNoticeLayout");
+        old["showNotices"] = serde_json::json!(false);
+        old["memoryMb"] = serde_json::json!(8192);
+        let bytes = serde_json::to_vec(&old).unwrap();
+        std::fs::write(&path, &bytes).unwrap();
+        let store = ConfigStore::open(dir.path()).unwrap();
+        assert!(!store.get().home_clean_mode);
+        assert_eq!(store.get().home_notice_layout, "masonry");
+        assert_eq!(store.get().memory_mb, 8192);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        for layout in ["single", "parallel", "masonry"] {
+            for clean in [false, true] {
+                let mut settings = store.get();
+                settings.home_clean_mode = clean;
+                settings.home_notice_layout = layout.into();
+                store.save(settings).unwrap();
+                let loaded = ConfigStore::open(dir.path()).unwrap().get();
+                assert_eq!(loaded.home_clean_mode, clean);
+                assert_eq!(loaded.home_notice_layout, layout);
+                let saved: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+                assert!(saved.get("showNotices").is_none());
+            }
+        }
+        let mut settings = store.get();
+        settings.home_notice_layout = "unknown".into();
+        let saved = std::fs::read(&path).unwrap();
+        assert!(store.save(settings).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), saved);
+        let imported = import_legacy(
+            &serde_json::json!({ "launcher": { "enableNotice": false } }),
+            dir.path(),
+        );
+        assert!(!imported.home_clean_mode);
+        assert_eq!(imported.home_notice_layout, "masonry");
+    }
     #[test]
     fn persists_and_rejects_invalid_settings_without_overwrite() {
         let dir = tempfile::tempdir().unwrap();
@@ -318,6 +416,52 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("settings.json"), "broken").unwrap();
         assert!(ConfigStore::open(dir.path()).is_err());
+    }
+    #[test]
+    fn dimension_palettes_persist_and_reject_unknown_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ConfigStore::open(dir.path()).unwrap();
+        for accent in ["forest", "nether", "end", "sift"] {
+            let mut settings = store.get();
+            settings.accent = accent.into();
+            store.save(settings).unwrap();
+            assert_eq!(ConfigStore::open(dir.path()).unwrap().get().accent, accent);
+        }
+        for accent in ["puce", "ebony", "unknown"] {
+            let mut settings = store.get();
+            settings.accent = accent.into();
+            assert!(store.save(settings).is_err());
+            assert_eq!(ConfigStore::open(dir.path()).unwrap().get().accent, "sift");
+        }
+    }
+    #[test]
+    fn retired_palettes_open_and_import_as_overworld() {
+        let dir = tempfile::tempdir().unwrap();
+        for (accent, legacy_name) in [("puce", "Puce"), ("ebony", "Ebony")] {
+            let settings = Settings {
+                accent: accent.into(),
+                memory_mb: 8192,
+                ..Default::default()
+            };
+            let bytes = serde_json::to_vec_pretty(&settings).unwrap();
+            let path = dir.path().join("settings.json");
+            std::fs::write(&path, &bytes).unwrap();
+            let store = ConfigStore::open(dir.path()).unwrap();
+            assert_eq!(store.get().accent, "forest");
+            assert_eq!(store.get().memory_mb, 8192);
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
+            store.save(store.get()).unwrap();
+            assert_eq!(
+                ConfigStore::open(dir.path()).unwrap().get().accent,
+                "forest"
+            );
+            let imported = import_legacy(
+                &serde_json::json!({ "launcher": { "theme": legacy_name } }),
+                dir.path(),
+            );
+            assert_eq!(imported.accent, "forest");
+            imported.validate().unwrap();
+        }
     }
     #[test]
     fn download_task_display_defaults_to_off_for_new_and_old_configs() {
@@ -364,6 +508,74 @@ mod tests {
                 .download_task_display,
             "off"
         );
+    }
+    #[test]
+    fn player_preview_defaults_keep_old_configs_compatible() {
+        let settings: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(settings.player_preview_mode, "front");
+        assert_eq!(settings.player3d_fps, 30);
+        assert_eq!(settings.player3d_background_type, "current");
+        assert!(settings.player3d_background.is_empty());
+        assert_eq!(settings.player3d_action, "still");
+        let legacy = import_legacy(&serde_json::json!({}), Path::new("C:/Games"));
+        assert_eq!(legacy.player_preview_mode, "front");
+        assert_eq!(legacy.player3d_fps, 30);
+        assert_eq!(legacy.player3d_background_type, "current");
+        assert_eq!(legacy.player3d_action, "still");
+    }
+    #[test]
+    fn player_preview_settings_persist_and_invalid_saves_preserve_the_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ConfigStore::open(dir.path()).unwrap();
+        let mut settings = store.get();
+        settings.player_preview_mode = "3d".into();
+        settings.player3d_fps = 60;
+        settings.player3d_background_type = "remote".into();
+        settings.player3d_background = "https://example.com/background.png".into();
+        settings.player3d_action = "wave".into();
+        store.save(settings).unwrap();
+        let saved = ConfigStore::open(dir.path()).unwrap().get();
+        let json = serde_json::to_value(&saved).unwrap();
+        assert_eq!(json["playerPreviewMode"], "3d");
+        assert_eq!(json["player3dFps"], 60);
+        assert_eq!(json["player3dBackgroundType"], "remote");
+        assert_eq!(
+            json["player3dBackground"],
+            "https://example.com/background.png"
+        );
+        assert_eq!(json["player3dAction"], "wave");
+        for (field, value) in [
+            ("playerPreviewMode", serde_json::json!("unknown")),
+            ("player3dFps", serde_json::json!(0)),
+            ("player3dFps", serde_json::json!(145)),
+            ("player3dBackgroundType", serde_json::json!("unknown")),
+            ("player3dAction", serde_json::json!("unknown")),
+        ] {
+            let mut invalid = json.clone();
+            invalid[field] = value;
+            assert!(store
+                .save(serde_json::from_value(invalid).unwrap())
+                .is_err());
+            assert_eq!(serde_json::to_value(store.get()).unwrap(), json);
+            assert_eq!(
+                serde_json::to_value(ConfigStore::open(dir.path()).unwrap().get()).unwrap(),
+                json
+            );
+        }
+        for mode in ["front", "back", "3d"] {
+            for action in ["still", "walk", "run", "fly", "wave"] {
+                for background in ["current", "none", "local", "remote"] {
+                    for fps in [1, 30, 144] {
+                        let mut settings = saved.clone();
+                        settings.player_preview_mode = mode.into();
+                        settings.player3d_action = action.into();
+                        settings.player3d_background_type = background.into();
+                        settings.player3d_fps = fps;
+                        settings.validate().unwrap();
+                    }
+                }
+            }
+        }
     }
     #[test]
     fn maps_legacy_options() {

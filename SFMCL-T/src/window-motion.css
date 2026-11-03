@@ -1,0 +1,20 @@
+:root[data-window-motion] {
+  background: transparent;
+  /* Keep Chromium's canvas transparent even when the app uses its dark theme. */
+  color-scheme: light;
+  overflow: clip;
+}
+html[data-window-motion] body {
+  /* Body backgrounds propagate to the browser canvas and would leave an opaque
+     rectangle behind the shrinking app. The app surface supplies its own fill. */
+  background: transparent;
+  min-height: 100dvh;
+  /* DWM rounds the native rectangle, not the surface moving inside it. */
+  clip-path: inset(0 round 8px);
+  transform-origin: center;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+html[data-window-motion][data-theme="dark"] body {
+  color-scheme: dark;
+}

@@ -1,5 +1,6 @@
 import { runtimePath } from "./lib/paths.mjs";
 import { chromium, expect } from "@playwright/test";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { resourceCenterFixture } from "./fixtures/resource-center.mjs";
@@ -57,13 +58,7 @@ const select = async (name, value) => {
   await page.getByRole("combobox", { name, exact: true }).click();
   await page.getByRole("option", { name: value, exact: true }).click();
 };
-const save = async () => {
-  const button = page
-    .getByRole("button", { name: "保存设置", exact: true })
-    .first();
-  if (await button.isEnabled()) await button.click();
-  await expect(button).toBeDisabled();
-};
+const save = () => waitForAutoSave(page);
 const shot = async (name) => {
   await page.evaluate(() =>
     Promise.allSettled(
@@ -197,11 +192,6 @@ try {
   expect(
     await page.evaluate(() => window.__pixelTest.openedCacheDirectories.at(-1)),
   ).toBe("D:/下载缓存/游戏文件");
-  expect(
-    await page.evaluate(
-      () => window.__pixelTest.data.settings.downloadCacheDir,
-    ),
-  ).toBe("");
   await save();
   expect(
     await page.evaluate(
@@ -221,10 +211,6 @@ try {
     () =>
       (window.__pixelTest.failures["settings.save"] = "无法写入下载缓存文件夹"),
   );
-  await page
-    .getByRole("button", { name: "保存设置", exact: true })
-    .first()
-    .click();
   await expect(page.getByRole("alert")).toContainText("无法写入下载缓存文件夹");
   expect(
     await page.evaluate(
@@ -232,7 +218,9 @@ try {
     ),
   ).toBe("D:/下载缓存/游戏文件");
   await expect(cache).toHaveValue("D:/无法写入");
-  await page.locator(".toast.error").click();
+  await page
+    .getByRole("button", { name: /关闭通知：.*无法写入下载缓存文件夹/ })
+    .click();
   await page.evaluate(
     () => delete window.__pixelTest.failures["settings.save"],
   );
@@ -247,13 +235,14 @@ try {
   await layout();
   await shot("cache-default");
   checks.push(
-    "Cache: icon opens default and unsaved custom directories without saving, folder picker, cancel, save/reopen, write error preserves draft and saved settings, blank input restores default",
+    "Cache: icon opens default and custom directories, folder picker edits save automatically, cancel/reopen work, write errors preserve input and previous settings, blank input restores default",
   );
 
   for (const [accent, label, borders] of [
-    ["forest", "森林绿", ["#8a9f8e", "#526958"]],
-    ["puce", "原版 · Puce", ["#a18b93", "#72545f"]],
-    ["ebony", "原版 · Ebony", ["#879caa", "#506c80"]],
+    ["forest", "主世界配色", ["#8a9f8e", "#526958"]],
+    ["nether", "地狱配色", ["#ad8776", "#795145"]],
+    ["end", "末地配色", ["#9d93ab", "#6f5e80"]],
+    ["sift", "筛界配色", ["#819fa2", "#507882"]],
   ]) {
     for (const [index, mode] of ["light", "dark"].entries()) {
       const key = `${accent}-${mode}`;
@@ -330,14 +319,24 @@ try {
       await expect(page.locator(".players-login-error")).toHaveCount(0);
       await shot(`${key}-microsoft-login`);
       await nav("版本管理");
-      await page
-        .getByRole("button", { name: "游戏设置 1.21.4", exact: true })
-        .click();
+      if (!(await page.locator(".version-settings-page:visible").count()))
+        await page
+          .getByRole("button", { name: "游戏设置 1.21.4", exact: true })
+          .click();
       await expect(
         page.getByRole("textbox", { name: "窗口标题", exact: true }),
       ).toBeDisabled();
       await shot(`${key}-version-settings`);
       await nav("资源中心");
+      if (
+        await page
+          .getByRole("heading", { name: "Sodium", exact: true })
+          .isVisible()
+      )
+        await page
+          .getByRole("button", { name: "返回上一级", exact: true })
+          .click();
+      await page.getByRole("tab", { name: "Minecraft", exact: true }).click();
       await page
         .getByRole("button", {
           name: "查看 Minecraft 1.20.1 安装配置",
@@ -407,10 +406,10 @@ try {
     expect(
       new Set(themes.map((theme) => JSON.stringify(theme.tokens[token]))).size,
       `${token} must respond to every palette and appearance`,
-    ).toBe(6);
+    ).toBe(8);
   }
-  expect(new Set(themes.map((theme) => theme.launch)).size).toBe(6);
-  expect(new Set(themes.map((theme) => theme.log.background)).size).toBe(6);
+  expect(new Set(themes.map((theme) => theme.launch)).size).toBe(8);
+  expect(new Set(themes.map((theme) => theme.log.background)).size).toBe(8);
   await page.locator(".theme-option.system").click();
   await save();
   await page.emulateMedia({ colorScheme: "light" });

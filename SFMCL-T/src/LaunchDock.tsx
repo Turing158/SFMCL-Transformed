@@ -34,6 +34,8 @@ import { Badge, Button, PixelFrame, ResourceImage } from "./components";
 import { SearchField } from "./controls";
 import { getLaunchTask, isActiveLaunch } from "./launchState";
 import { versionIcon } from "./versionIcon";
+import { versionPayload } from "./versionActions";
+import { gameDirectoryName, gameDirectoryPath } from "./gameDirectories";
 import { useApp } from "./store";
 import { FooterText } from "./FooterText";
 import { FooterStatusIcon } from "./FooterStatusIcon";
@@ -310,7 +312,10 @@ export function LaunchDock({ playerCaption }: { playerCaption: string }) {
   };
   const selectVersion = async (item: Version) => {
     if (locked || app.busy || requestInFlight.current || item.error) return;
-    if (item.id === settings.activeVersion) {
+    if (
+      item.id === settings.activeVersion &&
+      (item.directory ?? settings.activeDir) === settings.activeDir
+    ) {
       closePicker();
       return;
     }
@@ -323,7 +328,7 @@ export function LaunchDock({ playerCaption }: { playerCaption: string }) {
     try {
       await app.run(async () => {
         try {
-          await app.update("versions.select", { id: item.id });
+          await app.update("versions.select", versionPayload(item));
           setActionError(null);
           closePicker();
           app.notify(`已切换到 ${item.id}`);
@@ -516,17 +521,62 @@ function VersionPicker({
   const app = useApp();
   const [query, setQuery] = useState("");
   const panel = useRef<HTMLDivElement>(null);
-  const footerFeedback = useRef<Animation | null>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
+  const actionFeedback = useRef<Animation | null>(null);
   const needle = query.trim().toLowerCase();
-  const versions = app.versions.filter((item) =>
-    `${item.id} ${item.version} ${item.loader === "Vanilla" ? "原版 Vanilla" : item.loader} Java ${item.javaMajor}`
+  const settings = app.data.settings;
+  const showAll = app.showAllVersions;
+  const catalog = showAll ? app.allVersions.versions : app.versions;
+  const loading = showAll && app.allVersions.loading;
+  const directoryName = (item: Version) =>
+    gameDirectoryName(
+      settings.gameDirs.find(
+        (directory) => directory.path === item.directory,
+      ) ?? {
+        name: item.directory ?? settings.activeDir,
+        path: item.directory ?? settings.activeDir,
+      },
+    );
+  const selected = (item: Version) =>
+    item.id === settings.activeVersion &&
+    (item.directory ?? settings.activeDir) === settings.activeDir;
+  const versions = catalog.filter((item) =>
+    `${item.id} ${item.version} ${item.loader === "Vanilla" ? "原版 Vanilla" : item.loader} Java ${item.javaMajor} ${showAll ? `${directoryName(item)} ${item.directory}` : ""}`
       .toLowerCase()
       .includes(needle),
   );
-  const focusableId =
-    versions.find(
-      (item) => !item.error && item.id === app.data.settings.activeVersion,
-    )?.id || versions.find((item) => !item.error)?.id;
+  const focusablePath =
+    versions.find((item) => !item.error && selected(item))?.path ||
+    versions.find((item) => !item.error)?.path;
+  const versionKeys = versions.map((item) => item.path).join("\n");
+
+  useLayoutEffect(() => {
+    const element = list.current;
+    if (!element) return;
+    const measure = () => {
+      const remaining = element.scrollHeight - element.clientHeight;
+      const overflow = element.clientHeight > 0 && remaining > 1;
+      const next = {
+        top: overflow && element.scrollTop > 1,
+        bottom: overflow && remaining - element.scrollTop > 1,
+      };
+      setScrollEdges((previous) =>
+        previous.top === next.top && previous.bottom === next.bottom
+          ? previous
+          : next,
+      );
+    };
+    measure();
+    element.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    Array.from(element.children).forEach((item) => observer.observe(item));
+    return () => {
+      element.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  }, [versionKeys]);
 
   useLayoutEffect(() => {
     panel.current
@@ -534,10 +584,10 @@ function VersionPicker({
       ?.focus({ preventScroll: true });
   }, []);
 
-  useEffect(() => () => footerFeedback.current?.cancel(), []);
+  useEffect(() => () => actionFeedback.current?.cancel(), []);
 
-  function activateFooter(button: HTMLButtonElement, action: () => void) {
-    if (footerFeedback.current) return;
+  function activateAction(button: HTMLButtonElement, action: () => void) {
+    if (actionFeedback.current) return;
     // Finish the short press before navigation unmounts the picker.
     const animation = button.animate(
       [
@@ -551,9 +601,9 @@ function VersionPicker({
       ],
       { duration: 180 },
     );
-    footerFeedback.current = animation;
+    actionFeedback.current = animation;
     animation.onfinish = () => {
-      footerFeedback.current = null;
+      actionFeedback.current = null;
       action();
     };
   }
@@ -629,7 +679,9 @@ function VersionPicker({
       <header className="launch-picker-heading">
         <div>
           <h2 id={`${id}-title`}>选择游戏版本</h2>
-          <p>{app.versions.length} 个版本</p>
+          <p>
+            {catalog.length} 个版本{showAll && " · 全部"}
+          </p>
         </div>
         <SearchField
           label="搜索本地版本"
@@ -644,49 +696,82 @@ function VersionPicker({
           {error}
         </p>
       )}
-      <div
-        className="launch-version-list"
-        role="listbox"
-        aria-label="本地游戏版本"
-        aria-busy={disabled}
-      >
-        {versions.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className="launch-version-option has-surface"
-            role="option"
-            aria-selected={item.id === app.data.settings.activeVersion}
-            disabled={disabled || !!item.error}
-            tabIndex={item.id === focusableId ? 0 : -1}
-            data-tooltip={item.error || item.id}
-            onClick={() => onSelect(item)}
+      {showAll && app.allVersions.errors.length > 0 && (
+        <p className="launch-picker-error" role="alert">
+          部分目录读取失败，已显示其余版本。
+          <span data-tooltip={app.allVersions.errors.join("\n")}>详情</span>
+          <Button
+            disabled={disabled || loading}
+            onClick={app.allVersions.refresh}
           >
-            <PixelFrame />
-            <ResourceImage path={versionIcon(item)} alt="" />
-            <span className="launch-option-copy">
-              <strong>{item.id}</strong>
-              <small>
-                {item.loader === "Vanilla" ? "原版" : item.loader} · Java{" "}
-                {item.javaMajor}
-              </small>
-              {item.error && (
-                <small className="launch-option-error">
-                  版本不可用：{item.error}
+            重新读取
+          </Button>
+        </p>
+      )}
+      <div
+        className="launch-version-viewport"
+        hidden={versions.length === 0}
+        data-scroll-top={scrollEdges.top || undefined}
+        data-scroll-bottom={scrollEdges.bottom || undefined}
+      >
+        <div
+          ref={list}
+          className="launch-version-list"
+          role="listbox"
+          aria-label="本地游戏版本"
+          aria-busy={disabled || loading}
+        >
+          {versions.map((item) => (
+            <button
+              key={item.path}
+              type="button"
+              className="launch-version-option has-surface"
+              role="option"
+              aria-selected={selected(item)}
+              disabled={disabled || !!item.error}
+              tabIndex={item.path === focusablePath ? 0 : -1}
+              data-directory={item.directory ?? settings.activeDir}
+              data-tooltip={
+                item.error ||
+                (showAll
+                  ? `${item.id}\n${gameDirectoryPath(item.directory ?? settings.activeDir)}`
+                  : item.id)
+              }
+              onClick={() => onSelect(item)}
+            >
+              <PixelFrame />
+              <ResourceImage path={versionIcon(item)} alt="" />
+              <span className="launch-option-copy">
+                <strong>{item.id}</strong>
+                <small>
+                  {item.loader === "Vanilla" ? "原版" : item.loader} · Java{" "}
+                  {item.javaMajor}
+                  {showAll && ` · ${directoryName(item)}`}
                 </small>
+                {item.error && (
+                  <small className="launch-option-error">
+                    版本不可用：{item.error}
+                  </small>
+                )}
+              </span>
+              {selected(item) && (
+                <Check
+                  size={17}
+                  className="launch-option-check"
+                  aria-hidden="true"
+                />
               )}
-            </span>
-            {item.id === app.data.settings.activeVersion && (
-              <Check
-                size={17}
-                className="launch-option-check"
-                aria-hidden="true"
-              />
-            )}
-          </button>
-        ))}
+            </button>
+          ))}
+        </div>
       </div>
-      {versions.length === 0 && (
+      {loading && (
+        <div className="launch-picker-empty" role="status">
+          <LoaderCircle className="spin" size={22} />
+          <p>正在读取全部目录…</p>
+        </div>
+      )}
+      {!loading && versions.length === 0 && (
         <div className="launch-picker-empty">
           {needle ? <Search size={26} /> : <Box size={26} />}
           <h3>{needle ? "没有找到这个版本" : "还没有本地游戏"}</h3>
@@ -695,29 +780,15 @@ function VersionPicker({
               ? "换一个关键词，或安装一个新版本。"
               : "添加已有游戏目录，或安装一个全新的世界。"}
           </p>
+          <Button
+            disabled={disabled}
+            onClick={(event) => activateAction(event.currentTarget, onInstall)}
+          >
+            <Plus size={15} />
+            安装新版本
+          </Button>
         </div>
       )}
-      <div className="launch-picker-footer">
-        <Button
-          disabled={disabled}
-          onClick={(event) =>
-            activateFooter(event.currentTarget, () => {
-              onClose(false);
-              app.setPage("versions");
-            })
-          }
-        >
-          <FolderOpen size={15} />
-          {app.versions.length ? "版本管理" : "添加已有游戏"}
-        </Button>
-        <Button
-          disabled={disabled}
-          onClick={(event) => activateFooter(event.currentTarget, onInstall)}
-        >
-          <Plus size={15} />
-          安装新版本
-        </Button>
-      </div>
     </div>
   );
 }

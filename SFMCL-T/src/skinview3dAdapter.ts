@@ -9,6 +9,7 @@ import { LinearSRGBColorSpace } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { BufferGeometry, Material, Mesh } from "three";
 import type { CameraPose } from "./playerPreview";
+import { player3dFpsMin, player3dFpsMax } from "./playerPreview";
 import type { Player3DAction } from "./player3dActions";
 
 // Diagnostics are available only in development, never in the product UI.
@@ -37,6 +38,7 @@ export class Player3DRenderer {
   private disposed = false;
   private task: number | undefined;
   private lastRender = -Infinity;
+  private frameRate = 30;
   private animationTime: number | undefined;
   private action: Player3DAction = "still";
   private width = 0;
@@ -184,7 +186,12 @@ export class Player3DRenderer {
         diagnostics.pending--;
         this.renderNow();
       },
-      Math.max(0, 1000 / 30 - (performance.now() - this.lastRender)),
+      Math.max(
+        0,
+        Math.ceil(
+          1000 / this.frameRate - (performance.now() - this.lastRender),
+        ),
+      ),
     );
   }
 
@@ -206,7 +213,10 @@ export class Player3DRenderer {
       const delta =
         this.animationTime === undefined
           ? 0
-          : Math.min(0.1, (now - this.animationTime) / 1000);
+          : Math.min(
+              Math.max(0.1, 2 / this.frameRate),
+              (now - this.animationTime) / 1000,
+            );
       animation.update(this.viewer.playerObject, delta);
       this.animationTime = now;
     }
@@ -218,6 +228,19 @@ export class Player3DRenderer {
     this.paint(this.viewer.canvas);
     if (animation && !animation.paused) this.invalidate();
     return true;
+  }
+
+  setFrameRate(frameRate: number) {
+    const next = Number.isFinite(frameRate)
+      ? Math.max(
+          player3dFpsMin,
+          Math.min(player3dFpsMax, Math.round(frameRate)),
+        )
+      : 30;
+    if (this.disposed || this.frameRate === next) return;
+    this.frameRate = next;
+    this.cancel();
+    this.invalidate();
   }
 
   setAction(action: Player3DAction) {
@@ -261,9 +284,18 @@ export class Player3DRenderer {
 
   loadSkin(image: HTMLImageElement, slim: boolean) {
     this.viewer.loadSkin(image, {
-      model: slim && image.width === image.height ? "slim" : "default",
+      model: slim ? "slim" : "default",
     });
     this.loaded = true;
+  }
+
+  setModel(slim: boolean) {
+    const skin = this.viewer.playerObject.skin;
+    const model = slim ? "slim" : "default";
+    if (this.disposed || skin.modelType === model) return;
+    // The public setter updates both arm geometry and texture coordinates.
+    skin.modelType = model;
+    this.invalidate();
   }
 
   loadCape(image: HTMLImageElement | null) {

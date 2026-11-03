@@ -13,6 +13,7 @@ import {
   componentBlockReason,
   emptyInstallSelection,
   installSelectionPayload,
+  installVersionName,
   selectInstallLoader,
   type InstallComponent,
 } from "../installOptions";
@@ -83,6 +84,10 @@ export function MinecraftInstallPage({
     directory ?? (settings.activeDir || settings.gameDirs[0]?.path || "");
   const [name, setName] = useState(version.id);
   const [selection, setSelection] = useState(emptyInstallSelection);
+  const automaticName = installVersionName(version.id, selection);
+  useEffect(() => {
+    setName(automaticName);
+  }, [automaticName]);
   const { catalogs, retry } = useInstallCatalog(version.id);
   const mounted = useRef(false);
   useEffect(() => {
@@ -180,7 +185,6 @@ export function MinecraftInstallPage({
         </div>
         <div className="minecraft-components-title">
           <h2>加载器与组件</h2>
-          <p>不选择组件时安装原版。展开卡片选择版本，可同时添加兼容组件。</p>
         </div>
         <div className="minecraft-components">
           {components.map((component) => {

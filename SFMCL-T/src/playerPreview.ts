@@ -2,6 +2,16 @@ import type { Player } from "./types";
 import type { RefObject } from "react";
 
 export type PlayerPreviewMode = "front" | "back" | "3d";
+export type Player3DBackgroundType = "current" | "none" | "local" | "remote";
+export const playerPreviewDefaults = {
+  playerPreviewMode: "front",
+  player3dFps: 30,
+  player3dBackgroundType: "current",
+  player3dBackground: "",
+  player3dAction: "still",
+} as const;
+export const player3dFpsMin = 1;
+export const player3dFpsMax = 144;
 export const previewModeLabel = { front: "正面", back: "背面", "3d": "3D" };
 export const nextPreviewMode = (mode: PlayerPreviewMode): PlayerPreviewMode =>
   mode === "front" ? "back" : mode === "back" ? "3d" : "front";
@@ -20,6 +30,8 @@ export type PreviewReady = (
 
 export interface SkinPreview3DProps {
   player?: Player;
+  frameRate: number;
+  defaultAction: import("./player3dActions").Player3DAction;
   onReady: PreviewReady;
   onFailure: (canvas?: HTMLCanvasElement) => void;
   camera: { current: CameraPose | undefined };

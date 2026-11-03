@@ -1,5 +1,6 @@
 import { projectPath, runtimePath } from "./lib/paths.mjs";
 import { chromium, expect } from "@playwright/test";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 
@@ -42,6 +43,7 @@ const toggleRail = async () => {
   await collapse.click();
 };
 const progress = sidebar.getByRole("progressbar");
+const tip = sidebar.locator(".sidebar-tip");
 const names = ["开始游戏", "版本管理", "资源中心", "设置"];
 const ids = ["home", "versions", "resources", "settings"];
 const settled = async () => page.evaluate(() => Promise.allSettled(
@@ -238,6 +240,7 @@ try {
   await ready("hidden");
   await expect(nav.getByRole("button", { name: "下载中心", exact: true })).toHaveCount(0);
   await expect(sidebar.locator(".sidebar-downloads")).toHaveCount(0);
+  await expect(sidebar.locator(".sidebar-tip")).toHaveCount(0);
   await ready("empty");
   await expect(sidebar.locator(".sidebar-tip")).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "下载中心", exact: true })).toHaveCount(0);
@@ -292,17 +295,8 @@ try {
 
   await ready("default");
   await expect(sidebar.locator(".sidebar-downloads")).toHaveCount(0);
-  const tip = sidebar.locator(".sidebar-tip");
-  await expect(tip).toBeVisible();
-  const tipBefore = await tip.boundingBox();
-  await tip.hover();
-  await expect(tip).toHaveCSS("translate", "0px -2px");
-  await settled();
-  expect((await tip.boundingBox()).y).toBeCloseTo(tipBefore.y - 2, 1);
-  expect(await tip.locator("svg").evaluate(el => getComputedStyle(el).transform)).not.toBe("none");
-  await page.mouse.move(1000, 600);
-  await settled();
-  extraChecks.push("侧栏采用纯色背景；下载摘要与提示卡互斥，始终显示空下载摘要时也隐藏提示卡；提示卡悬停上浮并转动图标");
+  await expect(sidebar.locator(".sidebar-tip")).toHaveCount(0);
+  extraChecks.push("侧栏采用纯色背景；隐藏下载摘要时不再显示提示占位卡，角色入口仍固定在底部");
   await expect(nav.getByRole("button", { name: "下载中心", exact: true })).toHaveCount(0);
   await shot("default-hidden");
   const display = page.getByRole("combobox", { name: "侧栏下载任务", exact: true });
@@ -311,7 +305,7 @@ try {
     await display.click();
     await expect(page.getByRole("option")).toHaveText(["下载时", "始终", "关闭"]);
     await page.getByRole("option", { name: label, exact: true }).click();
-    await page.getByRole("button", { name: "保存设置", exact: true }).first().click();
+    await waitForAutoSave(page);
     await expect.poll(() => page.evaluate(() => window.__pixelTest.data.settings.downloadTaskDisplay)).toBe(mode);
   };
   await nav.getByRole("button", { name: "设置", exact: true }).click();
@@ -328,7 +322,7 @@ try {
     window.__pixelTest.tasks.jobs.forEach((job) => { job.status = "completed"; });
   });
   await expect(sidebar.locator(".sidebar-downloads")).toHaveCount(0);
-  await expect(tip).toBeVisible();
+  await expect(tip).toHaveCount(0);
   for (const status of ["queued", "running", "pausing", "paused"]) {
     await page.evaluate((status) => { window.__pixelTest.tasks.downloads[0].status = status; }, status);
     await expect(sidebar.locator(".sidebar-downloads")).toHaveAttribute("data-status", status);
@@ -367,10 +361,10 @@ try {
   await page.mouse.up();
   extraChecks.push("选中外观只认 aria-current；按下位移 2px 并收起底座");
 
-  // Six theme/accent combinations, including the brightest point of the sheen.
+  // Eight theme/accent combinations, including the brightest point of the sheen.
   await ready();
   for (const theme of ["light", "dark"]) {
-    for (const accent of ["forest", "puce", "ebony"]) {
+    for (const accent of ["forest", "nether", "end", "sift"]) {
       await page.evaluate(({ theme, accent }) => Object.assign(document.documentElement.dataset, { theme, accent }), { theme, accent });
       await page.mouse.move(1200, 800);
       await settled();

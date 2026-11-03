@@ -1,12 +1,12 @@
 import { Input, Select, Switch } from "../controls";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Check, FolderOpen, RefreshCw, Settings2 } from "lucide-react";
 import { PageHeader } from "../PageHeader";
 import { useApp } from "../store";
 import { api, pick } from "../api";
 import { Button, TabList, TabPanel, PixelFrame } from "../components";
 import { GameSettingsFields } from "./GameSettingsFields";
-import type { Settings } from "../types";
+import type { HomeNoticeLayout, Settings } from "../types";
 import {
   appIcon,
   BRAND_WORDMARK,
@@ -16,38 +16,50 @@ import {
 } from "../branding";
 import { useTabContentTransition } from "../useTabContentTransition";
 import { useButtonPressFeedback } from "../useButtonPressFeedback";
-import { SaveBar, SaveButton } from "../SaveBar";
-import { mergeSavedSettings, withJavaPaths } from "../gameSettings";
+import {
+  absoluteSettingsPath,
+  prepareSettings,
+  withJavaPaths,
+} from "../gameSettings";
+import { useAutoSavedSettings } from "../useAutoSavedSettings";
+import { UpdateCheckButton, useUpdateCheck } from "../UpdateCheckButton";
+import { previewModeLabel } from "../playerPreview";
+import type {
+  Player3DBackgroundType,
+  PlayerPreviewMode,
+} from "../playerPreview";
+import { player3dActions, player3dActionLabel } from "../player3dActions";
+import type { Player3DAction } from "../player3dActions";
 import "../settings.css";
+
 export function SettingsPage() {
   const app = useApp();
   const pressFeedback = useButtonPressFeedback("sfmcl-t-settings-press");
   const [tab, setTab] = useState("launcher");
+  const updateCheck = useUpdateCheck();
   const tabContent = useTabContentTransition(
     ["launcher", "game", "about"].indexOf(tab),
   );
-  const [draft, setDraft] = useState<Settings>(app.data.settings);
-  const [update, setUpdate] = useState("");
-  const dirty = JSON.stringify(draft) !== JSON.stringify(app.data.settings);
-  const savedSettings = JSON.stringify(app.data.settings);
-  const previousSettings = useRef(app.data.settings);
-  useEffect(() => {
-    const next = JSON.parse(savedSettings) as Settings;
-    const previous = previousSettings.current;
-    setDraft((current) => mergeSavedSettings(current, previous, next));
-    previousSettings.current = next;
-  }, [savedSettings]);
+  const autoSave = useAutoSavedSettings(
+    app.data.settings,
+    app.autoSaveSettings,
+    prepareSettings,
+    (error) => app.reportError(`设置自动保存失败：${String(error)}`),
+  );
+  const draft = autoSave.draft ?? app.data.settings;
+  const downloadSource = draft.minecraftDownloadSource || "auto";
+  const { setDraft } = autoSave;
   const change = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setDraft((s) => ({ ...s, [key]: value }));
   const toggle = (
-    key: "hardwareAcceleration" | "showNotices",
+    key: "hardwareAcceleration" | "homeCleanMode",
     title: string,
-    description: string,
+    description?: string,
   ) => (
-    <div className="setting-row">
+    <div className={description ? "setting-row" : "setting-row setting-row-compact"}>
       <div>
         <strong>{title}</strong>
-        <p>{description}</p>
+        {description && <p>{description}</p>}
       </div>
       <Switch
         checked={draft[key]}
@@ -57,19 +69,12 @@ export function SettingsPage() {
     </div>
   );
   return (
-    <div className="settings-page" onClickCapture={pressFeedback}>
-      <PageHeader
-        icon={<Settings2 />}
-        eyebrow="MAKE IT YOURS"
-        title="设置"
-        action={
-          <SaveButton
-            showIndicator
-            disabled={!dirty || app.busy}
-            onSave={() => void app.run(() => app.save(draft), "设置已保存")}
-          />
-        }
-      />
+    <div
+      className="settings-page"
+      onClickCapture={pressFeedback}
+      data-saving={autoSave.saving}
+    >
+      <PageHeader icon={<Settings2 />} eyebrow="MAKE IT YOURS" title="设置" />
       <TabList
         id="settings"
         className="settings-tabs"
@@ -85,14 +90,11 @@ export function SettingsPage() {
       <TabPanel ref={tabContent} id="settings" value={tab}>
         {tab === "game" && (
           <div className="settings-stack">
-            <p className="helper">
-              未启用独立设置的版本使用以下配置。可在版本管理中为每个版本单独设置。
-            </p>
             <GameSettingsFields
               draft={draft}
               onJavaPathsSave={async (paths, removedPath) => {
                 const saved = await app.saveJavaPaths(paths, removedPath);
-                setDraft((current) =>
+                autoSave.sync((current) =>
                   withJavaPaths(current, saved, removedPath),
                 );
                 return saved;
@@ -139,9 +141,10 @@ export function SettingsPage() {
                   value={draft.accent}
                   onValueChange={(value) => change("accent", value)}
                 >
-                  <option value="forest">森林绿</option>
-                  <option value="puce">原版 · Puce</option>
-                  <option value="ebony">原版 · Ebony</option>
+                  <option value="forest">主世界配色</option>
+                  <option value="nether">地狱配色</option>
+                  <option value="end">末地配色</option>
+                  <option value="sift">筛界配色</option>
                 </Select>
               </label>
               <label className="field">
@@ -194,20 +197,7 @@ export function SettingsPage() {
                 "硬件加速",
                 "使用 GPU 渲染界面，修改后重新启动应用生效。",
               )}
-              {toggle(
-                "showNotices",
-                "显示公告",
-                "读取配置目录中的 Notices.json，支持 Markdown 文档和图片。",
-              )}
               <div className="row-actions">
-                <Button
-                  onClick={() => {
-                    app.setPage("home");
-                  }}
-                >
-                  <RefreshCw size={16} />
-                  查看与刷新公告
-                </Button>
                 <Button
                   onClick={() => void app.run(app.refresh, "背景与图片已刷新")}
                 >
@@ -215,6 +205,135 @@ export function SettingsPage() {
                   刷新背景图片
                 </Button>
               </div>
+            </section>
+            <section className="panel settings-section has-surface">
+              <PixelFrame />
+              <h2>开始游戏界面</h2>
+              {toggle("homeCleanMode", "干净模式")}
+              <label className="field">
+                公告布局
+                <Select
+                  value={draft.homeNoticeLayout || "masonry"}
+                  aria-label="公告布局"
+                  disabled={draft.homeCleanMode}
+                  onValueChange={(value) =>
+                    change("homeNoticeLayout", value as HomeNoticeLayout)
+                  }
+                >
+                  <option value="single">一行一个折叠面板</option>
+                  <option value="parallel">双列平行布局</option>
+                  <option value="masonry">双列瀑布布局（默认）</option>
+                </Select>
+              </label>
+            </section>
+            <section className="panel settings-section has-surface">
+              <PixelFrame />
+              <h2>角色管理 · 皮肤预览</h2>
+              <div className="form-grid">
+                <label className="field">
+                  默认预览方式
+                  <Select
+                    value={draft.playerPreviewMode}
+                    aria-label="默认预览方式"
+                    onValueChange={(value) =>
+                      change("playerPreviewMode", value as PlayerPreviewMode)
+                    }
+                  >
+                    {(["front", "back", "3d"] as const).map((mode) => (
+                      <option key={mode} value={mode}>
+                        {previewModeLabel[mode]}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="field">
+                  3D 预览帧数
+                  <Select
+                    aria-label="3D 预览帧数"
+                    value={String(draft.player3dFps)}
+                    displayValue={draft.player3dFps}
+                    onValueChange={(value) =>
+                      change("player3dFps", Number(value))
+                    }
+                  >
+                    {[10, 24, 30, 45, 60].map((fps) => (
+                      <option key={fps} value={fps}>
+                        {fps}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="field">
+                  3D 预览背景
+                  <Select
+                    value={draft.player3dBackgroundType}
+                    aria-label="3D 预览背景"
+                    onValueChange={(value) =>
+                      change(
+                        "player3dBackgroundType",
+                        value as Player3DBackgroundType,
+                      )
+                    }
+                  >
+                    <option value="current">当前场景（默认）</option>
+                    <option value="none">纯色背景</option>
+                    <option value="local">本地图片</option>
+                    <option value="remote">网络图片</option>
+                  </Select>
+                </label>
+                <label className="field">
+                  3D 默认动作
+                  <Select
+                    value={draft.player3dAction}
+                    aria-label="3D 默认动作"
+                    onValueChange={(value) =>
+                      change("player3dAction", value as Player3DAction)
+                    }
+                  >
+                    {player3dActions.map((action) => (
+                      <option key={action} value={action}>
+                        {player3dActionLabel[action]}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              </div>
+              {["local", "remote"].includes(draft.player3dBackgroundType) && (
+                <label className="field">
+                  3D 背景图片路径或 URL
+                  <div className="input-action">
+                    <Input
+                      value={draft.player3dBackground}
+                      aria-label="3D 背景图片路径或 URL"
+                      onChange={(event) =>
+                        change("player3dBackground", event.target.value)
+                      }
+                      placeholder={
+                        draft.player3dBackgroundType === "local"
+                          ? "选择 JPG / PNG 图片"
+                          : "https://…"
+                      }
+                    />
+                    {draft.player3dBackgroundType === "local" && (
+                      <Button
+                        onClick={() =>
+                          void app.run(async () => {
+                            const path = await pick(false, [
+                              "png",
+                              "jpg",
+                              "jpeg",
+                            ]);
+                            if (path) change("player3dBackground", path);
+                          })
+                        }
+                      >
+                        <FolderOpen size={16} />
+                        选择 3D 背景图片
+                      </Button>
+                    )}
+                  </div>
+                </label>
+              )}
             </section>
             <section className="panel settings-section has-surface">
               <PixelFrame />
@@ -226,11 +345,14 @@ export function SettingsPage() {
                     id="download-cache-dir"
                     value={draft.downloadCacheDir || ""}
                     onChange={(e) => change("downloadCacheDir", e.target.value)}
+                    onBlur={() => {
+                      if (!absoluteSettingsPath(draft.downloadCacheDir))
+                        app.reportError("下载缓存文件夹必须是绝对路径");
+                    }}
                     placeholder={
                       app.data.defaultDownloadCacheDir ||
                       "默认：配置目录 / downloads / cache"
                     }
-                    aria-describedby="download-cache-help"
                   />
                   <Button
                     onClick={() =>
@@ -261,13 +383,28 @@ export function SettingsPage() {
                     <FolderOpen size={17} />
                   </button>
                 </div>
-                <small id="download-cache-help">
-                  留空使用默认目录。保存后用于新下载，已有任务继续使用原缓存目录；文件完成后自动清理缓存。
-                </small>
               </div>
-              <div className="form-grid">
+              <div className="form-grid download-options-grid">
+                <div className="field">
+                  <label htmlFor="download-source-strategy">下载源策略</label>
+                  <Select
+                    id="download-source-strategy"
+                    aria-label="下载源策略"
+                    value={downloadSource}
+                    onValueChange={(value) =>
+                      change(
+                        "minecraftDownloadSource",
+                        value as Settings["minecraftDownloadSource"],
+                      )
+                    }
+                  >
+                    <option value="auto">速度优先（推荐）</option>
+                    <option value="official">官网优先</option>
+                    <option value="bmclapi">镜像优先</option>
+                  </Select>
+                </div>
                 <label className="field">
-                  同时下载文件数
+                  同时下载数
                   <Input
                     type="number"
                     min={1}
@@ -276,10 +413,21 @@ export function SettingsPage() {
                     onChange={(e) =>
                       change("downloadConcurrency", Number(e.target.value))
                     }
+                    onBlur={() =>
+                      change(
+                        "downloadConcurrency",
+                        Math.min(
+                          32,
+                          Math.max(
+                            1,
+                            Math.round(draft.downloadConcurrency) || 1,
+                          ),
+                        ),
+                      )
+                    }
                   />
-                  <small>1–32，重新启动后使用新的并发上限。</small>
                 </label>
-                <label className="field">
+                <label className="field download-task-display">
                   侧栏下载任务
                   <Select
                     aria-label="侧栏下载任务"
@@ -292,9 +440,6 @@ export function SettingsPage() {
                     <option value="always">始终</option>
                     <option value="off">关闭</option>
                   </Select>
-                  <small>
-                    默认关闭。“下载时”在有未结束的下载或步骤任务时显示。
-                  </small>
                 </label>
               </div>
             </section>
@@ -339,34 +484,11 @@ export function SettingsPage() {
               <span className="badge has-surface">
                 <PixelFrame />v{app.data.version} · Rust + Tauri
               </span>
-              <div className="row-actions">
-                <Button
-                  onClick={() =>
-                    void app.run(async () => {
-                      const release = await api<{
-                        tag_name: string;
-                        html_url: string;
-                      }>("updates");
-                      setUpdate(`原项目最新发布：${release.tag_name}`);
-                    })
-                  }
-                >
-                  <RefreshCw size={16} />
-                  检查原项目更新
-                </Button>
-              </div>
-              {update && <p>{update}</p>}
+              <UpdateCheckButton {...updateCheck} />
             </section>
           </div>
         )}
       </TabPanel>
-      <SaveBar
-        visible={dirty}
-        message="有尚未保存的修改"
-        busy={app.busy}
-        onDiscard={() => setDraft(app.data.settings)}
-        onSave={() => void app.run(() => app.save(draft), "设置已保存")}
-      />
     </div>
   );
 }

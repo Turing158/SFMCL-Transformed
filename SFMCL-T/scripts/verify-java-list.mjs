@@ -2,6 +2,7 @@ import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { runtimePath } from "./lib/paths.mjs";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 
 // All persistence goes to the test browser's sessionStorage, never real settings.
 const evidence = runtimePath("evidence/java-list");
@@ -63,8 +64,7 @@ const scan = async () => {
   ).toBeEnabled();
 };
 const commit = async () => {
-  await save().click();
-  await expect(save()).toHaveCount(0);
+  await waitForAutoSave(page);
 };
 const openVersion = async (id) => {
   await nav("版本管理");
@@ -83,16 +83,9 @@ try {
     .poll(async () => (await saved()).javaPaths)
     .toEqual([j21, j17, j8]);
   await expect(title()).toHaveValue("Unsaved global title");
-  expect((await saved()).windowTitle).toBe("");
-  expect(
-    await page.evaluate(() =>
-      window.__pixelTest.requests.filter(
-        (r) => r.operation === "settings.save",
-      ),
-    ),
-  ).toHaveLength(0);
-  await expect(save()).toBeEnabled();
-  await page.getByRole("button", { name: "撤销修改", exact: true }).click();
+  await waitForAutoSave(page);
+  expect((await saved()).windowTitle).toBe("Unsaved global title");
+  await expect(save()).toHaveCount(0);
   await nav("开始游戏");
   await openGlobal();
   await openMenu();
@@ -111,7 +104,7 @@ try {
     ),
   ).toHaveLength(0);
   checks.push(
-    "Scans save the list immediately without committing unrelated drafts; navigation and reload restore it without discovery.",
+    "Scans and setting edits save automatically without overwriting each other; navigation and reload restore the Java list without discovery.",
   );
 
   await remove(j17).click();
@@ -189,9 +182,15 @@ try {
   ).toBeEnabled();
   await expect(trigger()).toContainText(manual);
   expect((await saved()).javaPaths).toEqual([j8, manual]);
-  await page.getByRole("button", { name: "撤销修改", exact: true }).click();
-  await expect(trigger()).toContainText("自动选择适合游戏的 Java");
+  await waitForAutoSave(page);
+  await expect(trigger()).toContainText(manual);
   expect((await saved()).javaPaths).toEqual([j8, manual]);
+  await openMenu();
+  await grid()
+    .locator(".pixel-select-option")
+    .filter({ hasText: "自动选择适合游戏的 Java" })
+    .click();
+  await waitForAutoSave(page);
   await openMenu();
   await trigger().focus();
   await page.keyboard.press("ArrowDown");
@@ -276,8 +275,11 @@ try {
   await expect
     .poll(async () => (await versionSaved())?.settings.javaPaths)
     .toEqual([j21, j17, j8]);
-  expect((await versionSaved()).settings.windowTitle).toBe("");
-  expect((await versionSaved()).useGlobal).toBe(true);
+  await waitForAutoSave(page);
+  expect((await versionSaved()).settings.windowTitle).toBe(
+    "Unsaved version title",
+  );
+  expect((await versionSaved()).useGlobal).toBe(false);
   await expect(title()).toHaveValue("Unsaved version title");
   await openMenu();
   await choice(j21).click();
@@ -289,13 +291,14 @@ try {
     .poll(async () => (await versionSaved()).settings.javaPaths)
     .toEqual([j17, j8]);
   expect((await versionSaved()).settings.javaPath).toBe("");
+  await waitForAutoSave(page);
   expect((await versionSaved()).settings.windowTitle).toBe(
-    "Unsaved version title",
+    "Another unsaved title",
   );
   await expect(title()).toHaveValue("Another unsaved title");
   expect((await saved()).javaPaths).toEqual([j21, j17, j8]);
   await closeMenu();
-  await page.getByRole("button", { name: "撤销修改", exact: true }).click();
+  await waitForAutoSave(page);
   await page.getByRole("button", { name: "返回上一级", exact: true }).click();
   await openVersion("1.21.4");
   await openMenu();
@@ -303,14 +306,14 @@ try {
   await closeMenu();
   await scope("Java 运行环境").click();
   await expect(trigger()).toBeDisabled();
-  await page.getByRole("button", { name: "撤销修改", exact: true }).click();
+  await waitForAutoSave(page);
   await page.getByRole("button", { name: "返回上一级", exact: true }).click();
   await openVersion("1.20.1-Fabric");
   await scope("Java 运行环境").click();
   await openMenu();
   await expect(choice(j21)).toBeVisible();
   checks.push(
-    "Independent version lists persist separately from global and other versions; automatic list writes preserve unsaved titles and scope switches.",
+    "Independent version lists persist separately from global and other versions; automatic list and settings writes preserve titles and scope switches.",
   );
 
   expect(errors).toEqual([]);

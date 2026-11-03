@@ -62,6 +62,7 @@ fn groups_follow_current_globals_and_preserve_dormant_overrides() {
         window: true,
         advanced: true,
         memory: false,
+        ..Default::default()
     });
     version_settings::save(root.path(), "grouped", &config).unwrap();
     let effective = version_settings::resolve(root.path(), "grouped", &global).unwrap();
@@ -84,6 +85,41 @@ fn groups_follow_current_globals_and_preserve_dormant_overrides() {
         GameSettings::from(&config.resolve(&global)),
         GameSettings::from(&global)
     );
+}
+
+#[test]
+fn merged_cards_share_scope_and_keep_legacy_independent_flags() {
+    let global = Settings::default();
+    let mut saved = GameSettings::from(&global);
+    saved.width = 1600;
+    saved.window_mode = "center".into();
+    saved.launcher_action = "tray".into();
+    saved.process_priority = "high".into();
+    let mut config = VersionSettings {
+        use_global: false,
+        independent_groups: Some(GameSettingGroups {
+            position: true,
+            process: true,
+            ..Default::default()
+        }),
+        settings: saved.clone(),
+    };
+    let groups = config.groups();
+    assert!(groups.window && groups.position && groups.launcher && groups.process);
+    let effective = config.resolve(&global);
+    assert_eq!(effective.width, 1600);
+    assert_eq!(effective.window_mode, "center");
+    assert_eq!(effective.launcher_action, "tray");
+    assert_eq!(effective.process_priority, "high");
+    config.independent_groups = Some(GameSettingGroups::default());
+    let inherited = config.resolve(&global);
+    assert_eq!(inherited.width, global.width);
+    assert_eq!(inherited.window_mode, global.window_mode);
+    assert_eq!(inherited.launcher_action, global.launcher_action);
+    assert_eq!(inherited.process_priority, global.process_priority);
+    config.independent_groups = Some(groups);
+    assert_eq!(config.resolve(&global).process_priority, "high");
+    assert_eq!(config.settings, saved);
 }
 
 #[test]

@@ -4,6 +4,7 @@ import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { allVersionsFixture } from "./fixtures/all-versions.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 import { verifyVersionSelection } from "./check-version-selection.mjs";
+import { verifyVersionDirectoryMotion } from "./check-version-directory-motion.mjs";
 
 const first = "C:/Pixel-Test/Minecraft";
 const second = "D:/Other-Minecraft";
@@ -50,6 +51,9 @@ const showAll = async () => {
     "aria-busy",
     "false",
   );
+  await expect(page.locator("#local-version-results")).not.toHaveAttribute(
+    "data-version-directory-transition",
+  );
 };
 const ready = async () => {
   await page.goto(url);
@@ -67,6 +71,7 @@ const selection = () =>
   }));
 
 try {
+  await verifyVersionDirectoryMotion(page, ready, choose, checks);
   await verifyVersionSelection(page, ready, showAll, checks);
   await ready();
   await showAll();
@@ -423,6 +428,152 @@ try {
   ).toHaveText("Fabric");
   checks.push(
     "Favorite changes update filtered results, and filters persist across directories, grid/list views and navigation.",
+  );
+
+  await ready();
+  await showAll();
+  const aggregateReads = (await requests("versions.list")).length;
+  const nav = (name) =>
+    page
+      .getByRole("navigation", { name: "主导航" })
+      .getByRole("button", { name, exact: true })
+      .click();
+  const picker = page.getByRole("dialog", {
+    name: "选择游戏版本",
+    exact: true,
+  });
+  const pickerSearch = picker.getByRole("searchbox", {
+    name: "搜索本地版本",
+    exact: true,
+  });
+  const switchVersion = page.locator(".launch-switch");
+  const pickerVersion = (id, folder) =>
+    picker
+      .getByRole("option", {
+        name: new RegExp(`^${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} `),
+      })
+      .and(page.locator(`[data-directory="${folder}"]`));
+  await nav("开始游戏");
+  await switchVersion.click();
+  await expect(picker.getByRole("option")).toHaveCount(3);
+  await expect(picker.locator(".launch-picker-heading p")).toHaveText(
+    "3 个版本 · 全部",
+  );
+  expect((await requests("versions.list")).length).toBe(aggregateReads);
+  await expect(pickerVersion("1.21.4", first)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(pickerVersion("1.21.4", second)).toHaveAttribute(
+    "aria-selected",
+    "false",
+  );
+  await pickerSearch.fill("另一游戏目录");
+  await expect(picker.getByRole("option")).toHaveCount(1);
+  await pickerSearch.press("ArrowDown");
+  await expect(pickerVersion("1.21.4", second)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(picker).toBeHidden();
+  expect(await selection()).toEqual({ directory: second, version: "1.21.4" });
+  expect((await requests("versions.select")).at(-1).payload).toEqual({
+    id: "1.21.4",
+    directory: second,
+  });
+  await expect(switchVersion).toBeFocused();
+  await expect(page.locator(".launch-primary")).toBeEnabled();
+  await switchVersion.click();
+  await expect(picker.getByRole("option")).toHaveCount(3);
+  await expect(pickerVersion("1.21.4", first)).toHaveAttribute(
+    "aria-selected",
+    "false",
+  );
+  await expect(pickerVersion("1.21.4", second)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await pickerSearch.fill(first);
+  await expect(picker.getByRole("option")).toHaveCount(2);
+  await pickerSearch.press("Enter");
+  await expect(picker).toBeHidden();
+  expect(await selection()).toEqual({ directory: first, version: "1.21.4" });
+  checks.push(
+    "The launch picker shares the All catalog without duplicate scans, searches source directories and switches same-name versions with directory-aware selection and focus restoration.",
+  );
+
+  await switchVersion.click();
+  for (const width of [1024, 375]) {
+    await page.setViewportSize({ width, height: 800 });
+    const geometry = await picker.evaluate((element) => ({
+      search: element.querySelector(".pixel-search").getBoundingClientRect()
+        .height,
+      options: [...element.querySelectorAll('[role="option"]')].map(
+        (option) => option.getBoundingClientRect().height,
+      ),
+      width: element.clientWidth,
+      content: element.scrollWidth,
+    }));
+    expect(geometry.search).toBeLessThanOrEqual(36);
+    expect(geometry.options.every((height) => height <= 54)).toBe(true);
+    await expect(picker.locator(".launch-picker-footer")).toHaveCount(0);
+    expect(geometry.content).toBeLessThanOrEqual(geometry.width);
+    await page.screenshot({
+      path: `${evidence}/picker-all-${width}.png`,
+      animations: "disabled",
+    });
+  }
+  await page.keyboard.press("Escape");
+  await nav("版本管理");
+  await expect(directory).toHaveText("全部");
+  await choose(`像素工坊 · ${first}`);
+  await nav("开始游戏");
+  await switchVersion.click();
+  await expect(picker.getByRole("option")).toHaveCount(2);
+  await expect(picker.locator(".launch-picker-heading p")).toHaveText(
+    "2 个版本",
+  );
+  await page.keyboard.press("Escape");
+  checks.push(
+    "The picker retains All when returning to management, follows a single-directory choice and uses compact rows and search without a footer or overflow at desktop and mobile widths.",
+  );
+
+  await ready();
+  await page.evaluate((folder) => {
+    window.__pixelTest.directoryFailures[folder] = "测试目录暂不可读";
+  }, second);
+  await showAll();
+  await nav("开始游戏");
+  await switchVersion.click();
+  await expect(picker.getByRole("option")).toHaveCount(2);
+  await expect(picker.getByRole("alert")).toContainText("部分目录读取失败");
+  await page.evaluate((folder) => {
+    delete window.__pixelTest.directoryFailures[folder];
+  }, second);
+  await picker.getByRole("button", { name: "重新读取", exact: true }).click();
+  await expect(picker.getByRole("option")).toHaveCount(3);
+  await expect(picker.getByRole("alert")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await ready();
+  await page.evaluate((folder) => {
+    window.__pixelTest.heldDirectoryReads[folder] = [];
+  }, second);
+  await choose("全部");
+  await nav("开始游戏");
+  await switchVersion.click();
+  await expect(picker.getByRole("status")).toHaveText("正在读取全部目录…");
+  await expect(picker.getByText("还没有本地游戏", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.evaluate((folder) => {
+    const held = window.__pixelTest.heldDirectoryReads[folder];
+    delete window.__pixelTest.heldDirectoryReads[folder];
+    held.forEach((resolve) => resolve());
+  }, second);
+  await expect(picker.getByRole("option")).toHaveCount(3);
+  await expect(picker.getByRole("status")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  checks.push(
+    "The All picker shows loading instead of a false empty state, preserves readable folders on failures and can retry the shared catalog.",
   );
 
   await ready();

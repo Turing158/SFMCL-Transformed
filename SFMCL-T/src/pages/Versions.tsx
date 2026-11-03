@@ -30,8 +30,9 @@ import type { Version } from "../types";
 import { versionIcon } from "../versionIcon";
 import { VersionManageDialog } from "../VersionManageDialog";
 import { versionPayload } from "../versionActions";
-import { useAllVersions } from "../useAllVersions";
 import { matchesVersionFilter } from "../installOptions";
+import { useVersionViewTransition } from "../useVersionViewTransition";
+import { VersionDirectoryResults } from "../VersionDirectoryResults";
 import "../versions.css";
 
 const viewKey = "sfmcl-t.versions.view";
@@ -44,9 +45,10 @@ export function Versions() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [loaderFilter, setLoaderFilter] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const showAll = app.showAllVersions;
+  const setShowAll = app.setShowAllVersions;
   const s = app.data.settings;
-  const all = useAllVersions(showAll, s.gameDirs, app.versionsRevision);
+  const all = app.allVersions;
   const versions = showAll
     ? all.versions
     : app.versions.map((version) => ({
@@ -125,6 +127,14 @@ export function Versions() {
   };
   const selected = (version: Version) =>
     s.activeVersion === version.id && s.activeDir === version.directory;
+  const viewMotion = useVersionViewTransition(
+    !settingsVersion && !localVersion,
+    JSON.stringify([
+      showAll,
+      s.activeDir,
+      items.map((version) => version.path),
+    ]),
+  );
   if (settingsVersion)
     return (
       <VersionSettingsPage
@@ -180,11 +190,14 @@ export function Versions() {
               setShowAll(true);
               return;
             }
-            setShowAll(false);
-            if (value !== s.activeDir)
-              void app.run(() =>
-                app.save({ ...s, activeDir: value, activeVersion: "" }),
-              );
+            if (value === s.activeDir) {
+              setShowAll(false);
+              return;
+            }
+            void app.run(async () => {
+              await app.save({ ...s, activeDir: value, activeVersion: "" });
+              setShowAll(false);
+            });
           }}
         >
           {s.gameDirs.length === 0 && <option value="">尚未添加目录</option>}
@@ -312,7 +325,9 @@ export function Versions() {
             <CatalogView
               className="version-view"
               value={view}
-              onValueChange={setView}
+              onValueChange={(next) =>
+                viewMotion.animateView(() => setView(next))
+              }
               aria-controls="local-version-results"
             />
           </div>
@@ -332,7 +347,11 @@ export function Versions() {
             <Button onClick={all.refresh}>重新读取</Button>
           </div>
         )}
-        <div id="local-version-results" aria-busy={showAll && all.loading}>
+        <VersionDirectoryResults
+          resultsRef={viewMotion.root}
+          scope={showAll ? allDirectories : s.activeDir}
+          loading={showAll && all.loading}
+        >
           {showAll && all.loading ? (
             <div className="versions-loading">
               <div className="versions-loading-status" role="status">
@@ -521,7 +540,7 @@ export function Versions() {
               ))}
             </div>
           )}
-        </div>
+        </VersionDirectoryResults>
       </section>
       {detail && (
         <VersionManageDialog

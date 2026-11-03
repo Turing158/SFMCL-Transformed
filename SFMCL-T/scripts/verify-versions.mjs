@@ -22,14 +22,28 @@ await page.addInitScript(() => {
   });
 });
 const settle = () =>
-  page.evaluate(() =>
-    Promise.allSettled(
-      document
+  page.evaluate(async () => {
+    // Directory exits may schedule entries after their finished promise settles.
+    for (;;) {
+      const animations = document
         .getAnimations()
-        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .map((a) => a.finished),
-    ),
-  );
+        .filter(
+          (animation) =>
+            animation.effect?.getComputedTiming().iterations !== Infinity &&
+            animation.playState !== "finished",
+        );
+      if (!animations.length) {
+        if (!document.querySelector("[data-version-directory-transition]"))
+          return;
+        await new Promise(requestAnimationFrame);
+        continue;
+      }
+      await Promise.allSettled(
+        animations.map((animation) => animation.finished),
+      );
+      await new Promise(requestAnimationFrame);
+    }
+  });
 const mode = async (view) => {
   if ((await page.locator(".version-list").count()) > 0 !== (view === "list"))
     await page
@@ -158,7 +172,10 @@ try {
     "Directory retains its folder icon and horizontal spacing, never scales on hover, reveals its frame on hover/open, and animates a path change.",
   );
 
-  // The shared toggle animates its icon; result geometry changes without travel.
+  // Both the shared toggle and the version layout animate on view changes.
+  await page.getByRole("button", { name: "选择 1.21.4", exact: true }).click();
+  await expect(card("1.21.4")).toHaveClass(/selected/);
+  const beforeViewSwitch = await selectRequests();
   await page.locator(".version-view").evaluate((el) => el.click());
   await expect(page.locator(".version-view .catalog-view-symbol")).toHaveCSS(
     "animation-name",
@@ -178,7 +195,8 @@ try {
       );
       return { sizes: sizes.length, movement: movement.length };
     });
-  expect(motion).toEqual({ sizes: 0, movement: 0 });
+  expect(motion.sizes).toBeGreaterThan(0);
+  expect(motion.movement).toBeGreaterThan(0);
   await page.locator(".version-view").evaluate((el) => el.click());
   await page.locator(".version-view").evaluate((el) => el.click());
   await settle();
@@ -193,8 +211,32 @@ try {
             .filter((a) => a.playState === "running").length,
       ),
   ).toBe(0);
+  await expect(page.locator("#local-version-results")).not.toHaveAttribute(
+    "data-version-view-transition",
+  );
+  await expect(card("1.21.4")).toHaveClass(/selected/);
+  expect(await selectRequests()).toBe(beforeViewSwitch);
+  await expect(card("1.21.4")).toHaveCSS("translate", "none");
+  await expect(card("1.21.4")).toHaveCSS("scale", "none");
+  await expect(card("1.21.4")).toHaveCSS("opacity", "1");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.locator(".version-view").evaluate((el) => el.click());
+  expect(
+    await page
+      .locator("#local-version-results")
+      .evaluate(
+        (el) =>
+          el
+            .getAnimations({ subtree: true })
+            .filter((animation) =>
+              animation.id.startsWith("sfmcl-t-version-view"),
+            ).length,
+      ),
+  ).toBeGreaterThan(0);
+  await settle();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   checks.push(
-    "View toggle uses the resource-center icon animation; cards, frames and contents do not move or morph, including repeated toggles.",
+    "Grid/list switches animate item travel/fades and content height; rapid toggles settle cleanly, selection is preserved and animations remain enabled under the system reduced-motion preference.",
   );
 
   for (const view of ["grid", "list"]) {

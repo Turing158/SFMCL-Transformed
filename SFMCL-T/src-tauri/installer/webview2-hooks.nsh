@@ -44,12 +44,12 @@ Function SFMCLTDetectWebView2
     !insertmacro SFMCL_T_READ_WEBVIEW_VERSION HKCU
   ${EndIf}
   sfmcl_t_webview_detect_done:
-  ; These packages target x64; restore the view used by Tauri's SetContext.
-  ${If} ${RunningX64}
+  ; Restore the package's view, matching Tauri's SetContext even on a 64-bit OS.
+  !if "${ARCH}" == "x64"
     SetRegView 64
-  ${Else}
+  !else
     SetRegView 32
-  ${EndIf}
+  !endif
   Pop $1
   Pop $0
 FunctionEnd

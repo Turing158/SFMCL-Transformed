@@ -1,5 +1,6 @@
 import { runtimePath } from "./lib/paths.mjs";
 import { chromium, expect } from "@playwright/test";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 
@@ -109,14 +110,17 @@ const chooseTheme = async (theme, accent) => {
     })
     .click();
   await page.getByRole("combobox", { name: "主题配色", exact: true }).click();
-  const name = { forest: "森林绿", puce: "原版 · Puce", ebony: "原版 · Ebony" }[
-    accent
-  ];
+  const name = {
+    forest: "主世界配色",
+    nether: "地狱配色",
+    end: "末地配色",
+    sift: "筛界配色",
+  }[accent];
   await page.getByRole("option", { name, exact: true }).click();
   const save = page
     .getByRole("button", { name: "保存设置", exact: true })
     .first();
-  if (await save.count()) await save.click();
+  await waitForAutoSave(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   await expect(page.locator("html")).toHaveAttribute("data-accent", accent);
   await expect(save).toHaveCount(0);
@@ -199,15 +203,9 @@ try {
   });
   await tabs.getByRole("tab", { name: "全局设置" }).click();
   await page.getByRole("switch", { name: "自动分配内存" }).click();
-  const savingButton = await save.elementHandle();
-  await save.click();
+  await waitForAutoSave(page);
   await expect(save).toHaveCount(0);
-  await savingButton.evaluate((button) => {
-    if (!button.disabled)
-      throw new Error("Closing save button must be disabled");
-    button.click();
-  });
-  await expect(page.getByText("设置已保存", { exact: true })).toBeVisible();
+  await expect(page.getByText("设置已保存", { exact: true })).toHaveCount(0);
   expect(
     await page.evaluate(
       () =>
@@ -220,7 +218,7 @@ try {
     window.__pixelTest.delays["settings.save"] = 0;
   });
   checks.push(
-    "Tabs support arrows, Home/End, wrapping and a single Tab stop; tab/panel associations work; disabled and busy Save buttons cannot submit twice",
+    "Tabs support arrows, Home/End, wrapping and a single Tab stop; settings save automatically without save controls or repetitive success notices",
   );
 
   await nav("下载中心");
@@ -332,7 +330,7 @@ try {
   );
 
   for (const theme of ["light", "dark"]) {
-    for (const accent of ["forest", "puce", "ebony"]) {
+    for (const accent of ["forest", "nether", "end", "sift"]) {
       await chooseTheme(theme, accent);
       await nav("版本管理");
       await page.mouse.move(0, 0);
@@ -343,13 +341,13 @@ try {
       await shot(`versions-${theme}-${accent}`);
     }
   }
-  await chooseTheme("dark", "puce");
+  await chooseTheme("dark", "nether");
   await nav("开始游戏");
-  await shot("home-dark-puce");
+  await shot("home-dark-nether");
   await nav("下载中心");
-  await shot("downloads-dark-puce");
+  await shot("downloads-dark-nether");
   checks.push(
-    "All six light/dark and forest/puce/ebony combinations persist through real settings controls and render the shared frames",
+    "All eight light/dark and forest/nether/end/sift combinations persist through real settings controls and render the shared frames",
   );
 
   for (const width of [375, 768, 1024, 1440]) {

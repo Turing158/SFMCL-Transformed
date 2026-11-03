@@ -1,4 +1,3 @@
-import { Input } from "../controls";
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -7,22 +6,26 @@ import {
   RefreshCw,
   RotateCcw,
   Shirt,
+  Flag,
   Trash2,
 } from "lucide-react";
 import { useApp } from "../store";
 import { usePageActive } from "../PageActivity";
 import { usePlayerViewTransition } from "../usePlayerViewTransition";
 import { usePlayerAppearanceTransition } from "../usePlayerAppearanceTransition";
-import { api, confirmAction, external, pick } from "../api";
-import { Badge, Button, Modal, Skin, PixelFrame } from "../components";
+import { confirmAction, pick } from "../api";
+import { Badge, Button, Skin, PixelFrame } from "../components";
 import { PageTitle } from "../PageHeader";
 import { usePlayerLogin } from "../usePlayerLogin";
 import { usePlayerLoginTransition } from "../usePlayerLoginTransition";
 import type { Player } from "../types";
 import { PlayerSkinPreview } from "../PlayerSkinPreview";
+import { useImageResource } from "../useImageResource";
 import { nextPreviewMode, previewModeLabel } from "../playerPreview";
 import type { PlayerPreviewMode } from "../playerPreview";
 import type { PlayerLoginKind } from "../navigation";
+import { PlayerProfileDialog } from "./PlayerProfileDialog";
+import type { PlayerProfileAction } from "./PlayerProfileDialog";
 import {
   MicrosoftIcon,
   PlayerAuthIdentity,
@@ -137,13 +140,34 @@ export function Players() {
     }
   });
   const viewSwitchLabel = `切换为${view === "grove" ? "方块展台" : "林间营地"}`;
-  const [previewMode, setPreviewMode] = useState<PlayerPreviewMode>("front");
-  const [modal, setModal] = useState<"rename" | null>(null);
-  const [name, setName] = useState("");
+  const defaultPreviewMode = app.data.settings.playerPreviewMode;
+  const [previewMode, setPreviewMode] =
+    useState<PlayerPreviewMode>(defaultPreviewMode);
+  const [modal, setModal] = useState<PlayerProfileAction | null>(null);
   const [offlineName, setOfflineName] = useState("");
   const [loginPreviewMode, setLoginPreviewMode] =
-    useState<PlayerPreviewMode>("front");
+    useState<PlayerPreviewMode>(defaultPreviewMode);
   const mode = loginKind ? loginPreviewMode : previewMode;
+  // The authorization stage shows no scenery, so it must not resolve images.
+  const backgroundType =
+    mode === "3d" && loginKind !== "microsoft"
+      ? app.data.settings.player3dBackgroundType
+      : "current";
+  const scene = `/assets/players/${view === "grove" ? "grass" : "gallery"}.svg`;
+  const backgroundPath =
+    backgroundType === "local" || backgroundType === "remote"
+      ? app.data.settings.player3dBackground
+      : "";
+  // Remote URLs load directly in the WebView like the 2D background; local
+  // files still need the image bridge. A failed image must not be retried for
+  // every scene switch, so remember the path that could not be decoded.
+  const { url: backgroundUrl } = useImageResource(backgroundPath, scene);
+  const [brokenBackground, setBrokenBackground] = useState("");
+  const customBackground =
+    backgroundType !== "current" &&
+    backgroundUrl !== scene &&
+    brokenBackground !== backgroundPath;
+  const scenerySource = customBackground ? backgroundUrl : scene;
   const lastLogin = useRef(loginKind);
   const focusAfterReturn = useRef<PlayerLoginKind | null>(null);
   const selected = app.data.players.find(
@@ -166,6 +190,10 @@ export function Players() {
     loginKind !== "offline",
   );
   useEffect(() => {
+    setPreviewMode(defaultPreviewMode);
+    setLoginPreviewMode(defaultPreviewMode);
+  }, [defaultPreviewMode]);
+  useEffect(() => {
     try {
       localStorage.setItem(viewKey, view);
     } catch {
@@ -177,7 +205,7 @@ export function Players() {
       if (!loginKind) focusAfterReturn.current = lastLogin.current || null;
       if (loginKind === "offline") {
         setOfflineName("");
-        setLoginPreviewMode("front");
+        setLoginPreviewMode(defaultPreviewMode);
       }
       lastLogin.current = loginKind;
     }
@@ -189,8 +217,11 @@ export function Players() {
         ?.focus();
       focusAfterReturn.current = null;
     }
-  }, [loginKind, app.busy, root, pageActive]);
+  }, [loginKind, app.busy, root, pageActive, defaultPreviewMode]);
   const close = () => setModal(null);
+  useEffect(() => {
+    if (!pageActive || loginKind) setModal(null);
+  }, [pageActive, loginKind]);
 
   return (
     <div
@@ -249,11 +280,23 @@ export function Players() {
               <PlayerAuthStage auth={auth} />
             ) : (
               <>
-                <div className="players-scenery" aria-hidden="true">
-                  <img
-                    src={`/assets/players/${view === "grove" ? "grass" : "gallery"}.svg`}
-                    alt=""
-                  />
+                <div
+                  className="players-scenery"
+                  data-background={backgroundType}
+                  data-custom-background={customBackground || undefined}
+                  aria-hidden="true"
+                >
+                  {backgroundType !== "none" && (
+                    <img
+                      key={scenerySource}
+                      src={scenerySource}
+                      alt=""
+                      onError={() => {
+                        if (customBackground && backgroundPath)
+                          setBrokenBackground(backgroundPath);
+                      }}
+                    />
+                  )}
                 </div>
                 <div className="players-stage-top">
                   <span className="players-stage-label" aria-hidden="true">
@@ -277,7 +320,7 @@ export function Players() {
                       loginKind
                         ? "创建角色后可切换模型"
                         : selected?.online
-                          ? "正版角色模型由 Minecraft 账号管理"
+                          ? "更换皮肤时可选择正版角色模型"
                           : `切换为${selected?.slim ? "经典" : "纤细"}模型`
                     }
                     aria-label={`切换模型，当前${previewPlayer?.slim ? "纤细" : "经典"}模型`}
@@ -298,6 +341,8 @@ export function Players() {
                 <PlayerSkinPreview
                   player={previewPlayer}
                   mode={mode}
+                  frameRate={app.data.settings.player3dFps}
+                  defaultAction={app.data.settings.player3dAction}
                   onReady={onSkinDraw}
                 />
                 <span className="players-stage-corner" aria-hidden="true">
@@ -350,7 +395,9 @@ export function Players() {
                   )}
                 </div>
                 {!loginKind && (
-                  <div className="players-actions">
+                  <div
+                    className={`players-actions${selected?.online ? " players-actions-online" : ""}`}
+                  >
                     <div
                       className="players-skin-split players-split-button has-surface"
                       role="group"
@@ -359,15 +406,19 @@ export function Players() {
                       <PixelFrame />
                       <button
                         type="button"
-                        className="players-skin-change"
+                        className="players-skin-change players-action"
+                        aria-label="更换皮肤"
                         disabled={!selected || app.busy}
                         onClick={() =>
                           void app.run(async () => {
                             if (!selected) return;
                             if (selected.online) {
-                              await external(
-                                "https://www.minecraft.net/zh-hans/msaprofile/mygames/editskin",
-                              );
+                              app.clearError();
+                              setModal({
+                                kind: "skin",
+                                player: selected,
+                                previewMode: mode,
+                              });
                               return;
                             }
                             const path = await pick(false, ["png"]);
@@ -384,48 +435,74 @@ export function Players() {
                           })
                         }
                       >
-                        <Shirt size={15} />
-                        更换皮肤
+                        <Shirt size={15} aria-hidden="true" />
+                        <span
+                          className="players-action-label"
+                          aria-hidden="true"
+                        >
+                          <span>更换皮肤</span>
+                        </span>
                       </button>
                       <button
                         type="button"
                         className="players-skin-reset players-split-secondary"
                         aria-label="重置皮肤"
                         data-tooltip={
-                          selected?.online
-                            ? "正版皮肤请在 Minecraft 官网管理"
-                            : "重置皮肤"
+                          selected?.online ? "恢复正版账号默认皮肤" : "重置皮肤"
                         }
-                        disabled={!selected || selected.online || app.busy}
-                        onClick={() =>
-                          selected &&
-                          void app.mutate(
+                        disabled={!selected || app.busy}
+                        onClick={async () => {
+                          if (!selected) return;
+                          if (
+                            selected.online &&
+                            !(await confirmAction(
+                              `将 ${selected.name} 的正版皮肤恢复为默认皮肤？`,
+                            ))
+                          )
+                            return;
+                          await app.mutate(
                             "players.skin",
                             { id: selected.uuid, path: null, slim: false },
                             "已重置默认皮肤",
-                          )
-                        }
+                          );
+                        }}
                       >
                         <RotateCcw size={14} />
                       </button>
                     </div>
+                    {selected?.online && (
+                      <Button
+                        className="players-action"
+                        aria-label="更换披风"
+                        disabled={app.busy}
+                        onClick={() => {
+                          app.clearError();
+                          setModal({ kind: "cape", player: selected });
+                        }}
+                      >
+                        <Flag size={14} aria-hidden="true" />
+                        <span
+                          className="players-action-label"
+                          aria-hidden="true"
+                        >
+                          <span>更换披风</span>
+                        </span>
+                      </Button>
+                    )}
                     <Button
+                      className="players-action"
+                      aria-label="更改名称"
                       disabled={!selected || app.busy}
                       onClick={() => {
-                        if (selected?.online) {
-                          void app.run(() =>
-                            external(
-                              "https://www.minecraft.net/zh-hans/msaprofile/mygames/editprofile",
-                            ),
-                          );
-                          return;
-                        }
-                        setName(selected?.name || "");
-                        setModal("rename");
+                        if (!selected) return;
+                        app.clearError();
+                        setModal({ kind: "rename", player: selected });
                       }}
                     >
-                      <Pencil size={14} />
-                      更改名称
+                      <Pencil size={14} aria-hidden="true" />
+                      <span className="players-action-label" aria-hidden="true">
+                        <span>更改名称</span>
+                      </span>
                     </Button>
                   </div>
                 )}
@@ -570,40 +647,12 @@ export function Players() {
           )}
         </section>
       </div>
-      {modal === "rename" && selected && (
-        <Modal title="更改角色名称" onClose={close}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void app.run(async () => {
-                await api("players.rename", { id: selected.uuid, name });
-                await app.refresh();
-                setModal(null);
-              }, "角色名称已更新");
-            }}
-          >
-            <label className="field">
-              新的名称
-              <Input
-                autoFocus
-                value={name}
-                maxLength={16}
-                onChange={(e) => setName(e.target.value)}
-                required
-                pattern="[A-Za-z0-9_]{1,16}"
-              />
-            </label>
-            <p className="helper">
-              离线 UUID 会随名称更新，已有世界中的玩家身份可能改变。
-            </p>
-            <div className="dialog-actions">
-              <Button onClick={close}>取消</Button>
-              <Button primary type="submit" disabled={app.busy}>
-                保存名称
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      {modal && (
+        <PlayerProfileDialog
+          key={`${modal.kind}:${modal.player.uuid}`}
+          action={modal}
+          onClose={close}
+        />
       )}
     </div>
   );

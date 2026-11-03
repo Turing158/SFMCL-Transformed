@@ -1,51 +1,46 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Settings2 } from "lucide-react";
 import { PageHeader } from "../PageHeader";
-import { api, confirmAction } from "../api";
 import { Button, PixelFrame } from "../components";
 import {
   independentGroups,
   resolveGameSettings,
   withJavaPaths,
+  prepareVersionSettings,
+  updateVersionGameSettings,
+  updateVersionSettingGroup,
 } from "../gameSettings";
 import { useApp } from "../store";
 import type { Version, VersionSettings } from "../types";
 import { GameSettingsFields } from "./GameSettingsFields";
-import { SaveBar, SaveButton } from "../SaveBar";
+import { useAutoSavedSettings } from "../useAutoSavedSettings";
 
 export function VersionSettingsPage({ version }: { version: Version }) {
   const app = useApp();
   const [saved, setSaved] = useState<VersionSettings | null>(null);
-  const [draft, setDraft] = useState<VersionSettings | null>(null);
+  const target = useRef({
+    ...version,
+    directory: version.directory ?? app.data.settings.activeDir,
+  }).current;
+  const autoSave = useAutoSavedSettings(
+    saved,
+    (previous, next) => app.autoSaveVersionSettings(target, previous, next),
+    prepareVersionSettings,
+    (error) => app.reportError(`版本设置自动保存失败：${String(error)}`),
+  );
+  const { draft, setDraft } = autoSave;
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
-  const { setNavigationGuard } = app;
-
-  useEffect(() => {
-    setNavigationGuard(
-      "versions",
-      () =>
-        !app.busy &&
-        (!dirty ||
-          confirmAction("此版本有尚未保存的游戏设置，放弃修改并返回？")),
-    );
-    return () => setNavigationGuard("versions", null);
-  }, [app.busy, dirty, setNavigationGuard]);
 
   useEffect(() => {
     let active = true;
     setSaved(null);
-    setDraft(null);
     setError("");
-    void api<VersionSettings>("versions.settings.get", {
-      id: version.id,
-      directory: version.directory,
-    })
+    void app
+      .loadVersionSettings(target)
       .then((value) => {
         if (active) {
           setSaved(value);
-          setDraft(value);
         }
       })
       .catch((reason) => {
@@ -54,35 +49,15 @@ export function VersionSettingsPage({ version }: { version: Version }) {
     return () => {
       active = false;
     };
-  }, [version.id, version.directory, revision]);
-
-  const save = () =>
-    void app.run(async () => {
-      if (!draft) return;
-      const value = await api<VersionSettings>("versions.settings.save", {
-        id: version.id,
-        directory: version.directory,
-        config: draft,
-      });
-      setSaved(value);
-      setDraft(value);
-      await app.refresh();
-    }, "版本游戏设置已保存");
+  }, [target, app.loadVersionSettings, revision]);
 
   return (
-    <div className="version-settings-page">
+    <div className="version-settings-page" data-saving={autoSave.saving}>
       <PageHeader
         icon={<Settings2 />}
         eyebrow="GAME SETTINGS"
         title="游戏设置"
         description={version.id}
-        action={
-          <SaveButton
-            showIndicator
-            disabled={!dirty || app.busy}
-            onSave={save}
-          />
-        }
       />
       {error ? (
         <section className="panel settings-section has-surface" role="alert">
@@ -97,57 +72,37 @@ export function VersionSettingsPage({ version }: { version: Version }) {
         <p role="status">正在读取版本设置…</p>
       ) : (
         <GameSettingsFields
+          version={target}
           draft={resolveGameSettings(draft, app.data.settings)}
           onJavaPathsSave={async (paths, removedPath) => {
-            const savedPaths = await api<string[]>("java.paths.save", {
-              versionId: version.id,
-              directory: version.directory,
+            const savedPaths = await app.saveJavaPaths(
               paths,
               removedPath,
-            });
-            const apply = (current: VersionSettings | null) =>
-              current && {
-                ...current,
-                settings: withJavaPaths(
-                  current.settings,
-                  savedPaths,
-                  removedPath,
-                ),
-              };
-            setSaved(apply);
-            setDraft(apply);
+              target,
+            );
+            autoSave.sync((current) => ({
+              ...current,
+              settings: withJavaPaths(
+                current.settings,
+                savedPaths,
+                removedPath,
+              ),
+            }));
             return savedPaths;
           }}
           groups={independentGroups(draft)}
           onGroupChange={(group, independent) =>
-            setDraft((current) => {
-              if (!current) return current;
-              const groups = {
-                ...independentGroups(current),
-                [group]: independent,
-              };
-              return {
-                ...current,
-                independentGroups: groups,
-                useGlobal: !Object.values(groups).some(Boolean),
-              };
-            })
+            setDraft((current) =>
+              updateVersionSettingGroup(current, group, independent),
+            )
           }
           setDraft={(update) =>
-            setDraft(
-              (current) =>
-                current && { ...current, settings: update(current.settings) },
+            setDraft((current) =>
+              updateVersionGameSettings(current, update(current.settings)),
             )
           }
         />
       )}
-      <SaveBar
-        visible={dirty}
-        message="此版本有尚未保存的修改"
-        busy={app.busy}
-        onDiscard={() => setDraft(saved)}
-        onSave={save}
-      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { runtimePath } from "./lib/paths.mjs";
 import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 
 const evidence = runtimePath("evidence/version-settings");
 await mkdir(evidence, { recursive: true });
@@ -37,9 +38,7 @@ const open = async (id) => {
   await expect(independent()).toBeVisible();
 };
 const commit = async () => {
-  await save().click();
-  await expect(save()).toHaveCount(0);
-  await expect(page.locator(".save-bar")).toHaveCount(0);
+  await waitForAutoSave(page);
 };
 
 try {
@@ -53,7 +52,7 @@ try {
   await expect(independent()).not.toBeChecked();
   await expect(
     page.locator(".settings-card-heading .pixel-switch-labeled"),
-  ).toHaveCount(4);
+  ).toHaveCount(5);
   const scopeLayout = () =>
     independent().evaluate((el) => {
       const track = el
@@ -212,20 +211,19 @@ try {
     window.__pixelTest.failures["versions.settings.save"] = "模拟保存失败";
   });
   await title().fill("Unsaved title");
-  await save().click();
   await expect(page.getByRole("alert")).toContainText("模拟保存失败");
-  await expect(save()).toBeEnabled();
+  await expect(save()).toHaveCount(0);
   await expect(title()).toHaveValue("Unsaved title");
-  await page.getByRole("button", { name: "撤销修改", exact: true }).click();
-  await expect(title()).toHaveValue("Version B");
   await page.evaluate(() => {
     delete window.__pixelTest.failures["versions.settings.save"];
   });
+  await waitForAutoSave(page);
+  await expect(title()).toHaveValue("Unsaved title");
   await back();
   await open("1.21.4");
   await expect(memory()).toHaveValue("8192");
   checks.push(
-    "Failed saves preserve the draft; undo only affects the current version",
+    "Failed automatic writes preserve input and retry; other versions remain independent",
   );
 
   for (const width of [375, 768, 1440]) {
@@ -250,7 +248,9 @@ try {
   await page
     .getByRole("button", { name: "游戏设置 1.21.4", exact: true })
     .click();
-  await expect(page.getByRole("alert")).toContainText("模拟读取失败");
+  await expect(
+    page.getByRole("alert").filter({ hasText: "模拟读取失败" }),
+  ).toBeVisible();
   await expect(save()).toHaveCount(0);
   await page.evaluate(() => {
     delete window.__pixelTest.failures["versions.settings.get"];

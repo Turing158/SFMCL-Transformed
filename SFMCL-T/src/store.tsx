@@ -16,7 +16,10 @@ import {
   navigationPage,
   switchPage,
 } from "./navigation";
-import { withJavaPaths } from "./gameSettings";
+import { withJavaPaths, launchSettingDefaults } from "./gameSettings";
+import { changedValues, flushAutoSaves } from "./autoSave";
+import { playerPreviewDefaults } from "./playerPreview";
+import { useAllVersions } from "./useAllVersions";
 import type { Notification, NotificationKind } from "./notifications";
 import type {
   NavigationEntry,
@@ -32,6 +35,7 @@ import type {
   Settings,
   Tasks,
   Version,
+  VersionSettings,
 } from "./types";
 const fallback: Settings = {
   schemaVersion: 1,
@@ -49,6 +53,7 @@ const fallback: Settings = {
   height: 720,
   windowTitle: "",
   customInfo: PRODUCT_NAME,
+  ...launchSettingDefaults,
   jvmArgsEnabled: false,
   jvmArgs: "",
   gameArgs: "",
@@ -57,8 +62,11 @@ const fallback: Settings = {
   backgroundType: "none",
   background: "",
   hardwareAcceleration: true,
-  showNotices: true,
+  homeCleanMode: false,
+  homeNoticeLayout: "masonry",
+  ...playerPreviewDefaults,
   downloadTaskDisplay: "off",
+  minecraftDownloadSource: "auto",
   downloadConcurrency: 8,
   downloadCacheDir: "",
   microsoftClientId: "",
@@ -70,6 +78,9 @@ interface AppState {
   data: Bootstrap;
   versions: Version[];
   versionsRevision: number;
+  showAllVersions: boolean;
+  setShowAllVersions: (showAll: boolean) => void;
+  allVersions: ReturnType<typeof useAllVersions>;
   favorites: FavoriteVersion[];
   tasks: Tasks;
   clearingDownloads: ReadonlySet<string>;
@@ -102,7 +113,19 @@ interface AppState {
   mutate: (op: string, p?: unknown, message?: string) => Promise<unknown>;
   update: (op: string, p?: unknown, message?: string) => Promise<unknown>;
   save: (s: Settings) => Promise<void>;
-  saveJavaPaths: (paths: string[], removedPath?: string) => Promise<string[]>;
+  autoSaveSettings: (previous: Settings, next: Settings) => Promise<Settings>;
+  loadVersionSettings: (version: Version) => Promise<VersionSettings>;
+  autoSaveVersionSettings: (
+    version: Version,
+    previous: VersionSettings,
+    next: VersionSettings,
+  ) => Promise<VersionSettings>;
+  reportError: (error: string) => void;
+  saveJavaPaths: (
+    paths: string[],
+    removedPath?: string,
+    version?: Version,
+  ) => Promise<string[]>;
 }
 const Context = createContext<AppState | null>(null);
 export function Provider({ children }: { children: ReactNode }) {
@@ -116,6 +139,12 @@ export function Provider({ children }: { children: ReactNode }) {
   });
   const [versions, setVersions] = useState<Version[]>([]);
   const [versionsRevision, setVersionsRevision] = useState(0);
+  const [showAllVersions, setShowAllVersions] = useState(false);
+  const allVersions = useAllVersions(
+    initialized && showAllVersions,
+    data.settings.gameDirs,
+    versionsRevision,
+  );
   const settingsRef = useRef(data.settings);
   settingsRef.current = data.settings;
   const [favorites, setFavorites] = useState<FavoriteVersion[]>([]);
@@ -144,6 +173,14 @@ export function Provider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState(0);
   const refreshGeneration = useRef(0);
   const selectionWrites = useRef<Promise<void>>(Promise.resolve());
+  const queueSettingsWrite = useCallback(<T,>(action: () => Promise<T>) => {
+    const write = selectionWrites.current.then(action);
+    selectionWrites.current = write.then(
+      () => undefined,
+      () => undefined,
+    );
+    return write;
+  }, []);
   const busy = pending > 0;
   const [error, setErrorMessage] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -179,6 +216,12 @@ export function Provider({ children }: { children: ReactNode }) {
       await selection;
       if (generation !== refreshGeneration.current) return;
       const value = await api<Bootstrap>("bootstrap");
+      value.settings = {
+        ...{ homeCleanMode: false, homeNoticeLayout: "masonry" as const },
+        ...playerPreviewDefaults,
+        ...launchSettingDefaults,
+        ...value.settings,
+      };
       const [versions, favorites] = await Promise.all([
         value.settings.activeDir
           ? api<Version[]>("versions.list")
@@ -367,26 +410,107 @@ export function Provider({ children }: { children: ReactNode }) {
       run(() => update(op, p, message)),
     [run, update],
   );
+  const autoSaveSettings = useCallback(
+    (previous: Settings, next: Settings) => {
+      const changes = changedValues(previous, next);
+      const write = queueSettingsWrite(async () => {
+        const saved = await api<Settings>("settings.save", {
+          ...settingsRef.current,
+          ...changes,
+        });
+        const settings = {
+          ...playerPreviewDefaults,
+          ...launchSettingDefaults,
+          ...saved,
+        };
+        settingsRef.current = settings;
+        setData((current) => ({ ...current, settings }));
+        return settings;
+      });
+      if ("isolation" in changes)
+        void write
+          .then(() => refresh())
+          .catch((error) => setError(String(error)));
+      return write;
+    },
+    [queueSettingsWrite, refresh, setError],
+  );
   const save = useCallback(
     async (settings: Settings) => {
-      await api<Settings>("settings.save", settings);
+      await autoSaveSettings(settingsRef.current, settings);
       await refresh();
     },
-    [refresh],
+    [autoSaveSettings, refresh],
+  );
+  const loadVersionSettings = useCallback(
+    async (version: Version) => {
+      await flushAutoSaves();
+      return queueSettingsWrite(() =>
+        api<VersionSettings>("versions.settings.get", {
+          id: version.id,
+          directory: version.directory,
+        }),
+      );
+    },
+    [queueSettingsWrite],
+  );
+  const autoSaveVersionSettings = useCallback(
+    (version: Version, previous: VersionSettings, next: VersionSettings) => {
+      const changes = changedValues(previous, next);
+      const gameChanges = changedValues(previous.settings, next.settings);
+      const write = queueSettingsWrite(async () => {
+        const latest = await api<VersionSettings>("versions.settings.get", {
+          id: version.id,
+          directory: version.directory,
+        });
+        return api<VersionSettings>("versions.settings.save", {
+          id: version.id,
+          directory: version.directory,
+          config: {
+            ...latest,
+            ...changes,
+            settings: { ...latest.settings, ...gameChanges },
+          },
+        });
+      });
+      if (
+        "useGlobal" in changes ||
+        "independentGroups" in changes ||
+        "isolation" in gameChanges
+      )
+        void write
+          .then(() => refresh())
+          .catch((error) => setError(String(error)));
+      return write;
+    },
+    [queueSettingsWrite, refresh, setError],
   );
   const saveJavaPaths = useCallback(
-    async (paths: string[], removedPath?: string) => {
-      const saved = await api<string[]>("java.paths.save", {
-        paths,
-        removedPath,
+    (paths: string[], removedPath?: string, version?: Version) => {
+      return queueSettingsWrite(async () => {
+        const saved = await api<string[]>("java.paths.save", {
+          paths,
+          removedPath,
+          ...(version && {
+            versionId: version.id,
+            directory: version.directory,
+          }),
+        });
+        if (!version) {
+          settingsRef.current = withJavaPaths(
+            settingsRef.current,
+            saved,
+            removedPath,
+          );
+          setData((current) => ({
+            ...current,
+            settings: withJavaPaths(current.settings, saved, removedPath),
+          }));
+        }
+        return saved;
       });
-      setData((current) => ({
-        ...current,
-        settings: withJavaPaths(current.settings, saved, removedPath),
-      }));
-      return saved;
     },
-    [],
+    [queueSettingsWrite],
   );
   useEffect(() => {
     let active = true;
@@ -459,6 +583,9 @@ export function Provider({ children }: { children: ReactNode }) {
         data,
         versions,
         versionsRevision,
+        showAllVersions,
+        setShowAllVersions,
+        allVersions,
         favorites,
         tasks,
         clearingDownloads,
@@ -485,6 +612,10 @@ export function Provider({ children }: { children: ReactNode }) {
         mutate,
         update,
         save,
+        autoSaveSettings,
+        loadVersionSettings,
+        autoSaveVersionSettings,
+        reportError: setError,
         saveJavaPaths,
       }}
     >

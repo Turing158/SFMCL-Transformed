@@ -17,7 +17,9 @@ export function positionTooltip(
   const gap = 10;
   if (
     !anchor.isConnected ||
-    anchor.closest('[hidden], [inert], [aria-hidden="true"]') ||
+    anchor.closest(
+      '[hidden], [inert], [aria-hidden="true"], [data-notice-list-moving="true"]',
+    ) ||
     !anchor.getClientRects().length ||
     rect.bottom < y + margin ||
     rect.top > y + vh - margin ||
@@ -130,7 +132,8 @@ export function TooltipHost() {
     let pointerPoint = { x: 0, y: 0 };
     const retiring = new Set<HTMLDivElement>();
     const trigger = (target: EventTarget | null) =>
-      target instanceof Element
+      target instanceof Element &&
+      !target.closest('[data-notice-list-moving="true"]')
         ? target.closest<HTMLElement>("[data-tooltip]")
         : null;
     const content = (element: HTMLElement) =>
@@ -379,6 +382,7 @@ export function TooltipHost() {
         "inert",
         "aria-hidden",
         "aria-expanded",
+        "data-notice-list-moving",
       ],
     });
     document.addEventListener("pointerover", over, true);

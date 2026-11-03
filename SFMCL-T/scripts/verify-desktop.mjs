@@ -1,5 +1,6 @@
 import { runtimePath } from "./lib/paths.mjs";
 import { chromium, expect } from "@playwright/test";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -16,11 +17,7 @@ const invoke = (operation, payload = {}) =>
     { operation, payload },
   );
 const original = await invoke("bootstrap");
-if (
-  !path
-    .resolve(original.dataDir)
-    .startsWith(runtimePath() + path.sep)
-) {
+if (!path.resolve(original.dataDir).startsWith(runtimePath() + path.sep)) {
   throw new Error(
     "Use SFMCL_T_DATA_DIR inside this workspace's .runtime directory for verification",
   );
@@ -138,10 +135,7 @@ try {
   await page
     .getByLabel("窗口标题", { exact: true })
     .fill("SFMCL-T UI Verification");
-  await page
-    .getByRole("button", { name: "保存设置", exact: true })
-    .first()
-    .click();
+  await waitForAutoSave(page);
   await expect
     .poll(async () => (await invoke("bootstrap")).settings.windowTitle)
     .toBe("SFMCL-T UI Verification");
@@ -151,7 +145,7 @@ try {
   await expect(page.getByLabel("窗口标题", { exact: true })).toHaveValue(
     "SFMCL-T UI Verification",
   );
-  checks.push("Settings edit/save survives frontend reload");
+  checks.push("Automatic settings edits survive frontend reload");
   await nav("资源中心");
   await page.getByRole("tab", { name: "模组", exact: true }).click();
   if (!(await page.getByLabel("游戏版本", { exact: true }).isVisible()))

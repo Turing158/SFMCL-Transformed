@@ -228,9 +228,9 @@
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  min-height: 32px;
+  min-height: var(--button-compact-height);
   min-width: 110px;
-  padding: 6px 12px;
+  padding: 4px 12px;
   line-height: 20px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

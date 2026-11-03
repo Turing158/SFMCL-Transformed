@@ -2,7 +2,7 @@ use super::{
     arguments::{build, Identity},
     installer::Installer,
     java,
-    process::run_java_with_title,
+    process::{run_java_with_settings, LaunchEvents},
     version_settings, versions,
 };
 use crate::{
@@ -21,6 +21,14 @@ pub struct LaunchIdentity {
 
 impl Installer {
     pub async fn launch(self: &Arc<Self>, id: String, player: LaunchIdentity) -> Result<String> {
+        self.launch_with_events(id, player, None).await
+    }
+    pub async fn launch_with_events(
+        self: &Arc<Self>,
+        id: String,
+        player: LaunchIdentity,
+        events: Option<LaunchEvents>,
+    ) -> Result<String> {
         if player.name.is_empty() || player.uuid.is_empty() {
             bail!("请先选择角色");
         }
@@ -55,7 +63,7 @@ impl Installer {
         tokio::spawn(async move {
             let _lock = lock;
             let result = installer
-                .launch_inner(&root, &id, player, settings, job.clone())
+                .launch_inner(&root, &id, player, settings, job.clone(), events)
                 .await;
             job.finish(&result);
         });
@@ -68,9 +76,16 @@ impl Installer {
         player: LaunchIdentity,
         settings: crate::config::Settings,
         job: Arc<Job>,
+        events: Option<LaunchEvents>,
     ) -> Result<()> {
         job.step(0, "解析版本与兼容 Java");
         let version = versions::resolve(root, id)?;
+        // Reject an unsupported or missing direct-entry target before downloads begin.
+        super::quick_play::arguments(
+            &version,
+            &settings,
+            &versions::game_directory(root, id, settings.isolation)?,
+        )?;
         let java = java::select(
             &settings.java_path,
             &settings.java_paths,
@@ -112,13 +127,14 @@ impl Installer {
             bail!(job.cancellation_message());
         }
         job.step(4, "Minecraft 正在运行，可在此查看日志或结束游戏");
-        run_java_with_title(
+        run_java_with_settings(
             &java.path,
             &args,
             &directory,
             job,
             &[player.access_token],
-            &settings.window_title,
+            &settings,
+            events,
         )
         .await?;
         Ok(())

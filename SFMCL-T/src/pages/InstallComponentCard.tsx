@@ -38,7 +38,10 @@ export function InstallComponentCard({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(60);
-  const shown = !blocked && !disabled;
+  const shown =
+    !blocked &&
+    !disabled &&
+    (!!value || loading || !!error || choices.length > 0);
   const expanded = open && shown;
   const filtered = choices.filter((choice) =>
     `${choice.file?.version ?? choice.value} ${choice.description}`

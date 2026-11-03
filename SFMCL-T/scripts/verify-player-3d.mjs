@@ -804,7 +804,7 @@ try {
     await input.focus();
     for (let i = 0; i < 4; i++) await page.keyboard.press("Enter");
     await expect(input).toHaveAttribute("data-action", "still");
-    for (const accent of ["forest", "puce", "ebony"])
+    for (const accent of ["forest", "nether", "end", "sift"])
       for (const theme of ["light", "dark"]) {
         await page.evaluate(
           ({ accent, theme }) => {
@@ -845,7 +845,7 @@ try {
     await expect(input).toHaveAttribute("data-action", "still");
   }
   check(
-    "Both scenery layouts, six theme colors and narrow/short windows preserve canvas budget and buttons",
+    "Both scenery layouts, eight theme colors and narrow/short windows preserve canvas budget and buttons",
   );
 
   await input.focus();

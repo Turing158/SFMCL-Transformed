@@ -51,7 +51,12 @@ function Get-InstalledWebView2Version {
 }
 
 function Assert-DevelopmentTools {
-    param([switch]$WebOnly, [switch]$RequireWebView2)
+    param(
+        [switch]$WebOnly,
+        [switch]$RequireWebView2,
+        [ValidateSet('x86_64-pc-windows-msvc', 'i686-pc-windows-msvc')]
+        [string[]]$Targets = @('x86_64-pc-windows-msvc')
+    )
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
         throw 'These scripts target Windows 10/11 x64.'
     }
@@ -72,9 +77,12 @@ function Assert-DevelopmentTools {
             throw "Missing $command. Install Rust with the MSVC toolchain: https://rustup.rs/"
         }
     }
-    $targets = & rustup.exe target list --installed
-    if ($LASTEXITCODE -ne 0 -or 'x86_64-pc-windows-msvc' -notin $targets) {
-        throw 'Missing Rust target. Run: rustup target add x86_64-pc-windows-msvc'
+    $installedTargets = & rustup.exe target list --installed
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot read installed Rust targets.' }
+    foreach ($target in $Targets) {
+        if ($target -notin $installedTargets) {
+            throw "Missing Rust target. Run: rustup target add $target"
+        }
     }
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path -LiteralPath $vswhere)) {
@@ -82,8 +90,13 @@ function Assert-DevelopmentTools {
     }
     $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     if (-not $visualStudio) { throw 'The Visual Studio MSVC x64/x86 build tools are missing.' }
-    $sdkLibraries = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Lib\*\um\x64\kernel32.lib'
-    if (-not (Test-Path -Path $sdkLibraries)) { throw 'Install the Windows 10/11 SDK in Visual Studio Installer.' }
+    foreach ($target in $Targets) {
+        $sdkArchitecture = if ($target -eq 'i686-pc-windows-msvc') { 'x86' } else { 'x64' }
+        $sdkLibraries = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib\*\um\$sdkArchitecture\kernel32.lib"
+        if (-not (Test-Path -Path $sdkLibraries)) {
+            throw "Install the Windows 10/11 SDK with $sdkArchitecture libraries in Visual Studio Installer."
+        }
+    }
     Write-Host "MSVC build tools: $visualStudio"
 
     $webviewVersion = Get-InstalledWebView2Version
@@ -111,8 +124,115 @@ function Sync-NodeDependencies {
     }
 }
 
-function Assert-StandaloneExecutable {
+function Get-CargoTargetDirectory {
+    param([string]$WorkspaceRoot)
+    if ($env:CARGO_TARGET_DIR) {
+        return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($env:CARGO_TARGET_DIR)
+    }
+    return (Join-Path $WorkspaceRoot 'target')
+}
+
+function Repair-StaleCargoCache {
+    <#
+    .SYNOPSIS
+    Move aside Cargo build units whose recorded absolute paths point elsewhere.
+    .DESCRIPTION
+    Build scripts print absolute paths into target\...\build\<crate>\output and
+    Cargo replays that output while the fingerprint stays valid. Renaming or
+    copying a workspace therefore leaves entries such as
+    target\...\build\tauri-<hash>\out\... pointing at the old location, which
+    breaks Tauri ACL generation with "failed to read plugin permissions".
+    Cargo cannot invalidate a single unit, so the affected build directories and
+    their fingerprints are moved to .runtime\cargo-stale\<timestamp> and built
+    again by this run. Nothing is deleted.
+    #>
+    param([string]$WorkspaceRoot)
+    $targetDirectory = Get-CargoTargetDirectory -WorkspaceRoot $WorkspaceRoot
+    if (-not (Test-Path -LiteralPath $targetDirectory)) { return }
+    $prefix = [IO.Path]::GetFullPath($targetDirectory).TrimEnd('\') + '\'
+    $profileDirectories = New-Object System.Collections.Generic.List[object]
+    foreach ($entry in @(Get-ChildItem -LiteralPath $targetDirectory -Directory -ErrorAction SilentlyContinue)) {
+        if ($entry.Name -eq 'debug' -or $entry.Name -eq 'release') {
+            $profileDirectories.Add($entry)
+            continue
+        }
+        # Target triple directories such as x86_64-pc-windows-msvc (four or more parts).
+        if ($entry.Name -notmatch '^[A-Za-z0-9_]+(-[A-Za-z0-9_]+){2,}$') { continue }
+        foreach ($inner in @(Get-ChildItem -LiteralPath $entry.FullName -Directory -ErrorAction SilentlyContinue)) {
+            if ($inner.Name -eq 'debug' -or $inner.Name -eq 'release') { $profileDirectories.Add($inner) }
+        }
+    }
+    # Recorded paths are matched on the target directory's own name, which is
+    # normally "target" but follows CARGO_TARGET_DIR when that is set. The
+    # character classes stop at the separators build scripts use to join paths
+    # (quotes and semicolons), so one line can carry several paths.
+    $targetSegment = [regex]::Escape('\' + (Split-Path -Leaf $targetDirectory) + '\')
+    $recordedPathPattern = '(?im)\b[A-Za-z]:\\[^"''\r\n;]*?' + $targetSegment + '[^"''\r\n;]*'
+    $staleUnits = New-Object System.Collections.Generic.List[object]
+    try {
+        foreach ($profile in $profileDirectories) {
+            $buildRoot = Join-Path $profile.FullName 'build'
+            if (-not (Test-Path -LiteralPath $buildRoot)) { continue }
+            foreach ($unit in @(Get-ChildItem -LiteralPath $buildRoot -Directory -ErrorAction SilentlyContinue)) {
+                $output = Join-Path $unit.FullName 'output'
+                if (-not (Test-Path -LiteralPath $output)) { continue }
+                foreach ($recorded in [regex]::Matches([IO.File]::ReadAllText($output), $recordedPathPattern)) {
+                    if ($recorded.Value.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
+                    $staleUnits.Add($unit)
+                    break
+                }
+            }
+        }
+    } catch {
+        throw "Cannot inspect the Cargo cache (is a build still running?): $($_.Exception.Message)"
+    }
+    if ($staleUnits.Count -eq 0) { return }
+    $quarantineRoot = Join-Path $WorkspaceRoot ('.runtime\cargo-stale\' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    try {
+        foreach ($unit in $staleUnits) {
+            $destination = Join-Path $quarantineRoot $unit.FullName.Substring($prefix.Length)
+            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination))
+            Move-Item -LiteralPath $unit.FullName -Destination $destination -Force
+            # The fingerprint must go too, or Cargo keeps replaying the cached output.
+            $fingerprint = Join-Path (Split-Path -Parent (Split-Path -Parent $unit.FullName)) ('.fingerprint\' + $unit.Name)
+            if (Test-Path -LiteralPath $fingerprint) {
+                $fingerprintDestination = Join-Path $quarantineRoot $fingerprint.Substring($prefix.Length)
+                [void][IO.Directory]::CreateDirectory((Split-Path -Parent $fingerprintDestination))
+                Move-Item -LiteralPath $fingerprint -Destination $fingerprintDestination -Force
+            }
+        }
+    } catch {
+        throw "Cannot reset stale Cargo cache entries (is a build still running?): $($_.Exception.Message)"
+    }
+    Write-Host "Cargo cache held $($staleUnits.Count) build unit(s) from another workspace path."
+    Write-Host "Moved them to $quarantineRoot; they are rebuilt now."
+}
+
+function Get-ExecutableArchitecture {
     param([string]$Path)
+    $reader = [IO.BinaryReader]::new([IO.File]::OpenRead($Path))
+    try {
+        if ($reader.ReadUInt16() -ne 0x5a4d) { throw "Not a Windows executable: $Path" }
+        $reader.BaseStream.Position = 0x3c
+        $peOffset = $reader.ReadInt32()
+        if ($peOffset -lt 64 -or $peOffset -gt $reader.BaseStream.Length - 6) {
+            throw "Invalid PE header offset: $Path"
+        }
+        $reader.BaseStream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x4550) { throw "Invalid PE signature: $Path" }
+        switch ($reader.ReadUInt16()) {
+            0x014c { return 'x86' }
+            0x8664 { return 'x64' }
+            default { throw "Unsupported executable architecture: $Path" }
+        }
+    } finally { $reader.Dispose() }
+}
+
+function Assert-StandaloneExecutable {
+    param([string]$Path, [ValidateSet('x64', 'x86')][string]$Architecture = 'x64')
+    if ((Get-ExecutableArchitecture -Path $Path) -ne $Architecture) {
+        throw "The executable does not match the requested $Architecture architecture: $Path"
+    }
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     $visualStudio = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     $dumpbin = Get-ChildItem -Path (Join-Path $visualStudio 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe') |

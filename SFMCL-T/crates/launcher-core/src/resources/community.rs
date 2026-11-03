@@ -75,6 +75,7 @@ pub struct Community {
     client: reqwest::Client,
     vault: Arc<Vault>,
     dependency_cache: Mutex<dependencies::DependencyCache>,
+    sources: Arc<crate::download_sources::SourceSelector>,
 }
 impl Community {
     pub fn new(vault: Arc<Vault>) -> Result<Self> {
@@ -85,10 +86,31 @@ impl Community {
                 .build()?,
             vault,
             dependency_cache: Mutex::new(Default::default()),
+            sources: Arc::new(crate::download_sources::SourceSelector::default()),
         })
+    }
+    pub fn with_sources(mut self, sources: Arc<crate::download_sources::SourceSelector>) -> Self {
+        self.sources = sources;
+        self
     }
     async fn get(&self, source: &str, path: &str, params: &[(String, String)]) -> Result<Value> {
         self.request(source, path, params, None).await
+    }
+    fn request_builder(&self, url: &str, body: Option<&Value>) -> Result<reqwest::RequestBuilder> {
+        let mut request = match body {
+            Some(body) => self.client.post(url).json(body),
+            None => self.client.get(url),
+        }
+        .timeout(std::time::Duration::from_secs(12));
+        // Never disclose an official API credential to MCIM or a redirect.
+        if official_curseforge_api(url) {
+            let key = self
+                .vault
+                .curseforge_key()
+                .map_err(|_| anyhow::anyhow!("CurseForge 暂时不可用，请稍后重试"))?;
+            request = request.header("x-api-key", curseforge_header(&key)?);
+        }
+        Ok(request)
     }
     async fn request(
         &self,
@@ -104,33 +126,74 @@ impl Community {
         } else {
             bail!("未知资源平台")
         };
-        let url = format!("{root}/{path}");
-        let mut request = match body {
-            Some(body) => self.client.post(url).json(&body),
-            None => self.client.get(url),
+        let mut original = reqwest::Url::parse(&format!("{root}/{path}"))?;
+        original
+            .query_pairs_mut()
+            .extend_pairs(params.iter().map(|(key, value)| (key, value)));
+        let urls = self.sources.candidates(original.as_str());
+        let ordered = self
+            .sources
+            .order_with(&urls, &tokio_util::sync::CancellationToken::new(), |url| {
+                self.request_builder(url, body.as_ref())
+            })
+            .await?;
+        let mut error = None;
+        for url in ordered {
+            let result = async {
+                let response = self.request_builder(&url, body.as_ref())?.send().await?;
+                if response.status().is_redirection() {
+                    bail!("资源平台返回了不支持的跳转，请稍后重试");
+                }
+                if matches!(
+                    response.status(),
+                    reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
+                ) {
+                    bail!("资源渠道暂时不可用，请稍后重试");
+                }
+                if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    bail!("资源平台请求过于频繁，请稍后重试");
+                }
+                Ok::<Value, anyhow::Error>(response.error_for_status()?.json().await?)
+            }
+            .await;
+            match result {
+                Ok(value) => return Ok(value),
+                Err(failure) => {
+                    self.sources.failed(&url).await;
+                    error = Some(failure);
+                }
+            }
         }
-        .query(params);
-        if source == "curseforge" {
-            let key = self
-                .vault
-                .curseforge_key()
-                .map_err(|_| anyhow::anyhow!("CurseForge 暂时不可用，请稍后重试"))?;
-            request = request.header("x-api-key", curseforge_header(&key)?);
+        Err(error.unwrap_or_else(|| anyhow::anyhow!("资源渠道暂时不可用，请稍后重试")))
+    }
+    pub async fn resolve_download_entry(&self, url: &str) -> Result<Option<String>> {
+        if !super::curseforge::is_download_entry(url) {
+            return Ok(None);
         }
-        let response = request.send().await?;
-        if response.status().is_redirection() {
-            bail!("资源平台返回了不支持的跳转，请稍后重试");
-        }
-        if matches!(
-            response.status(),
-            reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
-        ) {
-            bail!("资源渠道暂时不可用，请稍后重试");
-        }
-        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            bail!("资源平台请求过于频繁，请稍后重试");
-        }
-        Ok(response.error_for_status()?.json().await?)
+        let parsed = reqwest::Url::parse(url)?;
+        let parts = parsed.path().split('/').collect::<Vec<_>>();
+        let value = self
+            .get(
+                "curseforge",
+                &format!("mods/{}/files/{}/download-url", parts[4], parts[6]),
+                &[],
+            )
+            .await?;
+        let Some(download) = value["data"].as_str() else {
+            return Ok(None);
+        };
+        let mirror_file = reqwest::Url::parse(download).is_ok_and(|url| {
+            url.scheme() == "https"
+                && url.host_str() == Some("mod.mcimirror.top")
+                && url.username().is_empty()
+                && url.password().is_none()
+                && url.port_or_known_default() == Some(443)
+                && url.path().starts_with("/files/")
+        });
+        Ok(
+            (super::curseforge::is_download_cdn(download) || mirror_file)
+                .then(|| download.to_string()),
+        )
     }
     pub async fn search(&self, q: &Query) -> Result<SearchResults> {
         let limit = q.limit.clamp(1, 40);
@@ -410,6 +473,16 @@ mod pack_tests {
     }
 }
 
+fn official_curseforge_api(value: &str) -> bool {
+    reqwest::Url::parse(value).is_ok_and(|url| {
+        url.scheme() == "https"
+            && url.host_str() == Some("api.curseforge.com")
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.port_or_known_default() == Some(443)
+    })
+}
+
 fn curseforge_header(key: &str) -> Result<reqwest::header::HeaderValue> {
     if key.trim().is_empty() {
         bail!("CurseForge 暂时不可用，请稍后重试");
@@ -423,6 +496,42 @@ fn curseforge_header(key: &str) -> Result<reqwest::header::HeaderValue> {
 #[cfg(test)]
 mod credential_tests {
     use super::*;
+    #[test]
+    fn mirror_post_requests_preserve_payload_without_official_credentials() {
+        let directory = tempfile::tempdir().unwrap();
+        let community = Community::new(Arc::new(Vault::open(directory.path()).unwrap())).unwrap();
+        let body = json!({"fingerprints":[123]});
+        let request = community
+            .request_builder(
+                "https://mod.mcimirror.top/curseforge/v1/fingerprints",
+                Some(&body),
+            )
+            .unwrap()
+            .build()
+            .unwrap();
+        assert_eq!(request.method(), reqwest::Method::POST);
+        assert!(!request.headers().contains_key("x-api-key"));
+        assert_eq!(
+            serde_json::from_slice::<Value>(request.body().unwrap().as_bytes().unwrap()).unwrap(),
+            body
+        );
+    }
+
+    #[test]
+    fn official_credentials_are_only_attached_to_the_exact_official_api() {
+        assert!(official_curseforge_api(
+            "https://api.curseforge.com/v1/mods"
+        ));
+        for url in [
+            "https://mod.mcimirror.top/curseforge/v1/mods",
+            "https://api.curseforge.com.example.org/v1/mods",
+            "https://user@api.curseforge.com/v1/mods",
+            "http://api.curseforge.com/v1/mods",
+            "https://api.curseforge.com:444/v1/mods",
+        ] {
+            assert!(!official_curseforge_api(url));
+        }
+    }
 
     #[test]
     fn credential_is_redacted_from_request_debug_output() {

@@ -223,12 +223,12 @@ try {
       );
     }
     const fixture = window.__pixelTest;
-    fixture.data.settings.showNotices = true;
+    fixture.data.settings.homeCleanMode = false;
     fixture.data.settings.theme = "dark";
-    fixture.data.settings.accent = "ebony";
+    fixture.data.settings.accent = "end";
     fixture.data.players[0].skin = "C:/Pixel-Test/skin.png";
     fixture.data.backgroundPath = "C:/Pixel-Test/background.png";
-    window.__SFMCL_T_APPEARANCE__ = { theme: "dark", accent: "ebony" };
+    window.__SFMCL_T_APPEARANCE__ = { theme: "dark", accent: "end" };
     window.__startupTest = {
       release: (name) => gates[name](),
       entered: [],
@@ -358,18 +358,31 @@ try {
   releases.notice();
   await ready(page);
   const reveal = await page.evaluate(() => window.__startupTest.reveal);
-  expect(reveal).toEqual({
-    frames: [
-      { opacity: "0", transform: "scale(0.8)" },
-      { opacity: "1", transform: "scale(1)" },
-    ],
-    duration: 380,
+  expect(reveal).toMatchObject({
+    duration: 150,
     imagesReady: true,
     fonts: "loaded",
     skinAlpha: 255,
   });
+  expect(reveal.frames[0]).toEqual({
+    opacity: "0",
+    transform: "translateY(1.25%) scale(0.965)",
+  });
+  expect(reveal.frames.at(-1)).toEqual({
+    opacity: "1",
+    transform: "translateY(0%) scale(1)",
+  });
+  for (const [index, frame] of reveal.frames.entries()) {
+    if (index)
+      expect(Number(frame.opacity)).toBeGreaterThanOrEqual(
+        Number(reveal.frames[index - 1].opacity),
+      );
+  }
+  const settling = reveal.frames[Math.floor((reveal.frames.length - 1) * 0.8)];
+  expect(Number(settling.opacity)).toBe(1);
+  expect(settling.transform).not.toBe(reveal.frames.at(-1).transform);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.locator("html")).toHaveAttribute("data-accent", "ebony");
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "end");
   expect(await page.evaluate(() => window.__pixelTest.startupPhases)).toEqual([
     "loading",
     "ready",
@@ -385,7 +398,7 @@ try {
     "Bootstrap, version list, initial tasks/notices, IPC image resolution, background, canvas skin, lazy notice image and font independently block reveal.",
   );
   checks.push(
-    "The fully loaded UI enters at scale .8 / opacity 0, finishes at 1 / 1 in 380 ms; startup never replays on navigation.",
+    "The fully loaded UI floats into place in 150 ms and becomes opaque before settling; startup never replays on navigation.",
   );
 
   const failure = await fresh();

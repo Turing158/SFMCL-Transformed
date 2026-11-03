@@ -196,15 +196,7 @@
   gap: 10px;
 }
 
-:is(
-  .panel,
-  .launch-card,
-  .player-row,
-  .theme-option,
-  .modal,
-  .save-bar,
-  .toast
-) {
+:is(.panel, .launch-card, .player-row, .theme-option, .modal, .toast) {
   --surface-shape: var(--corner-card);
   --surface-shape-0: var(--corner-card-inset-0);
   --surface-shape-1: var(--corner-card-inset-1);
@@ -292,7 +284,6 @@
   overscroll-behavior: contain;
   margin: 0 2px 2px;
 }
-.save-bar,
 .device-code {
   --surface-edge: var(--accent);
 }
@@ -517,7 +508,7 @@
 .steps .failed .step-number {
   --surface-edge: var(--danger);
 }
-:is(.status-dot, .unsaved-dot) {
+.status-dot {
   border-radius: 0;
 }
 .progress {
@@ -530,7 +521,7 @@
 :is(.inline-error, .log-view, .markdown pre, .markdown img) {
   clip-path: var(--corner-control);
 }
-:is(.status-dot, .unsaved-dot) {
+.status-dot {
   clip-path: var(--corner-micro);
 }
 .character-shadow {

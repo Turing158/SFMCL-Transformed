@@ -1,10 +1,128 @@
 .notices {
   display: grid;
   gap: 12px;
+  container-type: inline-size;
 }
-.page-heading:has(> .notice-refresh) {
+.notice-animated-list {
+  min-width: 0;
+  position: relative;
+}
+.notice-home-list .notice-list-item {
+  min-width: 0;
+}
+@container (min-width: 540px) {
+  .notice-home-list:is(
+    [data-notice-layout="parallel"],
+    [data-notice-layout="masonry"]
+  ) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 12px;
+    align-items: start;
+  }
+  .notice-home-list[data-notice-layout="masonry"] {
+    grid-auto-rows: 4px;
+  }
+  .notice-home-list[data-notice-layout="masonry"] > .notice-list-item {
+    grid-row-end: span var(--notice-row-span, 1);
+  }
+}
+.notice-list-item {
+  position: relative;
+  box-sizing: border-box;
+  padding-bottom: 12px;
+}
+.notice-preset-motion .notice-list-item {
+  padding-bottom: 14px;
+}
+.notice-list-item:not([data-notice-phase="stable"]) {
+  overflow-y: clip;
+}
+.notice-list-item[data-notice-phase="exiting"] {
+  pointer-events: none;
+}
+.notice-list-content {
+  min-width: 0;
+  display: flow-root;
+  transform-origin: center top;
+}
+.notice-home-list[data-notice-sortable="true"] .notice-heading {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.notice-home-list[data-notice-sortable="true"] .notice-toggle {
+  cursor: grab;
+}
+.notice-list-item[data-notice-placeholder="true"] > .notice-list-content {
+  opacity: 0;
+  visibility: hidden;
+}
+.notice-drag-placeholder {
+  position: absolute;
+  inset: 0 0 12px;
+  --surface-shape: var(--corner-card);
+  --surface-shape-2: var(--corner-card-inset-2);
+  --surface-edge: var(--accent);
+  --surface-fill: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  --surface-depth: 2px;
+  pointer-events: none;
+  animation: notice-placeholder-in 180ms ease-out;
+}
+@keyframes notice-placeholder-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.notice-drag-overlay {
+  position: fixed;
+  z-index: 110;
+  margin: 0;
+  pointer-events: none;
+  transform: scale(1.025);
+  transform-origin: center center;
+  filter: drop-shadow(
+    0 8px 12px color-mix(in srgb, var(--bg) 30%, transparent)
+  );
+  will-change: left, top, transform;
+}
+.notice-drag-overlay .notice-card {
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  --surface-edge: var(--accent);
+}
+.notice-drag-overlay .notice-control {
+  visibility: hidden;
+}
+body[data-notice-dragging="true"],
+body[data-notice-dragging="true"] * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.page-heading:has(> .notice-actions) {
   flex-wrap: nowrap;
   align-items: center;
+}
+.notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.notice-add:is(:hover, :focus-visible),
+.notice-hide:is(:hover, :focus-visible):not(:disabled) {
+  --surface-fill: var(--soft);
+  --surface-edge: var(--accent);
+  color: var(--accent);
+}
+.notice-delete:is(:hover, :focus-visible):not(:disabled) {
+  --surface-edge: var(--danger);
+  color: var(--danger);
 }
 .icon-button.notice-refresh {
   transition:
@@ -55,7 +173,48 @@
   --surface-edge: var(--accent);
 }
 .notice-card .notice-heading {
+  --notice-inline-padding: 18px;
+  position: relative;
   margin: 0;
+}
+.notice-heading > h3 {
+  min-width: 0;
+  margin: 0;
+}
+.notice-control {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--notice-inline-padding) - 5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  transform: translateY(-50%);
+}
+.notice-remove-motion {
+  display: flex;
+  opacity: 0;
+  transform: translateY(3px) scale(0.72);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.notice-heading[data-remove-visible="true"] .notice-remove-motion {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.notice-control .notice-remove {
+  --button-height: var(--button-compact-height);
+  width: var(--button-height);
+  height: var(--button-height);
+  padding: 0;
+  color: var(--muted);
+}
+.notice-remove:focus-visible {
+  outline-offset: 1px;
 }
 .notice-toggle {
   display: flex;
@@ -63,7 +222,7 @@
   gap: 12px;
   width: 100%;
   min-height: 52px;
-  padding: 12px 18px;
+  padding: 12px var(--notice-inline-padding);
   text-align: left;
   font-size: 14px;
   font-weight: 600;
@@ -81,6 +240,15 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.notice-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
 .notice-icon,
 .notice-icon img {
   display: block;
@@ -90,14 +258,23 @@
   flex-shrink: 0;
 }
 .notice-warning {
+  flex-shrink: 0;
   color: var(--danger);
 }
 .notice-chevron {
+  flex-shrink: 0;
   color: var(--muted);
-  transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  transform: rotate(var(--notice-chevron-rotation, 0deg)) scale(1);
+  transition:
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.notice-heading[data-remove-visible="true"] .notice-chevron {
+  opacity: 0;
+  transform: rotate(var(--notice-chevron-rotation, 0deg)) scale(0.72);
 }
 .notice-card[data-open="true"] .notice-chevron {
-  transform: rotate(180deg);
+  --notice-chevron-rotation: 180deg;
 }
 .notice-body {
   display: grid;
@@ -149,10 +326,47 @@
   max-width: 100%;
   overflow-x: auto;
 }
+.notice-editor {
+  width: min(620px, calc(100vw - 32px));
+}
+.notice-editor .tab-panel {
+  padding-top: 16px;
+}
+.notice-form,
+.notice-preset-list {
+  display: grid;
+  gap: 14px;
+}
+.notice-preset-empty .empty {
+  min-height: 240px;
+  padding: 40px 24px;
+}
+.notice-preset-empty .empty h3 {
+  margin: 0;
+}
+.notice-form .field {
+  margin: 0;
+}
+.notice-form textarea {
+  resize: vertical;
+  min-height: 150px;
+}
+.notice-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.notice-preset-row > .button {
+  flex-shrink: 0;
+}
 @media (max-width: 650px) {
+  .notice-card .notice-heading {
+    --notice-inline-padding: 14px;
+  }
   .notice-toggle {
     gap: 9px;
-    padding-inline: 14px;
   }
   .notice-content {
     padding: 14px;

@@ -1,8 +1,12 @@
 pub mod arguments;
+pub mod download_source;
 pub mod installer;
 pub mod java;
 pub mod launch;
+mod loader_sources;
 pub mod loaders;
 pub mod process;
+pub mod quick_play;
 pub mod version_settings;
 pub mod versions;
+pub mod window;

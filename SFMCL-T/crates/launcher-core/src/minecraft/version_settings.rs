@@ -7,8 +7,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// Only game options can be overridden; accounts, directories and launcher
-/// preferences always come from the global configuration.
+/// Game options and launch-time window behavior can be overridden per version.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct GameSettings {
@@ -22,6 +21,18 @@ pub struct GameSettings {
     pub height: u32,
     pub window_title: String,
     pub custom_info: String,
+    pub window_mode: String,
+    pub window_monitor: String,
+    pub window_x: i32,
+    pub window_y: i32,
+    pub launcher_action: String,
+    pub restore_launcher: bool,
+    pub server_enabled: bool,
+    pub server_host: String,
+    pub server_port: u16,
+    pub quick_play_enabled: bool,
+    pub quick_play_world: String,
+    pub process_priority: String,
     pub jvm_args_enabled: bool,
     pub jvm_args: String,
     pub game_args: String,
@@ -46,6 +57,18 @@ impl From<&Settings> for GameSettings {
             height: s.height,
             window_title: s.window_title.clone(),
             custom_info: s.custom_info.clone(),
+            window_mode: s.window_mode.clone(),
+            window_monitor: s.window_monitor.clone(),
+            window_x: s.window_x,
+            window_y: s.window_y,
+            launcher_action: s.launcher_action.clone(),
+            restore_launcher: s.restore_launcher,
+            server_enabled: s.server_enabled,
+            server_host: s.server_host.clone(),
+            server_port: s.server_port,
+            quick_play_enabled: s.quick_play_enabled,
+            quick_play_world: s.quick_play_world.clone(),
+            process_priority: s.process_priority.clone(),
             jvm_args_enabled: s.jvm_args_enabled,
             jvm_args: s.jvm_args.clone(),
             game_args: s.game_args.clone(),
@@ -60,6 +83,42 @@ impl GameSettings {
         }
         if !(320..=16384).contains(&self.width) || !(240..=16384).contains(&self.height) {
             bail!("游戏窗口尺寸无效");
+        }
+        if !["default", "center", "remember", "maximized", "custom"]
+            .contains(&self.window_mode.as_str())
+        {
+            bail!("未知窗口位置模式");
+        }
+        if !(-131072..=131072).contains(&self.window_x)
+            || !(-131072..=131072).contains(&self.window_y)
+        {
+            bail!("窗口坐标必须在 -131072–131072 之间");
+        }
+        if !["keep", "minimize", "tray"].contains(&self.launcher_action.as_str()) {
+            bail!("未知启动器启动后行为");
+        }
+        if !["idle", "belowNormal", "normal", "aboveNormal", "high"]
+            .contains(&self.process_priority.as_str())
+        {
+            bail!("未知游戏进程优先级");
+        }
+        if self.server_port == 0 {
+            bail!("服务器端口必须在 1–65535 之间");
+        }
+        if !self.server_host.is_empty() {
+            super::quick_play::validate_host(&self.server_host)?;
+        }
+        if self.server_enabled && self.server_host.trim().is_empty() {
+            bail!("请填写服务器地址");
+        }
+        if self.server_enabled && self.quick_play_enabled {
+            bail!("服务器直连和快速进入存档不能同时开启");
+        }
+        if !self.quick_play_world.is_empty() {
+            valid_name(&self.quick_play_world)?;
+        }
+        if self.quick_play_enabled && self.quick_play_world.is_empty() {
+            bail!("请选择要快速进入的存档");
         }
         Ok(())
     }
@@ -76,6 +135,18 @@ impl GameSettings {
             height: self.height,
             window_title: self.window_title.clone(),
             custom_info: self.custom_info.clone(),
+            window_mode: self.window_mode.clone(),
+            window_monitor: self.window_monitor.clone(),
+            window_x: self.window_x,
+            window_y: self.window_y,
+            launcher_action: self.launcher_action.clone(),
+            restore_launcher: self.restore_launcher,
+            server_enabled: self.server_enabled,
+            server_host: self.server_host.clone(),
+            server_port: self.server_port,
+            quick_play_enabled: self.quick_play_enabled,
+            quick_play_world: self.quick_play_world.clone(),
+            process_priority: self.process_priority.clone(),
             jvm_args_enabled: self.jvm_args_enabled,
             jvm_args: self.jvm_args.clone(),
             game_args: self.game_args.clone(),
@@ -99,32 +170,56 @@ pub struct GameSettingGroups {
     pub java: bool,
     pub memory: bool,
     pub window: bool,
+    pub position: bool,
+    pub launcher: bool,
+    pub server: bool,
+    pub world: bool,
+    pub process: bool,
     pub advanced: bool,
 }
 
 impl VersionSettings {
     pub fn groups(&self) -> GameSettingGroups {
-        if self.use_global {
+        let mut groups = if self.use_global {
             GameSettingGroups::default()
         } else {
-            // Existing independent profiles override every group.
             self.independent_groups.unwrap_or(GameSettingGroups {
                 java: true,
                 memory: true,
                 window: true,
                 advanced: true,
+                ..Default::default()
             })
-        }
+        };
+        // Older profiles may store separate flags for sections now sharing one card.
+        groups.window |= groups.position;
+        groups.position = groups.window;
+        groups.launcher |= groups.process;
+        groups.process = groups.launcher;
+        groups
     }
 
     pub fn has_independent_settings(&self) -> bool {
         let groups = self.groups();
-        groups.java || groups.memory || groups.window || groups.advanced
+        groups.java
+            || groups.memory
+            || groups.window
+            || groups.advanced
+            || groups.position
+            || groups.launcher
+            || groups.server
+            || groups.world
+            || groups.process
     }
 
     pub fn resolve(&self, global: &Settings) -> Settings {
         let groups = self.groups();
         let mut effective = GameSettings::from(global);
+        effective.server_enabled = false;
+        effective.server_host.clear();
+        effective.server_port = self.settings.server_port;
+        effective.quick_play_enabled = false;
+        effective.quick_play_world.clear();
         let saved = &self.settings;
         if groups.java {
             effective.java_path = saved.java_path.clone();
@@ -147,6 +242,32 @@ impl VersionSettings {
             effective.jvm_args = saved.jvm_args.clone();
             effective.game_args = saved.game_args.clone();
         }
+        if groups.position {
+            effective.window_mode = saved.window_mode.clone();
+            effective.window_monitor = saved.window_monitor.clone();
+            effective.window_x = saved.window_x;
+            effective.window_y = saved.window_y;
+        }
+        if groups.launcher {
+            effective.launcher_action = saved.launcher_action.clone();
+            effective.restore_launcher = saved.restore_launcher;
+        }
+        if groups.server {
+            effective.server_host = saved.server_host.trim().into();
+            effective.server_enabled = !effective.server_host.is_empty();
+            effective.server_port = saved.server_port;
+        }
+        if groups.world {
+            effective.quick_play_world = saved.quick_play_world.clone();
+            effective.quick_play_enabled = !effective.quick_play_world.is_empty();
+        }
+        if groups.process {
+            effective.process_priority = saved.process_priority.clone();
+        }
+        if effective.quick_play_enabled {
+            effective.server_enabled = false;
+            effective.server_host.clear();
+        }
         effective.apply_to(global)
     }
 }
@@ -168,7 +289,14 @@ pub fn load(root: &Path, id: &str, global: &Settings) -> Result<VersionSettings>
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => VersionSettings {
             use_global: true,
             independent_groups: None,
-            settings: GameSettings::from(global),
+            settings: GameSettings {
+                server_enabled: false,
+                server_host: String::new(),
+                server_port: 25565,
+                quick_play_enabled: false,
+                quick_play_world: String::new(),
+                ..GameSettings::from(global)
+            },
         },
         Err(error) => return Err(error).with_context(|| format!("无法读取 {}", path.display())),
     };

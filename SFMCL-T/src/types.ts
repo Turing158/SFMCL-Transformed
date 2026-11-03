@@ -1,3 +1,9 @@
+import type {
+  Player3DBackgroundType,
+  PlayerPreviewMode,
+} from "./playerPreview";
+import type { Player3DAction } from "./player3dActions";
+
 export interface GameSettings {
   javaPath: string;
   javaPaths: string[];
@@ -9,6 +15,18 @@ export interface GameSettings {
   height: number;
   windowTitle: string;
   customInfo: string;
+  windowMode: "default" | "center" | "remember" | "maximized" | "custom";
+  windowMonitor: string;
+  windowX: number;
+  windowY: number;
+  launcherAction: "keep" | "minimize" | "tray";
+  restoreLauncher: boolean;
+  serverEnabled: boolean;
+  serverHost: string;
+  serverPort: number;
+  quickPlayEnabled: boolean;
+  quickPlayWorld: string;
+  processPriority: "idle" | "belowNormal" | "normal" | "aboveNormal" | "high";
   jvmArgsEnabled: boolean;
   jvmArgs: string;
   gameArgs: string;
@@ -23,8 +41,14 @@ export interface GameSettingGroups {
   memory: boolean;
   window: boolean;
   advanced: boolean;
+  position?: boolean;
+  launcher?: boolean;
+  server?: boolean;
+  world?: boolean;
+  process?: boolean;
 }
 export type GameSettingGroup = keyof GameSettingGroups;
+export type HomeNoticeLayout = "single" | "parallel" | "masonry";
 export interface Settings extends GameSettings {
   schemaVersion: number;
   gameDirs: { name: string; path: string }[];
@@ -36,8 +60,15 @@ export interface Settings extends GameSettings {
   backgroundType: string;
   background: string;
   hardwareAcceleration: boolean;
-  showNotices: boolean;
+  homeCleanMode: boolean;
+  homeNoticeLayout: HomeNoticeLayout;
+  playerPreviewMode: PlayerPreviewMode;
+  player3dFps: number;
+  player3dBackgroundType: Player3DBackgroundType;
+  player3dBackground: string;
+  player3dAction: Player3DAction;
   downloadTaskDisplay: string;
+  minecraftDownloadSource: "auto" | "official" | "bmclapi";
   downloadConcurrency: number;
   downloadCacheDir: string;
   microsoftClientId: string;
@@ -49,7 +80,19 @@ export interface Player {
   online: boolean;
   skin: string;
   cape?: string;
+  capes?: PlayerCape[] | null;
   slim: boolean;
+}
+export interface PlayerCape {
+  id: string;
+  name: string;
+  url: string;
+  active: boolean;
+}
+export interface PlayerNameChange {
+  nameChangeAllowed: boolean;
+  changedAt: string | null;
+  createdAt: string | null;
 }
 export interface Version {
   id: string;

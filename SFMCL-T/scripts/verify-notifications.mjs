@@ -219,7 +219,7 @@ try {
   );
 
   for (const theme of ["light", "dark"]) {
-    for (const accent of ["forest", "puce", "ebony"]) {
+    for (const accent of ["forest", "nether", "end", "sift"]) {
       await ready();
       await page.evaluate(
         ({ theme, accent }) => {
@@ -257,7 +257,7 @@ try {
     }
   }
   checks.push(
-    "All six theme combinations use the shared pixel outer and eroded inner corners, above the launch dock",
+    "All eight theme combinations use the shared pixel outer and eroded inner corners, above the launch dock",
   );
 
   for (const width of [375, 768, 1024, 1440]) {
