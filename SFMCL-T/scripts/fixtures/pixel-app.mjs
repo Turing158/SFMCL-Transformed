@@ -22,6 +22,18 @@ export function pixelAppFixture({
     height: 720,
     windowTitle: "",
     customInfo: "SFMCL-T",
+    windowMode: "default",
+    windowMonitor: "",
+    windowX: 0,
+    windowY: 0,
+    launcherAction: "keep",
+    restoreLauncher: true,
+    serverEnabled: false,
+    serverHost: "",
+    serverPort: 25565,
+    quickPlayEnabled: false,
+    quickPlayWorld: "",
+    processPriority: "normal",
     jvmArgsEnabled: false,
     jvmArgs: "",
     gameArgs: "",
@@ -30,8 +42,10 @@ export function pixelAppFixture({
     backgroundType: "none",
     background: "",
     hardwareAcceleration: true,
-    showNotices: false,
+    homeCleanMode: true,
+    homeNoticeLayout: "single",
     downloadTaskDisplay: components ? "always" : "off",
+    minecraftDownloadSource: "auto",
     downloadConcurrency: 8,
     downloadCacheDir: "",
     microsoftClientId: "",
@@ -79,6 +93,18 @@ export function pixelAppFixture({
         "height",
         "windowTitle",
         "customInfo",
+        "windowMode",
+        "windowMonitor",
+        "windowX",
+        "windowY",
+        "launcherAction",
+        "restoreLauncher",
+        "serverEnabled",
+        "serverHost",
+        "serverPort",
+        "quickPlayEnabled",
+        "quickPlayWorld",
+        "processPriority",
         "jvmArgsEnabled",
         "jvmArgs",
         "gameArgs",
@@ -151,6 +177,7 @@ export function pixelAppFixture({
   }
   window.__pixelTest = {
     data,
+    versions,
     requests,
     tasks,
     delays,
@@ -236,6 +263,26 @@ export function pixelAppFixture({
           return data.settings;
         case "system.memory":
           return { availableMb: window.__pixelTest.availableMemoryMb };
+        case "system.monitors":
+          return {
+            supported: true,
+            monitors: [
+              { id: "display-1", primary: true, width: 1920, height: 1080 },
+              { id: "display-2", primary: false, width: 2560, height: 1440 },
+            ],
+          };
+        case "game.launch-options": {
+          const id = payload.versionId || data.settings.activeVersion;
+          const directory = `${payload.directory || data.settings.activeDir}/.minecraft${payload.isolation ? `/versions/${id}` : ""}`;
+          return {
+            supportsQuickPlay: id ? !id.startsWith("1.19") : null,
+            directory,
+            worlds: [
+              { id: "My World", name: "我的世界" },
+              { id: "Creative", name: "创造测试" },
+            ],
+          };
+        }
         case "java.discover":
           return structuredClone(javaInventory);
         case "java.list":
@@ -319,7 +366,13 @@ export function pixelAppFixture({
           });
           return data.players.at(-1);
         case "notices.list":
+        case "notices.hidden":
+        case "notices.visibility":
+        case "notices.create":
+        case "notices.delete":
           return [];
+        case "notices.refresh":
+          return { items: [], error: "" };
         case "manifest":
           return {
             versions: ["1.21.4", "1.20.1", "1.19.4"].map((id) => ({

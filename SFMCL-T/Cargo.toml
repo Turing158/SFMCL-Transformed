@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/launcher-core", "src-tauri"]
+exclude = ["vendor/unrar-sys"]
 default-members = ["crates/launcher-core"]
 resolver = "2"
 
@@ -7,6 +8,9 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+
+[patch.crates-io]
+unrar_sys = { path = "vendor/unrar-sys" }
 
 [profile.release]
 opt-level = "z"

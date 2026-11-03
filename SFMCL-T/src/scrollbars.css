@@ -1,0 +1,66 @@
+@property --scrollbar-opacity {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+/* Each scrollport fades independently, including nested cards and both axes.
+   Native fields and the select/favorites scrollbars keep their own behavior. */
+html:root,
+html:root
+  :not(
+    :where(
+      input,
+      textarea,
+      select,
+      [contenteditable]:not([contenteditable="false"]),
+      [contenteditable]:not([contenteditable="false"]) *,
+      .pixel-select-popup,
+      .pixel-select-popup *,
+      .pixel-select-list,
+      .pixel-select-list *,
+      .sidebar-favorites
+    )
+  ) {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+html:root::-webkit-scrollbar-thumb,
+html:root
+  :not(
+    :where(
+      input,
+      textarea,
+      select,
+      [contenteditable]:not([contenteditable="false"]),
+      [contenteditable]:not([contenteditable="false"]) *,
+      .pixel-select-popup,
+      .pixel-select-popup *,
+      .pixel-select-list,
+      .pixel-select-list *,
+      .sidebar-favorites
+    )
+  )::-webkit-scrollbar-thumb {
+  --scrollbar-opacity: inherit;
+  background: color-mix(
+    in srgb,
+    var(
+        --scrollbar-thumb-color,
+        color-mix(in srgb, var(--muted) 40%, transparent)
+      )
+      calc(var(--scrollbar-opacity) * 100%),
+    transparent
+  );
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.sidebar {
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.26);
+}
+.notification-viewport {
+  --scrollbar-thumb-color: var(--surface-line);
+}

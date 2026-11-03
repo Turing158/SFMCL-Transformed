@@ -54,53 +54,83 @@
   --shadow-color: color-mix(in srgb, var(--sidebar), black 60%);
   color-scheme: dark;
 }
-:root[data-accent="puce"] {
-  --bg: #f9f6f7;
-  --panel: #fff;
-  --ink: #38292e;
-  --muted: #78656c;
-  --line: #eadfe3;
-  --accent: #865c62;
-  --accent-hover: #72454d;
-  --soft: #f3e9e9;
-  --sidebar: #463035;
-  --preview-accent: #865c62;
+/* Dimension palettes reference the Minecraft Wiki landscape images:
+   Nether: netherrack, lava and basalt; End: end stone, obsidian and purpur;
+   Sift: cyan sky, pink vegetation and white/grey trees. */
+:root[data-accent="nether"] {
+  --bg: #fbf3ed;
+  --panel: #fffaf6;
+  --ink: #3c211e;
+  --muted: #7e6055;
+  --line: #ebd8ce;
+  --accent: #9b3d28;
+  --on-accent: #ffffff;
+  --accent-hover: #802c1c;
+  --soft: #f6e3d6;
+  --sidebar: #3b1d1a;
+  --preview-accent: #9b3d28;
 }
-:root[data-accent="ebony"] {
-  --bg: #f5f7fa;
-  --panel: #fff;
-  --ink: #253440;
-  --muted: #637381;
-  --line: #dfe6ec;
-  --accent: #446d8a;
-  --accent-hover: #305670;
-  --soft: #e8eff4;
-  --sidebar: #233c4a;
-  --preview-accent: #446d8a;
+:root[data-accent="end"] {
+  --bg: #f7f6e9;
+  --panel: #fffdf2;
+  --ink: #302737;
+  --muted: #6c6374;
+  --line: #e2ddc8;
+  --accent: #70508c;
+  --on-accent: #ffffff;
+  --accent-hover: #593d73;
+  --soft: #efe5f2;
+  --sidebar: #272030;
+  --preview-accent: #70508c;
 }
-:root[data-theme="dark"][data-accent="puce"] {
-  --bg: #1d161a;
-  --panel: #2b2127;
-  --ink: #f1e4e9;
-  --muted: #c3aab4;
-  --line: #4a353f;
-  --on-accent: #301e25;
-  --accent: #d8aab4;
-  --accent-hover: #eac4cc;
-  --soft: #413037;
-  --sidebar: #302128;
+:root[data-accent="sift"] {
+  --bg: #edf9f6;
+  --panel: #fffafb;
+  --ink: #293c40;
+  --muted: #5c7376;
+  --line: #d6e8e5;
+  --accent: #9b3e5e;
+  --on-accent: #ffffff;
+  --accent-hover: #822e4c;
+  --soft: #f9e5ec;
+  --sidebar: #214d51;
+  --preview-accent: #9b3e5e;
 }
-:root[data-theme="dark"][data-accent="ebony"] {
-  --bg: #141b22;
-  --panel: #202b35;
-  --ink: #e3edf6;
-  --muted: #a7bacb;
-  --line: #354754;
-  --on-accent: #172a38;
-  --accent: #9cbdda;
-  --accent-hover: #b9d4eb;
-  --soft: #2d3d48;
-  --sidebar: #192c38;
+:root[data-theme="dark"][data-accent="nether"] {
+  --bg: #1e1313;
+  --panel: #2e1d1b;
+  --ink: #f6e6d7;
+  --muted: #c8afa1;
+  --line: #51342e;
+  --on-accent: #351b13;
+  --accent: #f0a15e;
+  --accent-hover: #ffc086;
+  --soft: #452b21;
+  --sidebar: #231314;
+}
+:root[data-theme="dark"][data-accent="end"] {
+  --bg: #15111d;
+  --panel: #231d2e;
+  --ink: #eeecd2;
+  --muted: #bcb6cd;
+  --line: #44394f;
+  --on-accent: #26182f;
+  --accent: #c5a2df;
+  --accent-hover: #ddc0ef;
+  --soft: #372a44;
+  --sidebar: #1b1425;
+}
+:root[data-theme="dark"][data-accent="sift"] {
+  --bg: #12272c;
+  --panel: #1d363c;
+  --ink: #f7eff3;
+  --muted: #b9cdd0;
+  --line: #36545c;
+  --on-accent: #371d2a;
+  --accent: #f1a0b8;
+  --accent-hover: #ffc2d1;
+  --soft: #432d3b;
+  --sidebar: #173d44;
 }
 * {
   box-sizing: border-box;
@@ -1448,6 +1478,7 @@ td:not(:first-child) {
   white-space: nowrap;
 }
 .pagination {
+  --button-height: 32px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1457,8 +1488,8 @@ td:not(:first-child) {
   color: var(--muted);
 }
 .pagination .button {
-  min-height: 35px;
-  padding: 7px 12px;
+  min-height: var(--button-height);
+  padding: 5px 12px;
 }
 .page-indicator-text {
   display: inline-block;
@@ -1997,33 +2028,6 @@ button.resource-row:hover {
 .about-card > small {
   font-size: 10px;
 }
-.save-bar {
-  position: sticky;
-  bottom: 0;
-  padding: 15px 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 22px;
-  z-index: 10;
-}
-.save-bar > span {
-  flex: 1;
-  font-size: 12px;
-}
-.save-button-motion {
-  display: flex;
-  flex-shrink: 0;
-}
-.save-button-motion[data-closing] > .button:disabled {
-  opacity: 1;
-}
-.unsaved-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 0;
-  background: currentColor;
-}
 .preview-banner {
   color: var(--accent);
   padding: 9px 14px;
@@ -2408,13 +2412,6 @@ button.resource-row:hover {
   }
   .about-card .row-actions {
     flex-wrap: wrap;
-  }
-  .save-bar {
-    flex-wrap: wrap;
-    padding: 12px;
-  }
-  .save-bar > span {
-    flex-basis: 100%;
   }
   .modal-body {
     padding: 18px;

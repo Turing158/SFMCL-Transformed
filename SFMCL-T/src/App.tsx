@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Compass,
   House,
-  Leaf,
   Play,
   Settings2,
 } from "lucide-react";
@@ -18,7 +17,7 @@ import { Versions } from "./pages/Versions";
 import { Resources } from "./pages/Resources";
 import { Downloads } from "./pages/Downloads";
 import { SettingsPage } from "./pages/Settings";
-import { NoticeRefreshButton, Notices, useNotices } from "./Notices";
+import { NoticeActions, Notices, useNotices } from "./Notices";
 import { Titlebar } from "./Titlebar";
 import { LaunchDock } from "./LaunchDock";
 import { FavoriteVersions } from "./FavoriteVersions";
@@ -204,17 +203,6 @@ export default function App() {
               <SidebarProgress state={sidebarProgress} />
             </div>
           )}
-          {!showDownloadTasks && (
-            <div className="sidebar-tip has-surface">
-              <PixelFrame />
-              <Leaf size={19} />
-              <p>
-                每一个方块，
-                <br />
-                都是新的可能。
-              </p>
-            </div>
-          )}
           <button
             className="profile-button has-surface"
             onClick={() => app.setPage("players")}
@@ -309,7 +297,8 @@ export default function App() {
 function Home() {
   const app = useApp();
   const s = app.data.settings;
-  const notices = useNotices(s.showNotices);
+  const showContent = !s.homeCleanMode;
+  const notices = useNotices(showContent);
   const player = app.data.players.find((p) => p.uuid === s.activePlayer);
   return (
     <>
@@ -317,16 +306,9 @@ function Home() {
         icon={<Play />}
         eyebrow="LET'S PLAY"
         title={player ? `你好，${player.name}` : "准备好，开启新的冒险"}
-        action={
-          s.showNotices && (
-            <NoticeRefreshButton
-              loading={notices.loading}
-              onRefresh={notices.refresh}
-            />
-          )
-        }
+        action={showContent && <NoticeActions notices={notices} />}
       />
-      {s.showNotices && <Notices {...notices} />}
+      {showContent && <Notices {...notices} layout={s.homeNoticeLayout} />}
     </>
   );
 }

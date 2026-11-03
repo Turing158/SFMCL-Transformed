@@ -86,6 +86,7 @@ pub fn build(
     }
     classpath.push(jar.to_string_lossy().into_owned());
     let game_dir = versions::game_directory(root, id, settings.isolation)?;
+    let quick_play_args = super::quick_play::arguments(version, settings, &game_dir)?;
     let asset_id = version["assetIndex"]["id"]
         .as_str()
         .or(version["assets"].as_str())
@@ -162,6 +163,9 @@ pub fn build(
         ("has_custom_resolution".into(), true),
         ("is_demo_user".into(), false),
         ("has_quick_plays_support".into(), false),
+        ("is_quick_play_singleplayer".into(), false),
+        ("is_quick_play_multiplayer".into(), false),
+        ("is_quick_play_realms".into(), false),
     ]);
     let mut args = if version["arguments"]["jvm"].is_array() {
         collect(&version["arguments"]["jvm"], &features)
@@ -216,6 +220,7 @@ pub fn build(
         args.push("--fullscreen".into());
     }
     args.extend(split_args(&settings.game_args)?);
+    args.extend(quick_play_args);
     for arg in &mut args {
         for (key, value) in &substitutions {
             *arg = arg.replace(&format!("${{{key}}}"), value);

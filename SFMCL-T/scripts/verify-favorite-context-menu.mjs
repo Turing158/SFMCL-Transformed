@@ -214,7 +214,7 @@ try {
   await expect(root).toHaveCount(0);
   await expect(favorite("1.21.4")).toBeFocused();
   for (const theme of ["light", "dark"])
-    for (const accent of ["forest", "puce", "ebony"]) {
+    for (const accent of ["forest", "nether", "end", "sift"]) {
       await page.evaluate(
         ({ theme, accent }) => {
           document.documentElement.dataset.theme = theme;
@@ -246,7 +246,7 @@ try {
     await expect(root).toHaveCount(0);
   }
   checks.push(
-    "Compact menu has no heading or submenu; More opens the dialog; keyboard, six themes and viewport bounds",
+    "Compact menu has no heading or submenu; More opens the dialog; keyboard, eight themes and viewport bounds",
   );
   expect(errors).toEqual([]);
   console.log(

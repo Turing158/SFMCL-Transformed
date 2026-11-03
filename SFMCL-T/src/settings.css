@@ -1,11 +1,103 @@
-/* Match labeled selects to the input fields' height and vertical padding. */
-.settings-page .field .pixel-select-trigger {
-  min-height: 44px;
-  padding-block: 10px;
+/* Inputs and labeled selects share one compact size inside the settings cards.
+   The cards are shared by the settings page and per-version game settings. */
+.settings-section :is(input.pixel-input, .pixel-select-trigger) {
+  min-height: 38px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.settings-section textarea.pixel-input {
+  padding: 7px 10px;
 }
 
-.settings-page .form-grid > .field {
-  margin-top: 17px;
+/* Tighter vertical rhythm so each card reads as one compact block. */
+.settings-stack {
+  gap: 14px;
+}
+.settings-section {
+  padding: 18px;
+}
+.settings-section > p {
+  margin-bottom: 14px;
+}
+.settings-section .field {
+  gap: 6px;
+  margin: 12px 0;
+}
+.settings-section .field:first-of-type {
+  margin-top: 12px;
+}
+.settings-section .form-grid {
+  gap: 0 18px;
+}
+.settings-section .form-grid > .field {
+  margin-top: 12px;
+}
+.settings-section .download-options-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.window-size-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) max-content;
+  gap: 0 18px;
+  align-items: start;
+}
+.window-size-row > .field {
+  min-width: 0;
+}
+.window-fullscreen .pixel-switch {
+  align-self: flex-start;
+  height: 38px;
+}
+.launch-behavior-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+  align-items: start;
+}
+.launch-behavior-groups > .field {
+  min-width: 0;
+}
+.launcher-behavior-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 0 18px;
+  align-items: start;
+}
+.launcher-behavior-row > .field {
+  min-width: 0;
+}
+.launcher-restore .pixel-switch {
+  align-self: flex-end;
+  height: 38px;
+}
+.settings-section .setting-row {
+  gap: 18px;
+  padding: 13px 0;
+}
+.settings-section .setting-row-compact {
+  padding: 0;
+}
+.settings-section .theme-options {
+  margin-top: 14px;
+  gap: 10px;
+}
+@media (max-width: 650px) {
+  .settings-section {
+    padding: 14px;
+  }
+  .window-size-row,
+  .launcher-behavior-row {
+    column-gap: 12px;
+  }
+  .launch-behavior-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-section .download-options-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .download-options-grid > .download-task-display {
+    grid-column: 1 / -1;
+  }
 }
 
 /* Tabs keep their shared indicator; switches animate their own track. */
@@ -62,4 +154,17 @@
 }
 .settings-page .theme-option:active .theme-preview {
   transform: scale(0.98);
+}
+
+.update-check-button {
+  min-width: 138px;
+}
+.update-check[data-update-state="latest"] .update-check-button {
+  --surface-edge: var(--surface-success);
+  --surface-fill: var(--surface-success-bg);
+  color: var(--surface-success);
+  opacity: 1;
+}
+.update-check[data-update-state="unpublished"] .update-check-button {
+  color: var(--muted);
 }

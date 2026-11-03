@@ -186,8 +186,9 @@ try {
   await expect(page.locator("dialog[open]")).toHaveCount(2);
   for (const [theme, accent, width, height] of [
     ["light", "forest", 1120, 640],
-    ["dark", "puce", 850, 600],
-    ["dark", "ebony", 375, 667],
+    ["dark", "nether", 850, 600],
+    ["dark", "end", 375, 667],
+    ["dark", "sift", 850, 600],
   ]) {
     await page.setViewportSize({ width, height });
     await page.evaluate(
@@ -231,18 +232,11 @@ try {
     .getByRole("navigation", { name: "页面路径" })
     .getByRole("button", { name: "返回上一级", exact: true });
   await back.click();
-  await assertOpen(
-    "此版本有尚未保存的游戏设置，放弃修改并返回？",
-    "versions.settings.save",
-  );
-  await answerConfirmation(page, false);
-  await expect(independent).toBeChecked();
-  await back.click();
-  await answerConfirmation(page, true);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator(".version-settings-page")).toHaveCount(0);
-  expect(await count("versions.settings.save")).toBe(0);
+  await expect.poll(() => count("versions.settings.save")).toBeGreaterThan(0);
   check(
-    "Unsaved settings stay on cancel and are discarded only after acceptance",
+    "Version settings save automatically on return without a discard confirmation",
   );
 
   await go("版本管理");

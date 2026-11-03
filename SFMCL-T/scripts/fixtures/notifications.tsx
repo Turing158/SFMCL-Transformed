@@ -9,6 +9,11 @@ import "../../src/surfaces.css";
 import "../../src/sidebar.css";
 import "../../src/resources.css";
 import "../../src/players.css";
+import "../../src/scrollbars.css";
+import { initializeScrollbars } from "../../src/scrollbars";
+
+const disposeScrollbars = initializeScrollbars();
+if (import.meta.hot) import.meta.hot.dispose(disposeScrollbars);
 
 // A test-only entry point exercises the real provider and the entire app.
 function Driver() {

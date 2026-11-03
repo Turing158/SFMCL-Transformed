@@ -41,6 +41,18 @@ const go = async () => {
   await page.goto(process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/");
   await page.locator(".sidebar .profile-button").click();
   await expect(ui.locator(".players-identity h2")).toHaveText("Steve");
+  await page.evaluate(() => document.fonts.ready);
+  // Measure settled cards, after the page entrance finishes moving their parent.
+  await ui.evaluate(async (root) => {
+    await Promise.all(
+      (root.closest(".page")?.getAnimations() || [])
+        .filter(
+          (animation) => animation.effect?.getTiming().iterations !== Infinity,
+        )
+        .map((animation) => animation.finished.catch(() => {})),
+    );
+    await new Promise(requestAnimationFrame);
+  });
 };
 
 try {

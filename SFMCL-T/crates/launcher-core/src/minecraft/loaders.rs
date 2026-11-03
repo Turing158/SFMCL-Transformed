@@ -1,5 +1,5 @@
 use super::{
-    installer::{get_json, InstallRequest, Installer, BMCL},
+    installer::{InstallRequest, Installer, BMCL},
     java,
     process::run_java,
     versions::{self, maven_path},
@@ -121,6 +121,21 @@ pub async fn catalog(
     minecraft: &str,
     kind: &str,
 ) -> Result<Vec<LoaderChoice>> {
+    catalog_with_sources(
+        client,
+        &crate::download_sources::SourceSelector::default(),
+        minecraft,
+        kind,
+    )
+    .await
+}
+
+pub async fn catalog_with_sources(
+    client: &reqwest::Client,
+    sources: &crate::download_sources::SourceSelector,
+    minecraft: &str,
+    kind: &str,
+) -> Result<Vec<LoaderChoice>> {
     valid_name(minecraft)?;
     let url = match kind {
         "Fabric" => format!("https://meta.fabricmc.net/v2/versions/loader/{minecraft}"),
@@ -131,7 +146,15 @@ pub async fn catalog(
         "LiteLoader" => format!("{BMCL}/liteloader/list?mcversion={minecraft}"),
         _ => bail!("未知加载器"),
     };
-    let value = get_json(client, &url, None).await?;
+    let urls = super::loader_sources::catalog_urls(minecraft, kind, url);
+    let value = sources
+        .fetch(
+            client,
+            &urls,
+            &tokio_util::sync::CancellationToken::new(),
+            |bytes| super::loader_sources::catalog_data(bytes, minecraft, kind),
+        )
+        .await?;
     let items = if kind == "LiteLoader" {
         if value["version"].is_string() {
             vec![value]
@@ -150,9 +173,13 @@ pub async fn catalog(
     }
     if kind == "Forge" {
         choices.sort_by(|a, b| {
-            b.metadata["modified"]
-                .as_str()
-                .cmp(&a.metadata["modified"].as_str())
+            let parts = |value: &str| {
+                value
+                    .split(['.', '-'])
+                    .map(|part| part.parse::<u64>().unwrap_or(0))
+                    .collect::<Vec<_>>()
+            };
+            parts(&b.version).cmp(&parts(&a.version))
         });
     }
     Ok(choices)
@@ -275,14 +302,56 @@ async fn download_installer(
     job: &Job,
 ) -> Result<PathBuf> {
     let path = work.join(format!("{}-installer.jar", choice.kind));
+    let url = installer_url(&request.minecraft, choice)?;
+    let sources = installer.sources();
+    let mut alternatives = if matches!(choice.kind.as_str(), "Forge" | "NeoForge") {
+        sources.candidates(&super::loader_sources::official_installer(
+            &request.minecraft,
+            choice,
+        )?)
+    } else {
+        vec![]
+    };
+    if choice.kind == "OptiFine" {
+        let official = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            super::loader_sources::optifine_installer(
+                &installer.client,
+                choice,
+                &request.minecraft,
+                &job.cancel,
+            ),
+        )
+        .await;
+        if let Ok(Ok(official)) = official {
+            alternatives.push(official);
+        }
+        if job.cancel.is_cancelled() {
+            bail!(job.cancellation_message());
+        }
+    }
+    if !alternatives.contains(&url) {
+        alternatives.push(url.clone());
+    }
+    sources.register(&url, alternatives);
+    let installer_hash = choice.metadata["files"]
+        .as_array()
+        .and_then(|files| {
+            files
+                .iter()
+                .find(|file| file["category"] == "installer" && file["format"] == "jar")
+        })
+        .and_then(|file| file["hash"].as_str())
+        .filter(|hash| hash.len() == 40 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .map(str::to_owned);
     let file = DownloadSpec {
         path: path
             .strip_prefix(&request.root)?
             .to_string_lossy()
             .into_owned(),
-        url: installer_url(&request.minecraft, choice)?,
+        url,
         size: None,
-        sha1: None,
+        sha1: installer_hash,
         sha512: None,
     };
     jobs::download(
@@ -334,7 +403,9 @@ async fn download_libraries(
         if target.exists() && lib.file.sha1.is_none() && lib.file.sha512.is_none() {
             continue;
         }
-        files.push(lib.file);
+        let mut file = lib.file;
+        file.url = installer.download_url(&file.url);
+        files.push(file);
     }
     jobs::download(
         &installer.downloads,
@@ -368,8 +439,16 @@ pub async fn install(
                     request.minecraft, choice.version
                 )
             };
-            let patch = get_json(&installer.client, &url, Some(&job)).await?;
-            validate_loader_profile(choice, &request.minecraft, &patch)?;
+            let sources = installer.sources();
+            let urls = super::loader_sources::profile_urls(&request.minecraft, &choice.kind, &url);
+            let patch = sources
+                .fetch(&installer.client, &urls, &job.cancel, |bytes| {
+                    let patch =
+                        super::loader_sources::profile_data(bytes, &request.minecraft, choice)?;
+                    validate_loader_profile(choice, &request.minecraft, &patch)?;
+                    Ok(patch)
+                })
+                .await?;
             let profile = versions::merge(base, &patch);
             library_downloads(installer, &request.root, &profile, &job).await?;
             Ok(profile)
@@ -432,7 +511,7 @@ pub async fn install(
                         &job,
                         "Minecraft 映射文件".into(),
                         request.root.clone(),
-                        vec![versions::spec(data, path, url.into())],
+                        vec![versions::spec(data, path, installer.download_url(url))],
                     )
                     .await?;
                 }
@@ -823,6 +902,24 @@ async fn run_processors(
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    #[ignore = "queries the public LiteLoader catalog"]
+    async fn live_liteloader_catalog_handles_absent_and_supported_releases() {
+        let client = crate::http_client().unwrap();
+        for minecraft in ["26.3", "1.21.4"] {
+            let choices = catalog(&client, minecraft, "LiteLoader").await.unwrap();
+            assert!(
+                choices.is_empty(),
+                "{minecraft}: unexpected LiteLoader release"
+            );
+        }
+        let choices = catalog(&client, "1.12.2", "LiteLoader").await.unwrap();
+        assert!(!choices.is_empty());
+        assert!(choices.iter().all(|choice| {
+            choice.kind == "LiteLoader" && choice.metadata["mcversion"] == "1.12.2"
+        }));
+    }
+
     fn combo_request() -> InstallRequest {
         InstallRequest {
             minecraft: "1.20.1".into(),
@@ -929,7 +1026,7 @@ mod tests {
             request.loader = Some(choice.clone());
             request.optifine = None;
             validate_selection(&request).unwrap();
-            let profile = get_json(
+            let profile = super::super::installer::get_json(
                 &client,
                 &format!(
                     "https://meta.fabricmc.net/v2/versions/loader/{minecraft}/{loader}/profile/json"

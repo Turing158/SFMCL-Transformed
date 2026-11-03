@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Badge, Button, Empty, PixelFrame, TabList } from "../components";
 import { api } from "../api";
+import { useApp } from "../store";
 import { matchesVersionFilter } from "../installOptions";
 import type { ManifestVersion } from "../types";
 import { CatalogView, type ResourceView } from "./CatalogView";
@@ -29,6 +30,7 @@ export function MinecraftInstall({
   onViewChange: (view: ResourceView) => void;
   onSelect: (version: ManifestVersion) => void;
 }) {
+  const source = useApp().data.settings.minecraftDownloadSource;
   const [versions, setVersions] = useState<ManifestVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -55,7 +57,7 @@ export function MinecraftInstall({
     return () => {
       active = false;
     };
-  }, [revision]);
+  }, [revision, source]);
   useEffect(() => {
     setPage(0);
   }, [query, filter]);
@@ -137,7 +139,6 @@ export function MinecraftInstall({
                       <div className="catalog-project-copy">
                         <div className="catalog-project-title">
                           <h2>{version.id}</h2>
-                          <span>Mojang</span>
                         </div>
                         <p>发布于 {version.releaseTime.slice(0, 10)}</p>
                       </div>

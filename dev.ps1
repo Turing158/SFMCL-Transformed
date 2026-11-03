@@ -43,6 +43,7 @@ try {
     if ($Web) {
         Invoke-Checked -File 'npm.cmd' -Arguments @('run', 'dev', '--', '--port', [string]$Port)
     } else {
+        Repair-StaleCargoCache -WorkspaceRoot $projectRoot
         if ($DataDir) {
             $env:SFMCL_T_DATA_DIR = $DataDir
         } elseif (-not $env:SFMCL_T_DATA_DIR) {

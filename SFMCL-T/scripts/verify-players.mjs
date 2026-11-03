@@ -99,7 +99,10 @@ try {
   await ui.getByRole("button", { name: "切换为方块展台", exact: true }).click();
   await expect(canvas).toHaveAttribute("aria-label", "Steve 的背面皮肤预览");
   await ui.getByRole("button", { name: "切换预览朝向，当前背面" }).click();
-  await expect(ui.locator(".players-figure")).toHaveAttribute("data-preview-mode", "3d");
+  await expect(ui.locator(".players-figure")).toHaveAttribute(
+    "data-preview-mode",
+    "3d",
+  );
   await ui.getByRole("button", { name: "切换预览朝向，当前3D" }).click();
   await expect.poll(() => canvas.evaluate((c) => c.toDataURL())).toBe(front);
   await ui.getByRole("button", { name: "切换模型，当前经典模型" }).click();
@@ -177,15 +180,28 @@ try {
   await expect(ui.getByRole("button", { name: /切换模型/ })).toBeDisabled();
   await expect(
     ui.getByRole("button", { name: "重置皮肤", exact: true }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await ui.getByRole("button", { name: "更换皮肤", exact: true }).click();
-  expect((await last("plugin:opener|open_url")).url).toContain("/editskin");
+  const skinDialog = page.getByRole("dialog", {
+    name: "更换正版皮肤",
+    exact: true,
+  });
+  await expect(skinDialog).toBeVisible();
+  await skinDialog.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(skinDialog).toHaveCount(0);
   await ui.getByRole("button", { name: "更改名称", exact: true }).click();
-  expect((await last("plugin:opener|open_url")).url).toContain("/editprofile");
+  const nameDialog = page.getByRole("dialog", {
+    name: "更改角色名称",
+    exact: true,
+  });
+  await expect(nameDialog).toBeVisible();
+  await expect.poll(() => last("players.namechange")).toEqual({ id: "alex" });
+  await nameDialog.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(nameDialog).toHaveCount(0);
   await refresh();
   expect(await last("players.refresh")).toEqual({ id: "alex" });
   check(
-    "Microsoft profile links, refresh and remote-only model/skin permissions",
+    "Microsoft skin/name dialogs, direct profile operations and login refresh",
   );
 
   const remoteRequests = [];

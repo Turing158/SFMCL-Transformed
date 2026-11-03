@@ -19,11 +19,14 @@
 :root[data-theme="dark"] {
   --pixel-check-shadow: #3d7752;
 }
-:root[data-theme="dark"][data-accent="puce"] {
-  --pixel-check-shadow: #895b66;
+:root[data-theme="dark"][data-accent="nether"] {
+  --pixel-check-shadow: #9b5835;
 }
-:root[data-theme="dark"][data-accent="ebony"] {
-  --pixel-check-shadow: #4f738e;
+:root[data-theme="dark"][data-accent="end"] {
+  --pixel-check-shadow: #795c93;
+}
+:root[data-theme="dark"][data-accent="sift"] {
+  --pixel-check-shadow: #956079;
 }
 
 .pixel-surface {

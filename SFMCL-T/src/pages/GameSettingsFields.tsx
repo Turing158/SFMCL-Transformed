@@ -4,14 +4,25 @@ import { FolderOpen, RefreshCw } from "lucide-react";
 import { useApp } from "../store";
 import { api, pickJava } from "../api";
 import { Button, PixelFrame } from "../components";
-import { javaPathKey, mergeJavaPaths } from "../gameSettings";
+import { javaPathKey, mergeJavaPaths, validServerHost } from "../gameSettings";
 import { useAvailableMemory } from "../useAvailableMemory";
 import type {
   GameSettingGroup,
   GameSettingGroups,
   GameSettings,
   Java,
+  Version,
 } from "../types";
+
+interface LaunchOptions {
+  supportsQuickPlay: boolean | null;
+  worlds: { id: string; name: string }[];
+  directory: string;
+}
+interface MonitorOptions {
+  supported: boolean;
+  monitors: { id: string; primary: boolean; width: number; height: number }[];
+}
 
 function SettingsCard({
   group,
@@ -66,14 +77,64 @@ export function GameSettingsFields({
   groups,
   onGroupChange,
   onJavaPathsSave,
+  version,
 }: {
   draft: GameSettings;
   setDraft: (update: (current: GameSettings) => GameSettings) => void;
   groups?: GameSettingGroups;
   onGroupChange?: (group: GameSettingGroup, independent: boolean) => void;
   onJavaPathsSave: (paths: string[], removedPath?: string) => Promise<string[]>;
+  version?: Version;
 }) {
   const app = useApp();
+  const [monitors, setMonitors] = useState<MonitorOptions>({
+    supported: true,
+    monitors: [],
+  });
+  const [monitorError, setMonitorError] = useState("");
+  const [monitorRevision, setMonitorRevision] = useState(0);
+  const [launchOptions, setLaunchOptions] = useState<LaunchOptions | null>(
+    null,
+  );
+  const [launchOptionsError, setLaunchOptionsError] = useState("");
+  const [worldRevision, setWorldRevision] = useState(0);
+  const launchTarget = version
+    ? JSON.stringify({
+        directory: version.directory ?? app.data.settings.activeDir,
+        versionId: version.id,
+        isolation: draft.isolation,
+      })
+    : null;
+  useEffect(() => {
+    let active = true;
+    setMonitorError("");
+    void api<MonitorOptions>("system.monitors")
+      .then((value) => {
+        if (active) setMonitors(value);
+      })
+      .catch((error) => {
+        if (active) setMonitorError(`显示器读取失败：${String(error)}`);
+      });
+    return () => {
+      active = false;
+    };
+  }, [monitorRevision]);
+  useEffect(() => {
+    let active = true;
+    setLaunchOptions(null);
+    setLaunchOptionsError("");
+    if (!launchTarget) return;
+    void api<LaunchOptions>("game.launch-options", JSON.parse(launchTarget))
+      .then((value) => {
+        if (active) setLaunchOptions(value);
+      })
+      .catch((error) => {
+        if (active) setLaunchOptionsError(`存档列表读取失败：${String(error)}`);
+      });
+    return () => {
+      active = false;
+    };
+  }, [launchTarget, worldRevision]);
   const [java, setJava] = useState<Java[]>([]);
   const [javaInfoError, setJavaInfoError] = useState("");
   const {
@@ -84,21 +145,13 @@ export function GameSettingsFields({
   } = useAvailableMemory();
   const memoryMax = Math.min(availableMb ?? 131072, 131072);
   const memoryMin = Math.min(512, memoryMax);
+  // Live memory limits affect the slider, never the saved configuration.
   const memoryValue = Math.min(draft.memoryMb, memoryMax);
   const memoryDisabled =
     draft.autoMemory ||
     availableMb === null ||
     memoryMax < 512 ||
     !!memoryError;
-  useEffect(() => {
-    if (availableMb === null || groups?.memory === false) return;
-    if (draft.memoryMb > memoryMax)
-      setDraft((current) =>
-        current.memoryMb > memoryMax
-          ? { ...current, memoryMb: memoryMax }
-          : current,
-      );
-  }, [availableMb, memoryMax, draft.memoryMb, groups?.memory, setDraft]);
   const javaPaths = mergeJavaPaths(
     draft.javaPaths,
     draft.javaPath ? [draft.javaPath] : [],
@@ -294,7 +347,7 @@ export function GameSettingsFields({
                 aria-label="内存 MB"
                 min={memoryMin}
                 max={memoryMax}
-                value={memoryValue}
+                value={draft.memoryMb}
                 disabled={memoryDisabled}
                 onChange={(e) =>
                   change(
@@ -302,9 +355,9 @@ export function GameSettingsFields({
                     Math.min(memoryMax, e.target.valueAsNumber || 0),
                   )
                 }
-                onBlur={() =>
-                  change("memoryMb", Math.max(memoryMin, memoryValue))
-                }
+                onBlur={() => {
+                  if (draft.memoryMb < memoryMin) change("memoryMb", memoryMin);
+                }}
               />
               <span>MB</span>
             </label>
@@ -326,8 +379,7 @@ export function GameSettingsFields({
         )}
       </SettingsCard>
       <SettingsCard group="window" title="游戏窗口" {...cardProps}>
-        {toggle("fullscreen", "全屏启动", "关闭后使用下方窗口尺寸。")}
-        <div className="form-grid">
+        <div className="window-size-row">
           <label className="field">
             宽度
             <Input
@@ -336,6 +388,15 @@ export function GameSettingsFields({
               max={16384}
               value={draft.width}
               onChange={(e) => change("width", Number(e.target.value))}
+              onBlur={() =>
+                change(
+                  "width",
+                  Math.min(
+                    16384,
+                    Math.max(320, Math.round(draft.width) || 320),
+                  ),
+                )
+              }
             />
           </label>
           <label className="field">
@@ -346,8 +407,112 @@ export function GameSettingsFields({
               max={16384}
               value={draft.height}
               onChange={(e) => change("height", Number(e.target.value))}
+              onBlur={() =>
+                change(
+                  "height",
+                  Math.min(
+                    16384,
+                    Math.max(240, Math.round(draft.height) || 240),
+                  ),
+                )
+              }
             />
           </label>
+          <div className="field window-fullscreen">
+            全屏启动
+            <Switch
+              checked={draft.fullscreen}
+              aria-label="全屏启动"
+              onCheckedChange={(checked) => change("fullscreen", checked)}
+            />
+          </div>
+        </div>
+        <div className="form-grid">
+          <label className="field">
+            窗口位置
+            <Select
+              aria-label="窗口位置"
+              value={draft.windowMode}
+              disabled={!monitors.supported || draft.fullscreen}
+              onValueChange={(value) =>
+                change("windowMode", value as GameSettings["windowMode"])
+              }
+            >
+              <option value="default">由游戏决定</option>
+              <option value="center">在所选显示器居中</option>
+              <option value="remember">记住上次窗口位置</option>
+              <option value="maximized">最大化启动</option>
+              <option value="custom">自定义位置</option>
+            </Select>
+          </label>
+          <label className="field">
+            显示器
+            <div className="input-action">
+              <Select
+                aria-label="游戏显示器"
+                value={draft.windowMonitor}
+                disabled={!monitors.supported}
+                onValueChange={(value) => change("windowMonitor", value)}
+              >
+                <option value="">默认显示器</option>
+                {draft.windowMonitor &&
+                  !monitors.monitors.some(
+                    (monitor) => monitor.id === draft.windowMonitor,
+                  ) && (
+                    <option value={draft.windowMonitor}>
+                      {draft.windowMonitor}（未连接）
+                    </option>
+                  )}
+                {monitors.monitors.map((monitor, index) => (
+                  <option key={monitor.id} value={monitor.id}>
+                    {`显示器 ${index + 1}${monitor.primary ? " · 主屏幕" : ""} · ${monitor.width} × ${monitor.height}`}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                className="icon-button"
+                aria-label="刷新显示器"
+                onClick={() => setMonitorRevision((value) => value + 1)}
+              >
+                <RefreshCw size={16} />
+              </Button>
+            </div>
+          </label>
+        </div>
+        {draft.windowMode === "custom" && (
+          <div className="form-grid">
+            <label className="field">
+              横向位置（像素）
+              <Input
+                aria-label="窗口横向位置"
+                type="number"
+                min={-131072}
+                max={131072}
+                disabled={draft.fullscreen || !monitors.supported}
+                value={draft.windowX}
+                onChange={(e) => change("windowX", e.target.valueAsNumber)}
+              />
+            </label>
+            <label className="field">
+              纵向位置（像素）
+              <Input
+                aria-label="窗口纵向位置"
+                type="number"
+                min={-131072}
+                max={131072}
+                disabled={draft.fullscreen || !monitors.supported}
+                value={draft.windowY}
+                onChange={(e) => change("windowY", e.target.valueAsNumber)}
+              />
+            </label>
+          </div>
+        )}
+        {monitorError && (
+          <p className="inline-error" role="alert">
+            {monitorError}
+          </p>
+        )}
+        <div className="form-grid">
           <label className="field">
             窗口标题
             <Input
@@ -365,6 +530,178 @@ export function GameSettingsFields({
           </label>
         </div>
       </SettingsCard>
+      <SettingsCard group="launcher" title="启动行为" {...cardProps}>
+        <div className="launch-behavior-groups">
+          <label className="field">
+            进程优先级
+            <Select
+              aria-label="游戏进程优先级"
+              value={draft.processPriority}
+              disabled={!monitors.supported}
+              onValueChange={(value) =>
+                change(
+                  "processPriority",
+                  value as GameSettings["processPriority"],
+                )
+              }
+            >
+              <option value="idle">低</option>
+              <option value="belowNormal">低于正常</option>
+              <option value="normal">正常（默认）</option>
+              <option value="aboveNormal">高于正常</option>
+              <option value="high">高</option>
+            </Select>
+          </label>
+          <div className="launcher-behavior-row">
+            <label className="field">
+              游戏启动后
+              <Select
+                aria-label="游戏启动后启动器行为"
+                value={draft.launcherAction}
+                onValueChange={(value) =>
+                  change(
+                    "launcherAction",
+                    value as GameSettings["launcherAction"],
+                  )
+                }
+              >
+                <option value="keep">保持显示</option>
+                <option value="minimize">最小化到任务栏</option>
+                <option value="tray">隐藏到系统托盘</option>
+              </Select>
+            </label>
+            <div className="field launcher-restore">
+              退出后恢复
+              <Switch
+                aria-label="退出后恢复"
+                checked={draft.restoreLauncher}
+                onCheckedChange={(checked) =>
+                  change("restoreLauncher", checked)
+                }
+              />
+            </div>
+          </div>
+        </div>
+      </SettingsCard>
+      {version && (
+        <section
+          className="panel settings-section has-surface"
+          data-setting-card="direct-entry"
+        >
+          <PixelFrame />
+          <header className="settings-card-heading">
+            <h2>快速进入</h2>
+          </header>
+          <fieldset
+            className="game-settings-fields settings-card-fields"
+            disabled={app.busy}
+            aria-label="快速进入"
+          >
+            <div className="form-grid">
+              <label className="field">
+                服务器地址
+                <Input
+                  aria-label="服务器地址"
+                  value={draft.serverHost}
+                  placeholder="例如 play.example.com 或 [::1]"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setDraft((current) => ({
+                      ...current,
+                      serverHost: value,
+                      serverEnabled: validServerHost(value),
+                      ...(value.trim()
+                        ? { quickPlayEnabled: false, quickPlayWorld: "" }
+                        : {}),
+                    }));
+                  }}
+                />
+              </label>
+              <label className="field">
+                服务器端口
+                <Input
+                  aria-label="服务器端口"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={draft.serverPort === 25565 ? "" : draft.serverPort}
+                  onChange={(e) =>
+                    change(
+                      "serverPort",
+                      e.target.value === "" ? 25565 : e.target.valueAsNumber,
+                    )
+                  }
+                />
+              </label>
+            </div>
+            {draft.serverHost.trim() && !validServerHost(draft.serverHost) && (
+              <p className="inline-error">
+                请填写域名或 IP，端口单独填写；IPv6 地址请用方括号包围。
+              </p>
+            )}
+            <label className="field">
+              选择存档
+              <div className="input-action">
+                <Select
+                  aria-label="快速进入的存档"
+                  value={draft.quickPlayWorld}
+                  disabled={
+                    launchOptions?.supportsQuickPlay !== true &&
+                    !draft.quickPlayWorld
+                  }
+                  onValueChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      quickPlayWorld: value,
+                      quickPlayEnabled: !!value,
+                      ...(value
+                        ? { serverEnabled: false, serverHost: "" }
+                        : {}),
+                    }))
+                  }
+                >
+                  <option value="">不进入存档</option>
+                  {draft.quickPlayWorld &&
+                    !launchOptions?.worlds.some(
+                      (world) => world.id === draft.quickPlayWorld,
+                    ) && (
+                      <option
+                        value={draft.quickPlayWorld}
+                        disabled={launchOptions?.supportsQuickPlay !== true}
+                      >
+                        {draft.quickPlayWorld}（当前目录中未找到）
+                      </option>
+                    )}
+                  {launchOptions?.worlds.map((world) => (
+                    <option
+                      key={world.id}
+                      value={world.id}
+                      disabled={launchOptions?.supportsQuickPlay !== true}
+                    >
+                      {world.name === world.id
+                        ? world.name
+                        : `${world.name} · ${world.id}`}
+                    </option>
+                  ))}
+                </Select>
+                <Button
+                  className="icon-button"
+                  aria-label="刷新存档列表"
+                  disabled={!launchOptions && !launchOptionsError}
+                  onClick={() => setWorldRevision((value) => value + 1)}
+                >
+                  <RefreshCw size={16} />
+                </Button>
+              </div>
+            </label>
+            {launchOptionsError && (
+              <p className="inline-error" role="alert">
+                {launchOptionsError}
+              </p>
+            )}
+          </fieldset>
+        </section>
+      )}
       <SettingsCard group="advanced" title="高级启动参数" {...cardProps}>
         {toggle(
           "jvmArgsEnabled",

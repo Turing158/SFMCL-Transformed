@@ -141,7 +141,7 @@
   padding-block: 2px 3px;
 }
 .sidebar nav button.has-surface,
-.sidebar :is(.profile-button, .sidebar-collapse, .sidebar-task, .sidebar-tip) {
+.sidebar :is(.profile-button, .sidebar-collapse, .sidebar-task) {
   --surface-edge: var(--rail-edge);
   --surface-fill: var(--rail-fill);
   --surface-base: var(--rail-shadow);
@@ -184,15 +184,7 @@
   overflow: hidden;
   white-space: nowrap;
 }
-.sidebar
-  :is(
-    .brand-copy,
-    .nav-copy,
-    .profile-copy,
-    .task-copy,
-    .task-count,
-    .sidebar-tip
-  ) {
+.sidebar :is(.brand-copy, .nav-copy, .profile-copy, .task-copy, .task-count) {
   opacity: var(--rail-open);
   visibility: visible;
   transition: visibility 0s;
@@ -284,7 +276,8 @@
   margin-top: auto;
   padding-top: 12px;
 }
-/* Reserve one navigation option above the bottom-anchored favorites. */
+/* Reclaim the download entry's space, keeping one navigation option above.
+   The viewport grows to its cap, then follows the profile downward. */
 .sidebar .sidebar-favorites-space {
   display: flex;
   flex-direction: column;
@@ -364,6 +357,7 @@
   user-select: none;
   transition: opacity 220ms ease;
 }
+.sidebar-favorites-viewport:hover > .sidebar-favorites-scrollbar,
 .sidebar-favorites-scrollbar:is(
   :hover,
   :focus-visible,
@@ -569,36 +563,6 @@
 .sidebar-progress:not([aria-valuenow]) .sidebar-progress-fill {
   opacity: 0.55;
 }
-.sidebar .sidebar-tip {
-  --surface-depth: 1px;
-  justify-content: flex-start;
-  height: calc(68px * var(--rail-open));
-  padding: calc(12px * var(--rail-open));
-  margin-bottom: calc(12px * var(--rail-open));
-  overflow: hidden;
-  color: var(--sidebar-tip);
-  transition:
-    color 180ms,
-    translate 180ms ease,
-    visibility 0s;
-}
-.sidebar .sidebar-tip:hover {
-  --surface-edge: var(--rail-edge-hover);
-  --surface-fill: var(--rail-fill-hover);
-  translate: 0 -2px;
-}
-.sidebar .sidebar-tip > svg {
-  transition: transform 180ms ease;
-}
-.sidebar .sidebar-tip:hover > svg {
-  transform: rotate(8deg) scale(1.1);
-}
-.sidebar .sidebar-tip p {
-  color: var(--sidebar-muted);
-  font-size: 11px;
-  line-height: 1.9;
-  white-space: nowrap;
-}
 .sidebar .profile-button {
   height: calc(var(--button-height) + 6px * var(--rail-open));
   min-height: calc(var(--button-height) + 6px * var(--rail-open));
@@ -721,7 +685,6 @@
 /* The effective class includes both the manual preference and the media query. */
 .sidebar.rail-collapsed
   :is(
-    .sidebar-tip,
     .profile-copy,
     .task-copy,
     .task-count,

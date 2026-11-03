@@ -26,3 +26,5 @@ curseforge.dat.*
 # Local diagnostic tools
 /SFMCL-T/crates/launcher-core/examples/
 /SFMCL-T/scripts/probe-services.mjs
+AGENTS.md
+RELEASE.md

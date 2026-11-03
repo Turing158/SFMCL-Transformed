@@ -1,6 +1,8 @@
 #requires -Version 5.1
 # Exercise the real NSIS environment page with isolated registry fixtures.
 # No system WebView2 keys are changed and no runtime/app installation is performed.
+[CmdletBinding()]
+param([ValidateSet('x64', 'x86', 'all')][string]$Architecture = 'all')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows-common.ps1')
 $project = Split-Path -Parent $PSScriptRoot
@@ -9,6 +11,9 @@ $nsis = Join-Path $env:LOCALAPPDATA 'tauri\NSIS\makensis.exe'
 if (-not (Test-Path -LiteralPath $nsis)) { throw 'Build an installer first so Tauri can prepare NSIS.' }
 $id = [guid]::NewGuid().ToString('N')
 $fixtureKey = "SOFTWARE\SFMCL-T-PackagingTest-$id"
+# CLSID keys are redirected between 32/64-bit views, unlike most HKCU Software keys.
+$viewFixtureKey = "SOFTWARE\Classes\CLSID\{$([guid]::Parse($id).ToString('D'))}"
+$architectures = if ($Architecture -eq 'all') { @('x64', 'x86') } else { @($Architecture) }
 $testRoot = Join-Path $workspace ".runtime\packaging\installer-tests\$id"
 $evidence = Join-Path $workspace '.runtime\packaging\evidence'
 [void][IO.Directory]::CreateDirectory($testRoot)
@@ -79,7 +84,10 @@ public static class PackagingWindow {
 function Clear-Fixture {
     foreach ($view in @([Microsoft.Win32.RegistryView]::Registry32, [Microsoft.Win32.RegistryView]::Registry64)) {
         $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, $view)
-        try { $base.DeleteSubKeyTree($fixtureKey, $false) } finally { $base.Dispose() }
+        try {
+            $base.DeleteSubKeyTree($fixtureKey, $false)
+            $base.DeleteSubKeyTree($viewFixtureKey, $false)
+        } finally { $base.Dispose() }
     }
 }
 
@@ -96,8 +104,10 @@ function Wait-Checkbox {
 
 try {
     $hook = (Join-Path $project 'src-tauri\installer\webview2-hooks.nsh').Replace('$', '$$')
-    $executable = Join-Path $testRoot 'environment-page.exe'
-    $template = @'
+    $results = @()
+    foreach ($architectureName in $architectures) {
+        $executable = Join-Path $testRoot "environment-page-$architectureName.exe"
+        $template = @'
 Unicode true
 !include MUI2.nsh
 Name "SFMCL-T packaging test"
@@ -105,6 +115,7 @@ OutFile "@OUTPUT@"
 RequestExecutionLevel user
 InstallDir "$TEMP\SFMCL-T-PackagingTest"
 !define SFMCL_T_WEBVIEW_REGKEY "@REGISTRY@"
+!define ARCH "@ARCH@"
 !include "@HOOK@"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -112,85 +123,103 @@ InstallDir "$TEMP\SFMCL-T-PackagingTest"
 Section
   ; /S exercises the same initialization used by the real installation hook.
   Call SFMCLTInitializeWebViewChoice
+  ; Detection must restore the registry view used by this package's app entries.
+  WriteRegStr HKCU "@VIEW_REGISTRY@" "architecture" "${ARCH}"
   FileOpen $0 "$EXEDIR\silent-state.txt" w
   FileWrite $0 "$SFMCLTWebViewSelected|$SFMCLTWebViewVersion"
   FileClose $0
 SectionEnd
 '@
-    $source = $template.Replace('@OUTPUT@', $executable.Replace('$', '$$')).Replace('@REGISTRY@', $fixtureKey).Replace('@HOOK@', $hook)
-    $nsi = Join-Path $testRoot 'environment-page.nsi'
-    [IO.File]::WriteAllText($nsi, $source, [Text.UTF8Encoding]::new($false))
-    Invoke-Checked -File $nsis -Arguments @('/V2', '/INPUTCHARSET', 'UTF8', $nsi)
-    $results = @()
-    $cases = @(
-        @{ Name = 'missing'; Version = ''; View = 'Registry32'; Checked = $true; Enabled = $true },
-        @{ Name = 'zero-version'; Version = '0.0.0.0'; View = 'Registry32'; Checked = $true; Enabled = $true },
-        @{ Name = 'installed-user32'; Version = '155.0.4283.45'; View = 'Registry32'; Checked = $false; Enabled = $false },
-        @{ Name = 'installed-user64'; Version = '154.0.4258.62'; View = 'Registry64'; Checked = $false; Enabled = $false }
-    )
-    foreach ($case in $cases) {
-        Clear-Fixture
-        if ($case.Version) {
-            $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryView]$case.View)
-            $key = $base.CreateSubKey($fixtureKey)
-            try { $key.SetValue('pv', $case.Version) } finally { $key.Dispose(); $base.Dispose() }
-        }
-        $process = Start-Process -FilePath $executable -WindowStyle Hidden -PassThru
-        try {
-            $page = Wait-Checkbox -ProcessId $process.Id
-            $checked = [PackagingWindow]::Checked($page.Checkbox)
-            $enabled = [PackagingWindow]::IsWindowEnabled($page.Checkbox)
-            if ($checked -ne $case.Checked -or $enabled -ne $case.Enabled) {
-                throw "$($case.Name): checkbox state is checked=$checked, enabled=$enabled"
+        $source = $template.Replace('@OUTPUT@', $executable.Replace('$', '$$')).Replace('@REGISTRY@', $fixtureKey).Replace('@HOOK@', $hook).Replace('@ARCH@', $architectureName).Replace('@VIEW_REGISTRY@', $viewFixtureKey)
+        $nsi = Join-Path $testRoot "environment-page-$architectureName.nsi"
+        [IO.File]::WriteAllText($nsi, $source, [Text.UTF8Encoding]::new($false))
+        Invoke-Checked -File $nsis -Arguments @('/V2', '/INPUTCHARSET', 'UTF8', $nsi)
+        $cases = @(
+            @{ Name = 'missing'; Version = ''; View = 'Registry32'; Checked = $true; Enabled = $true },
+            @{ Name = 'zero-version'; Version = '0.0.0.0'; View = 'Registry32'; Checked = $true; Enabled = $true },
+            @{ Name = 'installed-user32'; Version = '155.0.4283.45'; View = 'Registry32'; Checked = $false; Enabled = $false },
+            @{ Name = 'installed-user64'; Version = '154.0.4258.62'; View = 'Registry64'; Checked = $false; Enabled = $false }
+        )
+        foreach ($case in $cases) {
+            Clear-Fixture
+            if ($case.Version) {
+                $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryView]$case.View)
+                $key = $base.CreateSubKey($fixtureKey)
+                try { $key.SetValue('pv', $case.Version) } finally { $key.Dispose(); $base.Dispose() }
             }
-            [PackagingWindow]::Capture($page.Window, (Join-Path $evidence "$($case.Name).png"))
-            if ($case.Enabled) {
-                [PackagingWindow]::Click($page.Checkbox)
-                Start-Sleep -Milliseconds 150
-                if ([PackagingWindow]::Checked($page.Checkbox)) { throw 'The user cannot uncheck the environment option.' }
-                [PackagingWindow]::Click([PackagingWindow]::GetDlgItem($page.Window, 1))
-                Start-Sleep -Milliseconds 250
-                [PackagingWindow]::Click([PackagingWindow]::GetDlgItem($page.Window, 3))
-                Start-Sleep -Milliseconds 250
+            $process = Start-Process -FilePath $executable -WindowStyle Hidden -PassThru
+            try {
                 $page = Wait-Checkbox -ProcessId $process.Id
-                if ([PackagingWindow]::Checked($page.Checkbox)) { throw 'Navigating back reset the user selection.' }
+                $checked = [PackagingWindow]::Checked($page.Checkbox)
+                $enabled = [PackagingWindow]::IsWindowEnabled($page.Checkbox)
+                if ($checked -ne $case.Checked -or $enabled -ne $case.Enabled) {
+                    throw "$($case.Name): checkbox state is checked=$checked, enabled=$enabled"
+                }
+                [PackagingWindow]::Capture($page.Window, (Join-Path $evidence "$architectureName-$($case.Name).png"))
+                if ($case.Enabled) {
+                    [PackagingWindow]::Click($page.Checkbox)
+                    Start-Sleep -Milliseconds 150
+                    if ([PackagingWindow]::Checked($page.Checkbox)) { throw 'The user cannot uncheck the environment option.' }
+                    [PackagingWindow]::Click([PackagingWindow]::GetDlgItem($page.Window, 1))
+                    Start-Sleep -Milliseconds 250
+                    [PackagingWindow]::Click([PackagingWindow]::GetDlgItem($page.Window, 3))
+                    Start-Sleep -Milliseconds 250
+                    $page = Wait-Checkbox -ProcessId $process.Id
+                    if ([PackagingWindow]::Checked($page.Checkbox)) { throw 'Navigating back reset the user selection.' }
+                }
+            } finally {
+                if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force; $process.WaitForExit() }
+                $process.Dispose()
             }
-        } finally {
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force; $process.WaitForExit() }
-            $process.Dispose()
+            $silentProcess = Start-Process -FilePath $executable -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
+            try {
+                if ($silentProcess.ExitCode -ne 0) { throw 'Silent environment detection failed.' }
+                $silentState = Get-Content -LiteralPath (Join-Path $testRoot 'silent-state.txt') -Raw
+                $expectedSelection = if ($case.Checked) { '1' } else { '0' }
+                if (-not $silentState.StartsWith("$expectedSelection|")) { throw "Incorrect silent selection: $silentState" }
+                $expectedView = if ($architectureName -eq 'x86') { 'Registry32' } else { 'Registry64' }
+                foreach ($view in @('Registry32', 'Registry64')) {
+                    $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser, [Microsoft.Win32.RegistryView]$view)
+                    $key = $null
+                    try {
+                        $key = $base.OpenSubKey($viewFixtureKey)
+                        $registeredArchitecture = if ($key) { $key.GetValue('architecture') } else { $null }
+                        if (($view -eq $expectedView -and $registeredArchitecture -ne $architectureName) -or
+                            ($view -ne $expectedView -and $registeredArchitecture)) {
+                            throw "$architectureName registry view was not restored: $view contains '$registeredArchitecture'"
+                        }
+                    } finally {
+                        if ($key) { $key.Dispose() }
+                        $base.Dispose()
+                    }
+                }
+            } finally { $silentProcess.Dispose() }
+            $results += [pscustomobject]@{ architecture = $architectureName; case = $case.Name; checked = $checked; enabled = $enabled; registryView = $expectedView; silent = $true; passed = $true }
+            Write-Host "$architectureName/$($case.Name): interactive, silent and registry-view checks passed"
         }
-        $silentProcess = Start-Process -FilePath $executable -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
-        try {
-            if ($silentProcess.ExitCode -ne 0) { throw 'Silent environment detection failed.' }
-            $silentState = Get-Content -LiteralPath (Join-Path $testRoot 'silent-state.txt') -Raw
-            $expectedSelection = if ($case.Checked) { '1' } else { '0' }
-            if (-not $silentState.StartsWith("$expectedSelection|")) { throw "Incorrect silent selection: $silentState" }
-        } finally { $silentProcess.Dispose() }
-        $results += [pscustomobject]@{ case = $case.Name; checked = $checked; enabled = $enabled; silent = $true; passed = $true }
-        Write-Host "$($case.Name): interactive and silent checks passed"
-    }
-    $config = Get-Content -LiteralPath (Join-Path $project 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json
-    $installer = Join-Path $workspace "release\$($config.productName)_$($config.version)_x64_installer.exe"
-    if (Test-Path -LiteralPath $installer) {
-        # Run a snapshot so another build can replace the released installer.
-        $installerSnapshot = Join-Path $testRoot 'generated-installer.exe'
-        Copy-Item -LiteralPath $installer -Destination $installerSnapshot
-        $systemVersion = Get-InstalledWebView2Version
-        $process = Start-Process -FilePath $installerSnapshot -WindowStyle Hidden -PassThru
-        try {
-            $page = Wait-Checkbox -ProcessId $process.Id
-            $expected = -not [bool]$systemVersion
-            if ([PackagingWindow]::Checked($page.Checkbox) -ne $expected -or
-                [PackagingWindow]::IsWindowEnabled($page.Checkbox) -ne $expected) {
-                throw 'The generated installer does not reflect the actual machine environment.'
+        $config = Get-Content -LiteralPath (Join-Path $project 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json
+        $installer = Join-Path $workspace "release\$($config.productName)_v$($config.version)_$($architectureName)_installer.exe"
+        if (Test-Path -LiteralPath $installer) {
+            # Run a snapshot so another build can replace the released installer.
+            $installerSnapshot = Join-Path $testRoot "generated-installer-$architectureName.exe"
+            Copy-Item -LiteralPath $installer -Destination $installerSnapshot
+            $systemVersion = Get-InstalledWebView2Version
+            $process = Start-Process -FilePath $installerSnapshot -WindowStyle Hidden -PassThru
+            try {
+                $page = Wait-Checkbox -ProcessId $process.Id
+                $expected = -not [bool]$systemVersion
+                if ([PackagingWindow]::Checked($page.Checkbox) -ne $expected -or
+                    [PackagingWindow]::IsWindowEnabled($page.Checkbox) -ne $expected) {
+                    throw 'The generated installer does not reflect the actual machine environment.'
+                }
+                [PackagingWindow]::Capture($page.Window, (Join-Path $evidence "generated-installer-$architectureName.png"))
+                $results += [pscustomobject]@{ architecture = $architectureName; case = 'generated-installer'; systemVersion = $systemVersion; sha256 = (Get-FileHash -LiteralPath $installerSnapshot -Algorithm SHA256).Hash; passed = $true }
+                Write-Host "Generated $architectureName installer: actual machine detection passed"
+            } finally {
+                # Stop on the first page; do not perform a real application installation.
+                if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force; $process.WaitForExit() }
+                $process.Dispose()
             }
-            [PackagingWindow]::Capture($page.Window, (Join-Path $evidence 'generated-installer.png'))
-            $results += [pscustomobject]@{ case = 'generated-installer'; systemVersion = $systemVersion; sha256 = (Get-FileHash -LiteralPath $installerSnapshot -Algorithm SHA256).Hash; passed = $true }
-            Write-Host 'Generated installer: actual machine detection passed'
-        } finally {
-            # Stop on the first page; do not perform a real application installation.
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force; $process.WaitForExit() }
-            $process.Dispose()
         }
     }
     [IO.File]::WriteAllText((Join-Path $evidence 'installer-checks.json'), ($results | ConvertTo-Json))

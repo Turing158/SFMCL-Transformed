@@ -1,134 +1,297 @@
-# SFMCL-T · StarFall Minecraft Launcher-Transformed
+<div align="center">
 
-SFMCL-T（StarFall Minecraft Launcher-Transformed）是基于 Rust 核心、Tauri 2 和 React 的 Minecraft 启动器，由旧版 C# / WPF 实现迁移而来，保留角色、版本、资源、下载和设置的主要工作流程。按钮、卡片、Tab、标签和表单统一采用 Minecraft 像素圆角，支持浅色/深色主题与三种配色。
+<img src="docs/assets/sfmcl-t.png" alt="SFMCL-T" width="96" height="96" />
 
-## Windows 使用
+# SFMCL-T
 
-运行下文的打包脚本后，Windows x64 发布文件位于 `release/`。启动器需要 Microsoft WebView2 Runtime：安装版可按检测结果下载，便携版附带独立环境，单文件版使用系统已安装的环境。
+**用像素风界面管理 Minecraft，准备好下一次冒险。**
 
-1. 在「角色管理」创建离线角色，或通过 Microsoft 浏览器设备授权添加正版账号。
-2. 在「版本管理」选择游戏所在的外层文件夹，安装 Minecraft 和需要的加载器。启动器自动使用其中的 `.minecraft`，目录选择器只显示外层路径；直接选择已有的 `.minecraft` 也能识别。
-3. 在「设置 → 全局设置」扫描或手动添加 Java。1.12.2 / LiteLoader 使用 Java 8，1.20.1 使用 Java 17，较新游戏根据版本元数据选择 Java 21 等运行环境。
-4. 从首页底部固定区域选择版本并启动。版本列表支持就地搜索与键盘选择；启动进度、取消、下载续传和失败重试都保留在底部。运行后可结束游戏或进入下载中心查看日志。
+StarFall Minecraft Launcher-Transformed · 基于 Rust、Tauri 2 和 React 的 Minecraft Java 版启动器
 
-整合包可在「资源中心 → 整合包」通过 Modrinth / CurseForge 搜索，选择「安装新实例」或「下载到文件夹」。版本管理的「导入整合包」支持本地 MRPACK、ZIP、7Z、RAR、TAR、TAR.GZ 及完整客户端目录。安装按清单识别 Modrinth、CurseForge、MCBBS、MultiMC / Prism 或客户端目录格式，自动安装 Minecraft 与加载器，校验下载文件，并按格式合并覆盖文件；整合包默认独立游戏目录。
+<p>
+  <img src="https://img.shields.io/badge/平台-Windows%20x64%20%2F%20x86-0078D4?style=flat-square" alt="Windows x64 / x86" />
+  <img src="https://img.shields.io/badge/版本-0.1.0-4C8BF5?style=flat-square" alt="版本 0.1.0" />
+  <img src="https://img.shields.io/badge/核心-Rust-DEA584?style=flat-square" alt="Rust 核心" />
+  <img src="https://img.shields.io/badge/界面-Tauri%202%20%2B%20React-24C8D8?style=flat-square" alt="Tauri 2 + React" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-2EA043?style=flat-square" alt="MIT License" /></a>
+</p>
 
-也可将单个安装包或客户端目录拖入桌面应用的任意页面：界面完整显示导入占位，拖出窗口可取消；松开后检查包内清单与客户端文件，支持的整合包直接进入已填好包信息的安装设置，不支持的文件通过气泡提示原因。处理过程中忽略重复拖放；已有对话框打开时提示先关闭对话框。
+[快速上手](#快速上手) · [从源码运行](#从源码运行) · [构建发布包](#构建发布包) · [问题反馈](https://github.com/Turing158/SFMCL-Transformed/issues)
 
-可选文件默认跳过。CurseForge 文件无法自动下载时，可从官网获取指定版本，在下载中心的文件详情中「补选已下载文件」，通过大小和哈希校验后继续安装。服务端包、加密/多卷压缩包、冲突清单、多个可启动实例和 MultiMC 自定义补丁会提示具体原因。RAR 单个文件限制 512 MB，其他格式单个文件限制 4 GB，总解压限制 20 GB。整合包安装失败或取消后清理临时实例；安装期间的文件下载可暂停、继续或重试，退出后需重新发起整合包安装。
+</div>
 
-Windows 上的 Java 扫描参考 StarFallMCL：读取 HKLM / HKCU 的 32 位和 64 位注册表视图，枚举 JavaSoft 下 JRE / JDK 各版本的 `JavaHome`。手动添加的路径、`JAVA_HOME`、`PATH` 和常见安装目录也参与发现；同一可执行文件去重后探测实际版本与架构，失效安装自动跳过。设置页扫描和启动时自动选择共用这套逻辑。
+---
 
-扫描、手动添加后，Java 列表立即写入全局配置或当前版本的独立配置，无需点击「保存设置」，其他未保存的设置保持原状。手动添加仅接受 `java.exe` 或 `javaw.exe`。下拉框中每项右侧可删除记录，也可用方向键定位后按 Delete；删除已选项会恢复自动选择，不会删除磁盘上的 Java。再次打开设置只读取已保存列表，主动扫描可以重新发现此前删除的安装；删除列表记录不影响启动时的自动发现。
+## 这是什么？
 
-全局设置是各版本默认使用的游戏配置。在「版本管理 → 游戏设置」中，Java、内存与游戏目录、游戏窗口、高级启动参数四张卡片分别提供「全局 / 独立」开关，切到「独立」后可单独编辑该组并保存。切回「全局」后该组跟随最新全局设置，原独立值仍保留，再次开启可恢复。旧版独立配置自动按四组独立处理。独立配置存放在对应版本目录的 `.tmcl/settings.json`，重命名版本时随目录保留，不同游戏目录下的同名版本也互不影响。
+SFMCL-T 是 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-Minecraft-Launcher) 的 Rust / Tauri 重写版本。它延续了原项目的角色、版本、资源和下载工作流程，将游戏安装、加载器选择、整合包导入与启动设置放在同一个桌面应用中。
 
-版本管理支持直接点击卡片或列表项选择版本，右侧图标分别打开本地资源、游戏设置和更多操作。搜索框旁的单个图标按钮切换卡片与列表，记住显示偏好，并通过卡片宽高变化和内容移动衔接两种布局。目录选择器静止时只显示路径，悬停或展开时显示边框。游戏设置和本地资源通过标题栏返回箭头回到版本管理。
+界面采用 Minecraft 像素风控件，支持浅色、深色和跟随系统主题，以及森林绿、Puce、Ebony 三种配色。游戏文件保存在你选择的本地目录中，启动器配置与账号凭据单独保存。
 
-侧栏收藏版本支持紧凑的像素风右键菜单，仅显示「启动版本、切换版本、查看资源、版本设置、取消收藏、更多」六项。「更多」直接打开版本管理对话框，可重命名、打开版本／native 目录、更换／恢复图标、补全资源和删除版本，复用版本管理的操作与删除确认。菜单支持 Shift+F10、方向键和 Esc，自动避开窗口边缘并保留完整展开动画；不同目录下的同名版本分别操作，查看资源和设置不会切换当前启动版本。
+## 它能帮你做什么
 
-顶部采用 40px「融合导航」标题栏：拖动空白区域移动窗口，双击最大化或还原；右侧提供最小化、最大化／还原和关闭按钮。面包屑按「父页面 / 子页面」显示页面层级：「开始游戏」「角色管理」「版本管理」「资源中心」「设置」等主页面各自独立，只显示自身名称；进入子页面后，例如「版本管理 / 1.21.4 · 游戏设置」，可点击父页面返回。切换主页面时同步更新路径，窄窗口保留父页面与当前子页面。版本设置存在未保存修改时，返回仍会提示确认。关闭时会先暂停并保存下载任务；触屏下顶栏增至 44px，浏览器预览中的窗口按钮不可用。
+| | 能力 | 说明 |
+| :---: | --- | --- |
+| 👤 | **管理角色** | 创建离线角色，或通过 Microsoft 设备授权添加正版账号；支持皮肤上传与重置、已有官方披风切换、游戏名修改、角色切换与皮肤预览。 |
+| 🎮 | **安装与启动游戏** | 管理多个游戏目录，搜索、选择和收藏版本，从首页底部启动区启动或结束游戏。 |
+| 🧩 | **安装加载器** | 支持 Forge、NeoForge、Fabric、Quilt、OptiFine 和 LiteLoader；可选择兼容的 Forge + OptiFine 组合，或为 Fabric 附带 Fabric API。 |
+| 📦 | **导入整合包** | 从 Modrinth / CurseForge 安装整合包，或导入本地压缩包与完整客户端目录；支持拖入窗口安装。 |
+| 🔎 | **查找社区资源** | 搜索、筛选和下载模组、材质包、光影与数据包，查看项目详情、文件版本和前置依赖。 |
+| 🗂️ | **管理本地资源** | 启用或禁用模组，查看材质包与存档信息，包括种子、游戏规则、游戏模式和天气。 |
+| ⬇️ | **管理下载** | 查看下载进度与日志，暂停、继续或重试文件下载；按来源提供的大小与哈希校验文件。 |
+| ☕ | **配置游戏环境** | 扫描或手动添加 Java，设置内存、游戏目录隔离、窗口与启动参数，按版本覆盖全局设置。 |
+| 🎨 | **调整界面** | 切换主题与背景，配置 Markdown 公告；切换主页面时保留搜索、草稿和滚动位置。 |
 
-首页启动区桌面高 112px，窄窗口改为两行；正文独立滚动。其他页面保留原状态栏。主导航不显示下载中心；侧栏的下载任务区域默认关闭，可在「设置 → 启动器设置 → 下载 → 侧栏下载任务」选择「下载时、始终、关闭」。选择「下载时」后，仅在下载进行、排队或正在暂停时显示，任务结束后自动隐藏；点击任务摘要可进入下载中心。此设置独立于旧版下载中心入口设置，升级后也默认关闭。布局与状态说明见 [固定启动区](docs/internal/launch-dock-design.md)。
+## 快速上手
 
-开始游戏页的正文只保留标题与公告。公告参考 StarFallMCL，默认逐条收起，点击标题或按 Enter／空格展开，再次操作收起；各条公告互不影响，保留图标、Markdown、图片、链接与刷新。公告关闭时仅显示标题，底部版本选择与启动功能保持可用。
+**1. 启动应用**
 
-同一次运行中，主页面切换会保留离开时的子页面、搜索与筛选、未保存输入和滚动位置，再次点击当前主导航也不会重置页面。版本设置切换到其他主页面或下载中心时保留草稿；明确返回版本列表时仍确认放弃修改。下载中心保留筛选与日志，返回箭头指向本次进入前的页面。隐藏页面停用快捷键和弹出层，后台登录或安装完成不会强制切换当前页面。
+使用已构建的 Windows x64 / x86 程序。x64 版适用于 Windows 10 / 11 64 位系统；x86 版适用于 Windows 10 32 位系统，也可在 64 位 Windows 上运行：
 
-`npm run test:notices` 验证首页精简布局、公告折叠、键盘交互、六种主题、窄窗口和刷新恢复；默认使用 `http://127.0.0.1:4180` 的生产预览，也可通过 `SFMCL_T_UI_URL` 指定地址。
-
-默认配置保存到系统应用数据目录；可从「设置 → 关于与迁移 → 打开配置目录」定位。`SFMCL_T_DATA_DIR` 可指定独立配置目录。游戏、模组与存档保存在所选文件夹内的 `.minecraft`，开启隔离后使用其中的 `versions/<版本名>/` 目录。
-
-应用标识为 `com.sfmcl-t.minecraft-launcher`。全新安装使用新标识的配置目录；若新目录尚不存在而旧版 `com.tmcl.minecraft-launcher` 目录存在，会自动沿用旧目录，保留角色、凭据、下载记录与界面偏好。`SFMCL_T_DATA_DIR` 优先于兼容的 `TMCL_DATA_DIR`。CurseForge 与 Microsoft Client ID 同样兼容旧环境变量，渠道凭据优先读取 `SFMCL-T/service-credentials/`，并兼容旧版目录。
-
-启动动画与左上角字标统一显示 **SFMCL**，关于页显示 **SFMCL-T** 与全称。既有游戏存储格式（`.tmcl/`、`tmcl-downloads/`、下载断点文件及整合包元数据键）继续兼容，避免改名破坏版本设置、收藏、续传或旧整合包。
-
-## 迁移与资源
-
-- 在「设置 → 关于与迁移」显式导入旧版 JSON 配置文件。导入会替换当前启动设置并合并角色，原配置文件不被修改。凭据独立使用 Windows 系统保护保存。
-- 离线角色的 PNG 皮肤用于启动器预览；正版角色改名/换肤会打开 Minecraft 官方账号页面。
-- 支持 Forge、NeoForge、Fabric、Quilt、OptiFine 和 LiteLoader；Forge + OptiFine 按兼容版本组合，Fabric 可附带 Fabric API。
-- Forge 联装 OptiFine 时将原始 OptiFine JAR 放入对应游戏目录的 `mods`，由 OptiFine 在运行时应用补丁；只有独立安装 OptiFine 才运行 `optifine.Patcher`，避免展开的 Minecraft 类与 Forge 模块冲突。
-- 资源中心支持模组、材质包、光影和数据包的 Modrinth、CurseForge 搜索、筛选、详情和下载。数据包按游戏版本筛选并下载到所选文件夹，使用时放入世界存档的 `datapacks` 文件夹；Modrinth 固定获取数据包格式，避免下载为模组 JAR。本地可启停模组，查看材质包以及存档的完整 64 位种子、游戏规则、模式和天气。资源详情列出的前置依赖需按提示安装。
-- CurseForge 文件缺少 `downloadUrl` 时，参考 StarFallMCL 拼接官网下载入口，在点击开始下载后通过独立后台 WebView 解析跳转。取得真实 CDN 地址后加入原有下载队列，保留大小／SHA-1 校验；超时或网站验证失败会提示重试或前往官网，不再将缺少直链直接标为作者未开放下载。
-- CurseForge 凭据由 Rust 后端读取，界面不提供密钥输入、展示或导出。开发者可运行 `powershell -NoProfile -ExecutionPolicy Bypass -File SFMCL-T/scripts/import-curseforge-credential.ps1 -StarFallRoot <本地 StarFallMCL 根目录>`，脚本验证原项目中的凭据后，以 Windows DPAPI 加密保存到 `%LOCALAPPDATA%/SFMCL-T/service-credentials/curseforge.dat`，供当前用户的开发版和安装版共用。运行时也兼容 `SFMCL_T_CURSEFORGE_API_KEY` 与旧版加密凭据；空环境变量不会屏蔽已保存凭据。
-- 凭据不写入源码、前端包、配置导出或发布程序；`.gitignore` 排除本地环境文件和凭据文件。分发给其他用户的程序不携带此密钥；若要让公众使用渠道且无法提取服务密钥，需将其保存在服务端并代理请求。客户端 DPAPI 保护不能阻止当前 Windows 用户或管理员主动提取凭据。
-- Microsoft Client ID 可在设置中修改，默认值也可通过 `SFMCL_T_MICROSOFT_CLIENT_ID` 设置。不要将密码、令牌或 API Key 写入源码。
-- 配置目录中的 `Notices.json` 支持 `[{"title":"欢迎","content":"**开始冒险**"}]`，也可用 `source` 引用 Markdown 文件。默认背景读取同目录的 `bg.png` / `bg.jpg`，首页和设置提供刷新入口。
-
-## 开发
-
-源码、资源、npm 与 Cargo 工程均位于 `SFMCL-T/`；启动／打包入口、文档、`.runtime/` 运行数据和 `release/` 发布产物位于外层。下文 `.\dev.cmd`、`.\build.cmd` 在外层执行；`npm`、`cargo` 和 `node scripts/...` 命令在 `SFMCL-T/` 内执行。也可从外层使用 `npm --prefix SFMCL-T run <脚本名>`。
-
-像素组件接口与键盘交互见 [组件说明](docs/internal/pixel-components.md) 和 [表单说明](docs/internal/pixel-controls.md)。启动开发服务后，可运行 `npm run test:components`、`npm run test:controls` 检查界面交互和响应式布局。
-
-`npm run test:launch-dock` 检查固定启动区的选择、启动、取消、错误恢复及响应式布局，使用隔离的内存接口，不会修改本机游戏和账号。启动状态单元测试包含在 `npm test` 中。
-
-`npm run test:breadcrumbs` 检查父子页面层级、主页面切换、返回父页面、未保存设置确认与窄窗口键盘操作，使用隔离的内存接口。
-
-`npm run test:page-retention` 检查首页公告、版本设置、本地资源、资源详情、全局设置、角色登录和下载中心的切页状态保留，以及隐藏页面的快捷键与弹窗。
-
-`npm run test:resources` 包含数据包的两来源筛选、文件夹下载和前置资源跳转。`cargo run -p sfmcl-t-core --example check_datapack_downloads` 实测两平台下载并检查 ZIP 内容；`npm run test:datapack-desktop` 连接 `SFMCL_T_CDP`（默认 9445）的隔离桌面实例，检查真实数据包页面和 IPC 下载／哈希校验，原生文件夹选择器不在该脚本的实操范围内。
-
-`npm run test:versions` 检查版本选择、图标操作、目录切换、布局动画及明暗主题响应式排版；`npm run test:version-settings` 检查每张卡片的全局 / 独立设置、保存与恢复，均使用隔离的内存接口。`npm test` 只扫描 `src` 下的前端单元测试，像素几何的 Node 测试由 `npm run check:corners` 单独运行。
-
-需要 Windows 10/11 x64、Node.js 20.19+ 或 22.12+、Rust 的 `x86_64-pc-windows-msvc` 目标，以及 Visual Studio 的「使用 C++ 的桌面开发」工作负载和 Windows 10/11 SDK。启动桌面开发还需要 WebView2 Runtime；打包本身不要求本机安装 WebView2。
-
-```powershell
-.\dev.cmd                    # 检查环境、安装 npm 依赖并启动 Tauri + Vite
-.\dev.cmd -Check             # 只检查开发环境
-.\dev.cmd -Web               # 仅启动浏览器界面预览
-.\dev.cmd -Port 1430         # 默认 1420 已占用时使用其他端口
-.\dev.cmd -InstallDependencies # 强制重新执行 npm ci
-```
-
-脚本可从任意工作目录调用；`.cmd` 入口兼容 Windows 自带的 PowerShell 5.1，无需修改系统执行策略，也可直接运行 `dev.ps1`。依赖缺少或 `package-lock.json` 变化时自动执行 `npm ci`。`npm run desktop` 使用同一启动脚本；`npm run dev` 仅提供浏览器预览，文件操作、安装和游戏启动需在 Tauri 桌面内使用。
-
-开发实例默认使用外层 `.runtime/dev-data/`，避免与日常使用的配置混在一起。已有 `SFMCL_T_DATA_DIR` 会保留，也可通过 `.\dev.cmd -DataDir D:\SFMCLTDevData` 指定；脚本退出后恢复原环境变量。通过这些入口使用的 `SFMCL_T_DATA_DIR`、`-DataDir` 和打包参数 `-WebView2Path`，其相对路径均以外层目录为基准。
-
-## 打包
-
-```powershell
-.\build.cmd                  # 一次构建，生成三种包
-.\build.cmd installer        # 安装包，不内置 WebView2
-.\build.cmd portable         # 7z 便携包，内置 WebView2 Fixed Version Runtime
-.\build.cmd potable          # portable 的兼容拼写
-.\build.cmd single           # 单个 EXE，不内置 WebView2
-.\build.cmd single -NoExeCompression # 保留编译优化，跳过 UPX 压缩
-.\build.cmd portable -PortableFormat zip # 需要 ZIP 格式时使用
-.\build.cmd -Check           # 只检查打包所需工具
-```
-
-也可使用 `build.ps1 -Mode <模式>`，或 `npm run package:installer`、`npm run package:portable`、`npm run package:single`；`npm run package` 默认生成全部模式。输出文件按应用版本命名：
-
-| 模式 | `release/` 中的产物 | WebView2 行为 |
+| 形式 | 启动方式 | WebView2 环境 |
 | --- | --- | --- |
-| `installer` | `SFMCL_T_<版本>_x64_installer.exe` | 环境页检测 HKLM/HKCU 的 32/64 位注册表。缺少环境时默认勾选，可取消；已安装时禁用且不勾选。安装包只含下载脚本，勾选后联网下载微软引导程序，验证签名后安装。 |
-| `portable` / `potable` | `SFMCL_T_<版本>_x64_portable.7z` | 完整解压后运行 `SFMCL-T.exe`，自动使用同目录的 `WebView2/`，无需安装系统环境。可用 `-PortableFormat zip` 输出 ZIP。 |
-| `single` | `SFMCL_T_<版本>_x64_single.exe` | 仅分发这一个 EXE；前端已嵌入，需要目标机器已安装 WebView2。 |
+| 安装版 | 运行安装程序，再打开 SFMCL-T。 | 缺少环境时，安装器可联网下载并安装。 |
+| 单文件版 | 直接运行 `SFMCL-T_v<版本>_<架构>.exe`。 | 需要系统已安装 WebView2 Runtime。 |
 
-这些模式仅处理启动器的 WebView2，不附带 Java、Node.js 或 Rust。VC 运行库和 WebView2 加载器静态链接，脚本检查 EXE 没有对相应外置 DLL 的依赖。安装器的 `/S` 静默模式和 `/P` 被动模式也会检测环境，缺少时自动下载；取消勾选的交互安装只安装应用。
+从源码启动或生成这些文件，见下文的[开发](#给开发者)与[打包](#构建发布包)说明。Minecraft 需要的 Java 需另行准备。
 
-发布构建采用体积优化、完整 LTO、符号剥离和 `panic = "abort"`，并只启用使用到的依赖功能。内部 Rust panic 会直接结束发布版进程；正常错误仍通过原来的错误处理返回。单文件默认再使用 UPX 的 `--ultra-brute` 压缩，保留重定位与附加数据；`-NoExeCompression` 可生成未经 UPX 处理的 EXE。
+**2. 添加角色与游戏版本**
 
-安装包和便携包直接压缩编译后的原始 EXE。安装包采用 NSIS 的 LZMA，便携包默认采用 7z 的 LZMA2 固实压缩、128 MiB 字典，保留 WebView2 全部文件。Windows 10 解压 `.7z` 需要 7-Zip 等工具；ZIP 选项使用标准 Deflate，可由资源管理器解压。高压缩率会增加打包时间和内存占用。
+在「角色管理」创建离线角色，或选择 Microsoft 登录并在浏览器中完成设备授权。随后在「版本管理」添加游戏所在的外层文件夹，安装 Minecraft 与需要的加载器。
 
-首次需要压缩工具时，脚本从 [UPX 官方发布](https://github.com/upx/upx/releases/tag/v5.2.1)和 [7-Zip 官方发布](https://github.com/ip7z/7zip/releases/tag/26.04)下载固定版本，校验归档与可执行文件的 SHA-256，缓存在 `.runtime/packaging/tools/`；后续可离线复用。工具只用于构建，不需要系统安装，也不随应用分发。
+选中正版角色后，可在启动器内上传 PNG 皮肤并选择经典或纤细模型、恢复默认皮肤、切换账号已有的官方披风，或修改 Java 版游戏名。改名前会检查资格和名称是否可用；通常每 30 天可修改一次，正版 UUID 保持不变。操作成功后会同步角色资料和预览，登录凭据过期时会自动尝试刷新。
 
-本轮产物：single 2.01 MiB、installer 2.28 MiB、portable 189.04 MiB。体积比较和验证范围见[验证记录](docs/internal/verification.md#发布体积优化2026-10-15)。
+启动器会使用所选文件夹内的 `.minecraft/`；直接选择已有的 `.minecraft` 目录也能识别。
 
-便携版首次构建自动从[微软官方页面](https://developer.microsoft.com/en-us/microsoft-edge/webview2)下载 x64 固定版环境，校验微软签名和架构，缓存在 `.runtime/packaging/webview2/x64/`。后续优先复用缓存。固定版不会自动更新；发布新版时可指定新版本，或使用已下载并解压的官方固定版目录：
+**3. 配置 Java，开始游戏**
 
-```powershell
-.\build.cmd portable -WebView2Version 155.0.4283.45
-.\build.cmd portable -WebView2Path D:\SDKs\WebView2
+在「设置 → 全局设置」扫描 Java，或手动选择 `java.exe` / `javaw.exe`。在「角色管理」选好角色并调整游戏设置后，回到首页，在底部选择版本，点击「开始游戏」。启动器设置、全局设置和版本独立设置的修改都会自动保存，无需手动保存或撤销。
+
+| 游戏示例 | 常用 Java 版本 |
+| --- | --- |
+| Minecraft 1.12.2 / LiteLoader | Java 8 |
+| Minecraft 1.20.1 | Java 17 |
+| 较新的 Minecraft 版本 | 根据游戏版本元数据选择，通常需要 Java 21 等环境。 |
+
+启动器会探测 Java 的实际版本与架构，并在自动选择时结合游戏要求匹配环境。
+
+## 版本与游戏设置
+
+版本管理支持卡片和列表两种布局，可搜索版本、切换游戏目录、收藏常用版本，并进入本地资源或游戏设置。更多操作中可重命名版本、打开版本或 native 目录、更换图标、补全资源和删除版本。
+
+在「版本管理 → 游戏设置」中，以下四组配置可以分别选择「全局」或「独立」：
+
+- Java；
+- 内存与游戏目录；
+- 游戏窗口；
+- 高级启动参数。
+
+切到「独立」后，该组使用当前版本自己的配置；切回「全局」后会跟随全局设置，原独立值仍保留，再次开启即可恢复。版本设置保存在对应目录的 `.tmcl/settings.json`，不同游戏目录下的同名版本互不影响。
+
+Java 扫描会检查 Windows 注册表、`JAVA_HOME`、`PATH`、常见安装目录和手动添加的路径。扫描与手动添加后的 Java 列表立即保存；删除列表记录只移除启动器中的记录，删除已选项会恢复自动选择。
+
+Forge 与 OptiFine 联装时，OptiFine JAR 放入对应游戏目录的 `mods/`；独立安装 OptiFine 时才执行其补丁程序。
+
+「设置 → 启动器设置 → 下载 → 下载源策略」可选择「速度优先（推荐）」「官网优先」或「镜像优先」，修改后自动保存。速度优先会自动测速，在官网和镜像中选择当前较快的可用源；官网优先会先尝试官方源。Minecraft 本体、加载器和社区资源均使用所选策略，失败或校验不通过时切换备用源。已加入 BMCLAPI、Forge 官方仓库、NeoForge 官方仓库与 CDN、Fabric 镜像、MC Mirror、MCIM 和腾讯 Maven 镜像；文件哈希校验保持不变，详见 [下载源说明](docs/download-sources.md)。
+
+## 整合包与社区资源
+
+### 安装整合包
+
+在「资源中心 → 整合包」搜索 Modrinth 或 CurseForge 项目，选择文件后可「安装新实例」或「下载到文件夹」。
+
+本地整合包可通过版本管理中的「导入整合包」选择，也可将单个压缩包或客户端目录拖入桌面窗口。识别成功后会打开已填好包信息的安装设置。
+
+| 项目 | 支持范围 |
+| --- | --- |
+| 压缩格式 | MRPACK、ZIP、7Z、RAR、TAR、TAR.GZ |
+| 整合包格式 | Modrinth、CurseForge、MCBBS、MultiMC / Prism，以及完整客户端目录 |
+| 安装流程 | 识别清单、安装 Minecraft 与加载器、校验下载文件、合并覆盖文件 |
+| 游戏目录 | 整合包默认使用独立游戏目录。 |
+| 可选文件 | 默认跳过，可在安装设置中选择。 |
+
+整合包安装失败或取消后会清理临时实例。安装过程中的文件下载可暂停、继续或重试；退出启动器后，需要重新发起整合包安装。
+
+服务端包、加密或多卷压缩包、冲突清单、多个可启动实例及 MultiMC 自定义补丁会提示具体原因。RAR 单个文件限制 512 MiB，其他格式单个文件限制 4 GiB，总解压大小限制 20 GiB。
+
+### 下载与管理资源
+
+资源中心提供模组、材质包、光影和数据包的搜索、分类、版本筛选、详情与下载。安装资源时，请根据详情中的前置依赖提示准备所需组件。
+
+数据包下载到所选文件夹后，需放入目标世界存档的 `datapacks/` 目录。
+
+CurseForge 文件缺少直链时，桌面应用会在开始下载后尝试解析官网的下载跳转，再交给下载队列。整合包中的文件需要手动下载时，可从官网下载指定版本，在下载中心的文件详情中「补选已下载文件」，通过大小与哈希校验后继续安装。
+
+CurseForge 访问需要后端渠道凭据。发布程序不附带开发者的本机密钥，凭据配置见[渠道凭据](#渠道凭据)。
+
+## 下载、外观与公告
+
+下载中心可查看任务、文件进度和日志。侧栏任务摘要默认关闭，可在「设置 → 启动器设置 → 下载 → 侧栏下载任务」选择「下载时」「始终」或「关闭」；点击摘要可进入下载中心。关闭应用时会先暂停并保存下载任务。
+
+设置中还可调整下载并发数与缓存文件夹。缓存路径修改后会自动保存并用于新任务，已有任务继续使用原目录；文件下载完成后自动清理对应缓存。
+
+外观设置支持主题、配色、纯色背景、本地图片和网络图片。默认背景模式读取配置目录中的 `bg.png` / `bg.jpg`，也支持 `bg.jpeg`。
+
+「设置 → 启动器设置 → 角色管理 · 皮肤预览」可选择默认预览方式（正面、背面或 3D）、3D 预览帧数（1–144，默认 30）、3D 预览背景（当前场景、纯色、本地图片或网络图片）和 3D 默认动作。背景图加载失败时回退到当前场景；纯色与自定义背景只影响 3D 预览，2D 画面继续使用林间营地或方块展台。
+
+首页默认展示最近 3 条 Minecraft 官方新闻、1 条最新 Java 版更新和 1 条中文 Minecraft Wiki 版本介绍，并标明来源与日期。中文 Wiki 介绍通过版本清单跟随最新 Java 版本（含快照），展开后可阅读中文摘要并打开完整条目；官方新闻与更新日志保留英文。启动时先读取 `cache/official-notices.json`，页面显示后再联网更新，每小时自动检查一次；点击刷新可立即重新获取。各来源独立缓存，网络失败时保留已有内容，首次离线时显示欢迎公告。
+
+首页公告默认逐条收起，点击标题或按 Enter / 空格展开。官方新闻、Java 更新、中文 Wiki 介绍等预设公告可在右侧隐藏，隐藏后才出现在右上角「新增公告 → 预设」中，可重新添加到首页。隐藏状态保存到配置目录的 `HiddenNotices.json`，刷新和重启后继续生效；新发布的公告会正常显示。
+
+「设置 → 启动器设置 → 开始游戏界面」可开启干净模式（默认关闭），只保留开始游戏页顶部的问候区域，隐藏公告及新增、刷新按钮。公告布局默认「双列瀑布布局」，也可选择「一行一个折叠面板」或「双列平行布局」；平行布局按行对齐，瀑布布局根据卡片高度紧凑排列，窄窗口自动回到单列。设置自动保存，干净模式关闭后恢复所选布局。
+
+点击刷新按钮旁的「新增公告」，可填写标题和 Markdown 正文。自定义公告只提供删除操作，删除后不会出现在预设列表；公告保存在配置目录的 `Notices.json`，显示在官方内容之前。也可手动创建该文件：
+
+```json
+[
+  {
+    "title": "欢迎回来",
+    "content": "**准备好下一次冒险。**"
+  },
+  {
+    "title": "整合包说明",
+    "source": "modpack-notes.md"
+  }
+]
 ```
 
-`-WebView2Path` 应直接包含 `msedgewebview2.exe`、`msedge.dll`、`locales/` 等文件，不是 CAB 文件或系统 Edge 安装目录。仅指定版本时，该版本必须仍在微软下载页面提供，或已在本地缓存。网络受限时可提前准备本地环境及 npm/Cargo 依赖。便携版解压到可写的本地目录，运行时会为其 WebView2 目录设置微软要求的 AppContainer 读取/执行权限。配置仍默认保存在系统应用数据目录，可用 `SFMCL_T_DATA_DIR` 调整。
+公告支持 Markdown、图片与链接；`source` 可引用 Markdown 文件。修改后可从首页或设置中刷新。
 
-## 验证
+## 数据存储
 
-以下命令在 `SFMCL-T/` 内执行，测试数据、截图和检查结果统一读写外层 `.runtime/`。
+在「设置 → 启动器设置 → 本地数据」点击「打开配置目录」，即可定位当前应用数据。全新安装的默认目录为：
+
+```text
+%AppData%/com.sfmcl-t.minecraft-launcher/
+├── settings.json      # 全局设置与当前角色、版本选择
+├── players.json       # 角色列表
+├── credentials.dat    # Windows DPAPI 保护的账号凭据
+├── skins/             # 本地角色皮肤
+├── downloads/         # 下载任务记录
+│   └── cache/         # 默认下载缓存
+├── webview/           # WebView 用户数据
+├── Notices.json       # 可自行创建的公告配置
+├── HiddenNotices.json # 首页逐条公告的隐藏状态
+└── bg.png / bg.jpg    # 可自行放入的默认背景
+```
+
+游戏文件保存在所选游戏文件夹中：
+
+```text
+<所选游戏文件夹>/
+└── .minecraft/
+    ├── assets/
+    ├── libraries/
+    └── versions/
+        └── <版本名>/
+            ├── <版本名>.json
+            ├── <版本名>.jar
+            └── .tmcl/settings.json
+```
+
+开启游戏目录隔离后，模组、存档等使用对应的 `versions/<版本名>/` 目录。备份时应一并保留应用配置与游戏目录；账号凭据由当前 Windows 用户保护，跨用户复制可能无法读取。
+
+可通过 `SFMCL_T_DATA_DIR` 指定独立配置目录。若新配置目录尚不存在、旧版 `com.tmcl.minecraft-launcher` 目录已经存在，启动器会沿用旧目录。原有 `.tmcl/`、`tmcl-downloads/` 和下载断点格式继续兼容。
+
+## 给开发者
+
+当前源码位于 `SFMCL-T/`，桌面开发与打包入口位于仓库根目录。下文的 `npm`、`cargo` 命令在 `SFMCL-T/` 内执行，`dev.ps1` 与 `build.ps1` 在根目录执行：
+
+```text
+SFMCL-Transformed/
+├── README.md
+├── dev.ps1                    # 开发入口
+├── build.ps1                  # 打包入口
+├── SFMCL-T/
+│   ├── src/                  # React / TypeScript 界面
+│   ├── public/               # 静态资源
+│   ├── crates/launcher-core/  # Rust 核心：账号、安装、启动、资源与下载
+│   ├── src-tauri/            # Tauri 桌面应用与 IPC 接口
+│   ├── scripts/              # 构建辅助与验证脚本
+│   └── tests/fixtures/        # 测试数据
+├── .runtime/                 # 本地开发数据、工具缓存与验证产物
+└── release/                  # Windows 发布文件
+```
+
+### 开发环境
+
+- Windows 10 / 11 x64；
+- [Node.js](https://nodejs.org/) 20.19+ 或 22.12+；
+- [Rust](https://rustup.rs/) 1.90+ MSVC 工具链（当前锁定的依赖要求），x64 打包需要 `x86_64-pc-windows-msvc` 目标，x86 打包需要 `i686-pc-windows-msvc` 目标；
+- Windows PowerShell 5.1 或更高版本；
+- [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) 的「使用 C++ 的桌面开发」工作负载及 Windows 10 / 11 SDK；
+- [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)：桌面开发时需要，构建发布包时无需预先安装系统环境。
+
+### 从源码运行
+
+克隆仓库后，在仓库根目录启动：
+
+```powershell
+git clone https://github.com/Turing158/SFMCL-Transformed.git
+cd SFMCL-Transformed
+.\dev.cmd
+```
+
+开发入口会检查环境、按需执行 `npm ci`，再启动 Tauri 与 Vite。其他常用选项：
+
+```powershell
+.\dev.cmd -Check                       # 只检查开发环境
+.\dev.cmd -Web                         # 仅预览浏览器界面
+.\dev.cmd -Port 1430                   # 使用其他开发端口
+.\dev.cmd -DataDir D:\SFMCLTDevData      # 指定开发配置目录
+.\dev.cmd -InstallDependencies         # 重新执行 npm ci
+```
+
+脚本兼容 Windows PowerShell 5.1，可从任意工作目录调用。`npm run desktop` 使用同一入口；`npm run dev` 提供浏览器预览，文件操作、安装和游戏启动需要 Tauri 桌面环境。
+
+开发实例默认使用根目录的 `.runtime/dev-data/`。已有的 `SFMCL_T_DATA_DIR` 会保留，也可用 `-DataDir` 覆盖；相对路径以仓库根目录为基准。
+
+### 渠道凭据
+
+Microsoft Client ID 的默认值可通过 `SFMCL_T_MICROSOFT_CLIENT_ID` 设置。
+
+CurseForge API Key 由 Rust 后端读取。开发环境可通过 `SFMCL_T_CURSEFORGE_API_KEY` 提供，或从本机的旧版 StarFallMCL 项目导入：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File SFMCL-T/scripts/import-curseforge-credential.ps1 -StarFallRoot D:\Projects\StarFall-Minecraft-Launcher
+```
+
+导入脚本验证凭据后，以 Windows DPAPI 密文保存到 `%LOCALAPPDATA%/SFMCL-T/service-credentials/curseforge.dat`，供当前用户的开发版和安装版共用。
+
+配置目录、Microsoft Client ID 与 CurseForge Key 均兼容旧版 `TMCL_` 环境变量；非空的 `SFMCL_T_` 值优先。渠道凭据也兼容旧版目录。
+
+凭据不写入源码、前端包或发布程序，相关本地文件已由 `.gitignore` 排除。面向公众提供统一渠道时，可将服务密钥保存在服务端并代理请求；客户端 DPAPI 用于本机保护，无法阻止当前 Windows 用户或管理员主动提取凭据。
+
+### 构建发布包
+
+以下命令在仓库根目录执行，产物写入 `release/`。默认生成 x64 和 x86 两种架构的安装版、单文件版，共四个文件：
+
+```powershell
+.\build.ps1                            # 两个架构，各生成安装版和单文件版
+.\build.ps1 -Architecture x86          # 仅生成 x86 的两种包
+.\build.ps1 -Architecture x64          # 仅生成 x64 的两种包
+.\build.ps1 installer -Architecture x86 # x86 安装版
+.\build.ps1 single -Architecture x86    # x86 单文件 EXE
+.\build.ps1 single -NoExeCompression    # 跳过 UPX 压缩
+.\build.ps1 -Check                     # 只检查打包环境
+```
+
+| 模式 | 输出文件 | 说明 |
+| --- | --- | --- |
+| `installer` | `SFMCL-T_v<版本>_<架构>_installer.exe` | NSIS 安装包；检测系统 WebView2，缺少时可下载安装。 |
+| `single` | `SFMCL-T_v<版本>_<架构>.exe` | 前端嵌入 EXE，使用系统 WebView2；默认通过 UPX 压缩。 |
+
+版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v0.1.0_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
+
+也可调用 `build.ps1 -Mode <模式> -Architecture <架构>`，或在 `SFMCL-T/` 内运行 `npm run package`、`npm run package:x86`、`npm run package:x64`。`npm run package:installer -- -Architecture x86` 和 `npm run package:single -- -Architecture x86` 可分别生成 x86 安装版和单文件版。
+
+打包工具缓存位于 `.runtime/packaging/`；UPX 会按需下载并校验，后续可复用缓存。Tauri 会准备 NSIS 安装工具。Java 由使用者另行安装。
+
+为兼容 x86，当前使用带有 C 调用约定修正的本地 `unrar_sys` 依赖，说明与许可见 [UnRAR 兼容补丁](SFMCL-T/vendor/unrar-sys/PATCHES.md)。
+
+### 验证
+
+以下命令在 `SFMCL-T/` 内执行：
 
 ```powershell
 cargo fmt --all -- --check
@@ -136,29 +299,39 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 npm test
 npm run build
-npm run package
-npm run test:packaging  # 需先构建一次 installer，验证实际 NSIS 复选框及返回时的选择保持
 ```
 
-桌面自动化脚本通过 CDP 连接**隔离测试实例**，会创建测试角色、下载游戏或测试文件。请勿将测试脚本指向日常使用的数据目录。
+前端单元测试通过 `npm test` 运行；像素几何检查包含在 `npm run build` 中，也可单独运行 `npm run check:corners`。
+
+x86 工作区测试可运行 `cargo test --workspace --target i686-pc-windows-msvc --locked`。构建安装包后，`npm run test:packaging` 验证两个架构的环境检测及注册表视图，也可加 `-- -Architecture x86` 或 `-- -Architecture x64` 选择架构。
+
+界面验证脚本通常使用 `http://127.0.0.1:4180` 的生产预览，可通过 `SFMCL_T_UI_URL` 修改地址。先在一个终端启动预览，再在另一个终端执行检查：
 
 ```powershell
-$env:SFMCL_T_DATA_DIR = [IO.Path]::GetFullPath((Join-Path $PWD '..\.runtime\ui-data'))
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9422'
-npm run desktop
-# 在另一个同样位于 SFMCL-T/ 的终端，测试实例需已添加外层 .runtime/smoke-game 并安装 1.20.1：
-npm run test:e2e
-node scripts/probe-services.mjs
-npm run test:loaders
-node scripts/verify-addons.mjs
-# 启动验收还需要外层 .runtime/java8 与 .runtime/java17 中的 JRE：
-npm run test:launches
+# 终端一：已执行 npm run build
+npm run preview -- --port 4180
+
+# 终端二
+npm run test:notices
+npm run test:versions
+npm run test:resources
+npm run test:modpacks
 ```
 
-发布版的 CDP 地址可通过 `SFMCL_T_CDP` 传给验证脚本。`scripts/verify-workflows.mjs` 默认连接 `9423` 的独立发布版实例。
+桌面验证脚本通过 CDP 连接测试实例，会创建测试角色、下载游戏或测试文件，请使用独立数据目录。验证产物统一写入根目录的 `.runtime/`。`npm run test:packaging` 需先构建安装包。
 
-## 验收范围
+Microsoft 真人授权、令牌刷新与正版启动仍待完整实测；已验证的游戏与加载器样本也不代表所有历史组合均已覆盖。
 
-具体检查与证据见 [验证记录](docs/internal/verification.md)，功能对应关系见 [功能映射](docs/internal/feature-parity.md)。真人 Microsoft 授权与刷新仍按用户要求保留待验收；2026-10-19 已使用当前用户的加密凭据完成 CurseForge 分类、查询、详情、文件列表与真实下载校验。外部服务实测不能以单元测试或编译通过替代。当前版本的实测样本不代表所有历史 Minecraft / 加载器组合均已验证。
+## 许可与致谢
 
-旧版 C# / WPF 项目在迁移期间仅作为只读参考。
+项目采用 [MIT License](LICENSE)。RAR 解压使用 UnRAR，其使用与分发条款见 [UNRAR-LICENSE.txt](UNRAR-LICENSE.txt)；随附 Pixelify Sans 字体的许可见 [OFL 声明](SFMCL-T/public/assets/players/PixelifySans-OFL.txt)。
+
+感谢 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-Minecraft-Launcher) 提供原有实现与资源参考，以及 [Modrinth](https://modrinth.com/) 和 [CurseForge](https://www.curseforge.com/minecraft) 提供社区资源服务。
+
+---
+
+<div align="center">
+
+**选好角色与版本，开始你的下一次冒险。**
+
+</div>

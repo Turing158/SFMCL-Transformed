@@ -96,3 +96,21 @@ pub async fn resolve(app: &tauri::AppHandle, url: &str) -> Result<String> {
         .context("获取 CurseForge 下载地址已中断，请重试")?;
     result.map_err(anyhow::Error::msg)
 }
+
+pub async fn resolve_with_sources(
+    app: &tauri::AppHandle,
+    url: &str,
+    community: &sfmcl_t_core::resources::community::Community,
+) -> Result<String> {
+    if is_download_entry(url) {
+        if let Ok(Ok(Some(download))) = tokio::time::timeout(
+            Duration::from_secs(6),
+            community.resolve_download_entry(url),
+        )
+        .await
+        {
+            return Ok(download);
+        }
+    }
+    resolve(app, url).await
+}

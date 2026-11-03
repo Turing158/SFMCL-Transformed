@@ -1,6 +1,7 @@
 import { runtimePath } from "./lib/paths.mjs";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { chromium, expect } from "@playwright/test";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
 
 // UI regression checks run in a separate browser with an in-memory Tauri bridge.
@@ -133,7 +134,7 @@ try {
   await page.getByRole("tab", { name: "模组", exact: true }).click();
   const source = page.getByRole("combobox", { name: "资源来源", exact: true });
   for (const theme of ["light", "dark"]) {
-    for (const accent of ["forest", "puce", "ebony"]) {
+    for (const accent of ["forest", "nether", "end", "sift"]) {
       await page.evaluate(
         ({ theme, accent }) => {
           Object.assign(document.documentElement.dataset, { theme, accent });
@@ -357,7 +358,7 @@ try {
     page.getByRole("spinbutton", { name: "内存 MB", exact: true }),
   );
   checks.push(
-    "Search, text, multiline, number and select fields animate their pixel border without layout changes; all six palettes and disabled fields are covered",
+    "Search, text, multiline, number and select fields animate their pixel border without layout changes; all eight palettes and disabled fields are covered",
   );
   await page.getByRole("slider", { name: "游戏内存" }).fill("8192");
   await expect(page.getByRole("spinbutton", { name: "内存 MB" })).toHaveValue(
@@ -371,10 +372,7 @@ try {
   await page
     .getByRole("textbox", { name: "窗口标题", exact: true })
     .fill("Pixel controls");
-  await page
-    .getByRole("button", { name: "保存设置", exact: true })
-    .first()
-    .click();
+  await waitForAutoSave(page);
   expect(
     await page.evaluate(() => window.__pixelTest.data.settings),
   ).toMatchObject({
@@ -390,16 +388,13 @@ try {
   );
 
   await page.getByRole("tab", { name: "启动器设置", exact: true }).click();
-  await select("主题配色", "原版 · Puce");
+  await select("主题配色", "地狱配色");
   await page.getByRole("button", { name: "深色", exact: true }).click();
-  await page
-    .getByRole("button", { name: "保存设置", exact: true })
-    .first()
-    .click();
+  await waitForAutoSave(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.locator("html")).toHaveAttribute("data-accent", "puce");
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "nether");
   await page.getByRole("combobox", { name: "主题配色", exact: true }).click();
-  await screenshot("settings-dark-puce");
+  await screenshot("settings-dark-nether");
   await page.keyboard.press("Escape");
   checks.push("Theme and accent selectors persist and recolor custom controls");
 

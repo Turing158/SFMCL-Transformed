@@ -89,15 +89,20 @@ const themes = [
     ':root[data-theme="dark"]',
     { line: "#526958", active: "#81c69b", error: "#f19a9e" },
   ],
-  [':root[data-accent="puce"]', { line: "#a18b93", active: "#865c62" }],
-  [':root[data-accent="ebony"]', { line: "#879caa", active: "#446d8a" }],
+  [':root[data-accent="nether"]', { line: "#ad8776", active: "#9b3d28" }],
+  [':root[data-accent="end"]', { line: "#9d93ab", active: "#70508c" }],
+  [':root[data-accent="sift"]', { line: "#819fa2", active: "#9b3e5e" }],
   [
-    ':root[data-theme="dark"][data-accent="puce"]',
-    { line: "#72545f", active: "#d8aab4" },
+    ':root[data-theme="dark"][data-accent="nether"]',
+    { line: "#795145", active: "#f0a15e" },
   ],
   [
-    ':root[data-theme="dark"][data-accent="ebony"]',
-    { line: "#506c80", active: "#9cbdda" },
+    ':root[data-theme="dark"][data-accent="end"]',
+    { line: "#6f5e80", active: "#c5a2df" },
+  ],
+  [
+    ':root[data-theme="dark"][data-accent="sift"]',
+    { line: "#507882", active: "#f1a0b8" },
   ],
 ];
 for (const [selector, colors] of themes) {

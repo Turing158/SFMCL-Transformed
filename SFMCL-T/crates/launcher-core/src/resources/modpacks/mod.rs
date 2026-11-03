@@ -272,8 +272,9 @@ async fn install(
         profile
     } else {
         if let Some(loader) = &mut pack.pack.info.loader {
+            let sources = installer.sources();
             let catalog = tokio::select! {
-                result = loaders::catalog(&installer.client, &pack.pack.info.minecraft, &loader.kind) => result?,
+                result = loaders::catalog_with_sources(&installer.client, &sources, &pack.pack.info.minecraft, &loader.kind) => result?,
                 _ = job.cancel.cancelled() => bail!("整合包安装已取消"),
             };
             let requested = loader
@@ -451,6 +452,14 @@ async fn download_contents(
 ) -> Result<()> {
     if files.is_empty() {
         return Ok(());
+    }
+    let sources = installer.sources();
+    for file in &files {
+        let urls = std::iter::once(&file.url)
+            .chain(mirrors.get(&file.path).into_iter().flatten())
+            .flat_map(|url| crate::download_sources::candidates(url))
+            .collect();
+        sources.register(&file.url, urls);
     }
     loop {
         let id = installer

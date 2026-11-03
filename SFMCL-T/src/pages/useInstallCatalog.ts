@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { useApp } from "../store";
 import {
   loaderKinds,
   optifineForgeVersion,
@@ -33,6 +34,7 @@ const initialCatalogs = (): Record<InstallComponent, Catalog> => {
 };
 
 export function useInstallCatalog(minecraft: string) {
+  const source = useApp().data.settings.minecraftDownloadSource;
   const [catalogs, setCatalogs] = useState(initialCatalogs);
   const generation = useRef(0);
   const requests = useRef<Partial<Record<InstallComponent, number>>>({});
@@ -97,7 +99,7 @@ export function useInstallCatalog(minecraft: string) {
           }));
       }
     },
-    [minecraft],
+    [minecraft, source],
   );
 
   useEffect(() => {

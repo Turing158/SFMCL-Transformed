@@ -350,10 +350,13 @@ try {
   expect((await enter).some((value) => value > 0 && value < 1)).toBe(true);
   await expect(scrollbar).toHaveCSS("opacity", "1");
   await expect(scrollbar).not.toHaveAttribute("data-scrolling", "true");
-  const leave = frames();
   await page.mouse.move(bar.x - 20, bar.y + bar.height / 2);
+  await expect(scrollbar).toHaveCSS("opacity", "1");
+  const leave = frames();
+  await page.mouse.move(4, 4);
   expect((await leave).some((value) => value > 0 && value < 1)).toBe(true);
   await expect(scrollbar).toHaveCSS("opacity", "0");
+  await page.mouse.move(bar.x - 20, bar.y + bar.height / 2);
   await page.mouse.wheel(0, 100);
   await expect
     .poll(() => list.evaluate((node) => node.scrollTop))
@@ -406,7 +409,7 @@ try {
       .evaluate((node) => node.getBoundingClientRect().width),
   ).toBe(optionWidth);
   checks.push(
-    "Scrollbar fades on scroll and track hover, stays visible during captured dragging, supports track clicks and keyboard scrolling without selecting favorites or changing option widths",
+    "Scrollbar fades on scroll and whole-viewport hover including its track, stays visible during captured dragging, supports track clicks and keyboard scrolling without selecting favorites or changing option widths",
   );
   await shot("scroll-top");
   await page.setViewportSize({ width: 864, height: 1000 });

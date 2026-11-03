@@ -1,20 +1,23 @@
 import type { Loader, ManifestVersion, ResourceFile } from "./types";
-const aprilVersions = new Set([
-  "15w14a",
-  "1.RV-Pre1",
-  "3D Shareware v1.34",
-  "20w14infinite",
-  "22w13oneBlockAtATime",
-  "23w13a_or_b",
-  "24w14potato",
-  "25w14craftmine",
-]);
+const aprilVersions = new Set(
+  [
+    "15w14a",
+    "1.RV-Pre1",
+    "3D Shareware v1.34",
+    "20w14infinite",
+    "22w13oneblockatatime",
+    "23w13a_or_b",
+    "24w14potato",
+    "25w14craftmine",
+    "26w14a",
+  ].map((id) => id.toLowerCase()),
+);
 export function matchesVersionFilter(
   version: Pick<ManifestVersion, "id" | "type">,
   filter: string,
 ) {
   if (filter === "all") return true;
-  const april = aprilVersions.has(version.id);
+  const april = aprilVersions.has(version.id.toLowerCase());
   if (filter === "april") return april;
   if (filter === "old") return version.type.startsWith("old_");
   return !april && version.type === filter;
@@ -52,6 +55,32 @@ export const emptyInstallSelection: InstallSelection = {
   optifine: null,
   fabricApi: null,
 };
+
+export function installVersionName(
+  minecraft: string,
+  selection: InstallSelection,
+) {
+  const loader = selection.loader ?? selection.optifine;
+  if (!loader) return minecraft;
+  let suffix = `${loader.kind.toLowerCase()}-${loader.version}`;
+  if (loader.kind === "NeoForge") {
+    // Legacy mirror catalogs include Minecraft in the loader version;
+    // remove it from the label without changing the installation coordinate.
+    const prefix = `${minecraft}-`;
+    const version = loader.version.startsWith(prefix)
+      ? loader.version.slice(prefix.length)
+      : loader.version;
+    suffix = `neoforge-${version}`;
+  } else if (loader.kind === "OptiFine") {
+    suffix = `optifine_${minecraft}_${loader.version}`;
+  }
+  const safeSuffix = suffix
+    .trim()
+    .replace(/\.+$/, "")
+    .replace(/[\\/:*]/g, "-")
+    .replace(/[?"<>|]/g, "_");
+  return `${minecraft}-${safeSuffix}`;
+}
 
 export function componentBlockReason(
   kind: InstallComponent,

@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useApp } from "./store";
 import { useImageResource } from "./useImageResource";
 import { beginStartupWork } from "./startupReadiness";
@@ -52,19 +46,21 @@ export function Empty({
   title,
   description,
   action,
+  icon,
 }: {
   title: string;
-  description: string;
+  description?: string;
   action?: ReactNode;
+  icon?: ReactNode;
 }) {
   return (
     <div className="empty">
       <div className="empty-icon has-surface">
         <PixelFrame />
-        <Box size={30} />
+        {icon || <Box size={30} aria-hidden="true" />}
       </div>
       <h3>{title}</h3>
-      <p>{description}</p>
+      {description && <p>{description}</p>}
       {action}
     </div>
   );
@@ -417,11 +413,13 @@ export function Skin({
   player,
   face = false,
   back = false,
+  showCape = false,
   onDraw,
 }: {
   player?: Player;
   face?: boolean;
   back?: boolean;
+  showCape?: boolean;
   onDraw?: (canvas: HTMLCanvasElement, draw: () => void) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -430,14 +428,22 @@ export function Skin({
     "/assets/steve.png",
     true,
   );
+  const { url: capeUrl, ready: capeReady } = useImageResource(
+    showCape && !face && player?.online ? player.cape || "" : "",
+    "",
+    true,
+  );
   useEffect(() => {
     // Keep the previous pixels until the current resource has actually resolved.
-    if (!ready) return;
+    if (!ready || !capeReady) return;
     let active = true;
     const finishStartupDraw = beginStartupWork();
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => {
+    const cape = capeUrl ? new Image() : null;
+    let capeLoaded = !cape;
+    let capeValid = false;
+    const render = () => {
       if (!active) return;
       const c = canvas.current;
       if (!c) {
@@ -452,9 +458,13 @@ export function Skin({
       const draw = () => {
         const s = img.width / 64;
         const modern = img.height === img.width;
-        const slim = player?.slim && modern;
+        const slim = !!player?.slim;
         ctx.clearRect(0, 0, c.width, c.height);
         ctx.imageSmoothingEnabled = false;
+        const drawCape = () => {
+          if (cape && capeValid)
+            ctx.drawImage(cape, back ? 1 : 12, 1, 10, 16, 3, 9, 10, 16);
+        };
         const part = (
           sx: number,
           sy: number,
@@ -479,11 +489,12 @@ export function Skin({
           part(40, 8, 8, 8, 0, 0);
           return;
         }
+        if (!back) drawCape();
         if (back) {
           const arm = slim ? 3 : 4;
           part(24, 8, 8, 8, 4, 1);
           part(32, 20, 8, 12, 4, 9);
-          part(slim ? 51 : 52, 20, arm, 12, 12, 9);
+          part(modern && slim ? 51 : 52, 20, arm, 12, 12, 9);
           part(
             modern ? (slim ? 43 : 44) : 52,
             modern ? 52 : 20,
@@ -503,6 +514,7 @@ export function Skin({
             part(12, 52, 4, 12, 4, 21);
           }
           part(56, 8, 8, 8, 4, 1);
+          drawCape();
           return;
         }
         part(8, 8, 8, 8, 4, 1);
@@ -532,6 +544,21 @@ export function Skin({
       else draw();
       finishStartupDraw();
     };
+    img.onload = () => {
+      if (capeLoaded) render();
+    };
+    if (cape) {
+      cape.crossOrigin = "anonymous";
+      const capeDone = () => {
+        if (!active) return;
+        capeLoaded = true;
+        capeValid = cape.naturalWidth === 64 && cape.naturalHeight === 32;
+        if (img.complete && img.naturalWidth > 0) render();
+      };
+      cape.onload = capeDone;
+      cape.onerror = capeDone;
+      cape.src = capeUrl;
+    }
     img.onerror = () => {
       if (img.src.endsWith("/assets/steve.png")) {
         finishStartupDraw();
@@ -544,7 +571,17 @@ export function Skin({
       active = false;
       finishStartupDraw();
     };
-  }, [url, ready, revision, face, back, player?.slim, onDraw]);
+  }, [
+    url,
+    ready,
+    revision,
+    capeUrl,
+    capeReady,
+    face,
+    back,
+    player?.slim,
+    onDraw,
+  ]);
   return (
     <canvas
       ref={canvas}

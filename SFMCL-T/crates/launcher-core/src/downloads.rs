@@ -141,6 +141,7 @@ impl Batch {
 
 pub struct DownloadManager {
     client: Client,
+    sources: Arc<crate::download_sources::SourceSelector>,
     directory: PathBuf,
     cache_directory: Mutex<PathBuf>,
     batches: AsyncMutex<HashMap<String, Arc<Batch>>>,
@@ -210,6 +211,7 @@ impl DownloadManager {
         let concurrency = concurrency.clamp(1, 32);
         Ok(Arc::new(Self {
             client: crate::http_client()?,
+            sources: Arc::new(crate::download_sources::SourceSelector::default()),
             directory: directory.into(),
             cache_directory: Mutex::new(std::path::absolute(directory)?.join("cache")),
             batches: AsyncMutex::new(batches),
@@ -218,6 +220,11 @@ impl DownloadManager {
             concurrency,
         }))
     }
+    /// Shares source ranking and fallback routes across download workflows.
+    pub fn sources(&self) -> Arc<crate::download_sources::SourceSelector> {
+        self.sources.clone()
+    }
+
     /// Applies only to new batches; changing this never relocates active partials.
     pub fn set_cache_directory(&self, directory: &Path) -> Result<()> {
         if !directory.is_absolute() {
@@ -573,15 +580,24 @@ impl DownloadManager {
                 if cancel.is_cancelled() { return; }
                 batch.change(|s| { s.active_workers += 1; s.files[index].status = Status::Running; });
                 let mut outcome = Err(anyhow!("下载未执行"));
-                for attempt in 0..3 {
+                let candidates = manager.sources.candidates(&spec.url);
+                let ordered = match manager.sources.order(&manager.client, &candidates, &cancel).await {
+                    Ok(urls) => urls,
+                    Err(_) => vec![spec.url.clone()],
+                };
+                let attempts = ordered.len().max(3);
+                for attempt in 0..attempts {
                     if cancel.is_cancelled() { break; }
                     batch.change(|s| { s.files[index].attempts += 1; });
-                    outcome = transfer(&manager.client, &root, cache_dir.as_deref(), &batch_id, &spec, &cancel, |bytes, total| {
+                    let mut selected = spec.clone();
+                    selected.url = ordered[attempt % ordered.len()].clone();
+                    outcome = transfer(&manager.client, &root, cache_dir.as_deref(), &batch_id, &selected, &cancel, |bytes, total| {
                         batch.change(|s| { s.files[index].downloaded = bytes; s.files[index].total = total; });
                     }).await;
                     if outcome.is_ok() || cancel.is_cancelled() { break; }
-                    if attempt < 2 {
-                        tokio::select! { _ = cancel.cancelled() => break, _ = tokio::time::sleep(Duration::from_millis(300 * (1 << attempt))) => {} }
+                    manager.sources.failed(&selected.url).await;
+                    if attempt + 1 < attempts {
+                        tokio::select! { _ = cancel.cancelled() => break, _ = tokio::time::sleep(Duration::from_millis(300 * (1 << attempt.min(2)))) => {} }
                     }
                 }
                 batch.change(|s| {
@@ -976,6 +992,10 @@ pub async fn verify_file(
         bail!("文件长度校验失败");
     }
     if spec.sha1.is_none() && spec.sha512.is_none() {
+        if spec.path.ends_with("-installer.jar") {
+            zip::ZipArchive::new(std::fs::File::open(path)?)
+                .context("安装器不是有效的 JAR 文件")?;
+        }
         return Ok(());
     }
     let mut sha1 = Sha1::new();

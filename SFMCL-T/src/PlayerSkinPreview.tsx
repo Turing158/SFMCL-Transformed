@@ -14,16 +14,28 @@ import type { ComponentType } from "react";
 export function PlayerSkinPreview({
   player,
   mode,
+  frameRate,
+  defaultAction,
   onReady,
+  showCape = false,
+  backFacing = false,
 }: {
   player?: Player;
   mode: PlayerPreviewMode;
+  frameRate: SkinPreview3DProps["frameRate"];
+  defaultAction: SkinPreview3DProps["defaultAction"];
   onReady: PreviewReady;
+  showCape?: boolean;
+  backFacing?: boolean;
 }) {
   const active = usePageActive();
   const root = useRef<HTMLDivElement>(null);
   const surface = useRef<HTMLCanvasElement>(null);
-  const camera = useRef<CameraPose | undefined>(undefined);
+  const camera = useRef<CameraPose | undefined>(
+    backFacing
+      ? { theta: Math.PI + 0.32, phi: Math.PI / 2, distance: 53 }
+      : undefined,
+  );
   const lastCanvas = useRef<HTMLCanvasElement | null>(null);
   const lastSize = useRef({ width: 0, height: 0 });
   const hold = useRef<HTMLCanvasElement | null>(null);
@@ -140,6 +152,8 @@ export function PlayerSkinPreview({
             <ThreeD
               key={retry}
               player={player}
+              frameRate={frameRate}
+              defaultAction={defaultAction}
               surface={surface}
               camera={camera}
               onReady={ready}
@@ -148,7 +162,12 @@ export function PlayerSkinPreview({
           )}
         </>
       ) : (
-        <Skin player={player} back={mode === "back"} onDraw={ready} />
+        <Skin
+          player={player}
+          back={mode === "back"}
+          showCape={showCape}
+          onDraw={ready}
+        />
       )}
       {active && show3d && loading && (
         <span

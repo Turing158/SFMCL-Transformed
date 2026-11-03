@@ -17,6 +17,20 @@ export function playersFixture() {
   fixture.confirm = true;
   fixture.pick = "C:/Test/skin.png";
   fixture.image = "/assets/steve.png";
+  fixture.capes = [
+    {
+      id: "migrator-cape",
+      name: "Migrator",
+      url: "https://textures.minecraft.net/texture/cd",
+      active: false,
+    },
+  ];
+  fixture.data.players[1].capes = structuredClone(fixture.capes);
+  fixture.nameChange = {
+    nameChangeAllowed: true,
+    changedAt: null,
+    createdAt: "2015-01-01T00:00:00Z",
+  };
   let serial = 0;
   const original = window.__TAURI_INTERNALS__.invoke;
   window.__TAURI_INTERNALS__.invoke = async (command, args) => {
@@ -49,6 +63,7 @@ export function playersFixture() {
     const player = fixture.data.players.find((p) => p.uuid === payload.id);
     switch (operation) {
       case "image":
+      case "players.skin.preview":
         if (fixture.imageDelays?.[payload.path])
           await new Promise((resolve) =>
             setTimeout(resolve, fixture.imageDelays[payload.path]),
@@ -65,10 +80,23 @@ export function playersFixture() {
         break;
       case "players.refresh":
         break;
+      case "players.capes":
+        if (payload.refresh || player.capes == null)
+          player.capes = structuredClone(fixture.capes);
+        return structuredClone(player.capes);
+      case "players.cape": {
+        for (const cape of fixture.capes)
+          cape.active = cape.id === payload.capeId;
+        player.cape = fixture.capes.find((cape) => cape.active)?.url || "";
+        player.capes = structuredClone(fixture.capes);
+        break;
+      }
+      case "players.namechange":
+        return structuredClone(fixture.nameChange);
       case "players.rename": {
         const active = fixture.data.settings.activePlayer === player.uuid;
         player.name = payload.name;
-        player.uuid = `renamed-${++serial}`;
+        if (!player.online) player.uuid = `renamed-${++serial}`;
         if (active) fixture.data.settings.activePlayer = player.uuid;
         break;
       }

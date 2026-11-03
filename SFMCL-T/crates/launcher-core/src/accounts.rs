@@ -16,6 +16,27 @@ use std::{
     time::Duration,
 };
 
+mod profile;
+pub use profile::{Cape, NameChange};
+
+struct AccountEndpoints {
+    minecraft: String,
+    microsoft_token: String,
+    xbox_authenticate: String,
+    xsts_authorize: String,
+}
+
+impl Default for AccountEndpoints {
+    fn default() -> Self {
+        Self {
+            minecraft: "https://api.minecraftservices.com".into(),
+            microsoft_token: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token".into(),
+            xbox_authenticate: "https://user.auth.xboxlive.com/user/authenticate".into(),
+            xsts_authorize: "https://xsts.auth.xboxlive.com/xsts/authorize".into(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
@@ -25,6 +46,8 @@ pub struct Player {
     pub skin: String,
     #[serde(default)]
     pub cape: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capes: Option<Vec<Cape>>,
     #[serde(default)]
     pub slim: bool,
 }
@@ -44,6 +67,7 @@ pub struct Accounts {
     client: reqwest::Client,
     jobs: Arc<Jobs>,
     login_gate: Arc<tokio::sync::Mutex<()>>,
+    endpoints: AccountEndpoints,
 }
 
 pub fn offline_uuid(name: &str) -> String {
@@ -82,6 +106,7 @@ impl Accounts {
             client: crate::http_client()?,
             jobs,
             login_gate: Arc::new(tokio::sync::Mutex::new(())),
+            endpoints: AccountEndpoints::default(),
         }))
     }
     pub fn list(&self) -> Vec<Player> {
@@ -116,6 +141,7 @@ impl Accounts {
             online: false,
             skin: String::new(),
             cape: String::new(),
+            capes: None,
             slim: false,
         };
         self.upsert(player.clone())?;
@@ -197,18 +223,27 @@ impl Accounts {
         self.upsert(player.clone())?;
         Ok(player)
     }
-    pub async fn texture_image(&self, source: &str) -> Result<Vec<u8>> {
+    fn texture_kind(&self, source: &str) -> Result<TextureKind> {
         let players = self.list();
         let kind = if players.iter().any(|player| player.skin == source) {
             TextureKind::Skin
-        } else if players
-            .iter()
-            .any(|player| player.online && player.cape == source)
-        {
+        } else if players.iter().any(|player| {
+            player.online
+                && (player.cape == source
+                    || player
+                        .capes
+                        .as_ref()
+                        .is_some_and(|capes| capes.iter().any(|cape| cape.url == source)))
+        }) {
             TextureKind::Cape
         } else {
-            bail!("纹理地址不属于已保存角色的皮肤或已装备披风");
+            bail!("纹理地址不属于已保存角色的皮肤或已拥有披风");
         };
+        Ok(kind)
+    }
+
+    pub async fn texture_image(&self, source: &str) -> Result<Vec<u8>> {
+        let kind = self.texture_kind(source)?;
         // Minecraft profiles can still contain HTTP texture URLs. Fetch over
         // HTTPS in Rust so WebView CSP/CORS cannot prevent canvas rendering.
         let url = official_texture_url(source)?;
@@ -297,7 +332,7 @@ impl Accounts {
             tokio::select! { _=job.cancel.cancelled()=>bail!(job.cancellation_message()), _=tokio::time::sleep(Duration::from_secs(interval))=>{} }
             let request = self
                 .client
-                .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
+                .post(&self.endpoints.microsoft_token)
                 .form(&[
                     ("client_id", client_id.as_str()),
                     ("device_code", code.as_str()),
@@ -308,7 +343,7 @@ impl Accounts {
             let ok = response.status().is_success();
             let value: Value = response.json().await?;
             if ok {
-                self.exchange(&value, job).await?;
+                self.exchange(&value, job, None).await?;
                 return Ok(());
             }
             match value["error"].as_str() {
@@ -323,13 +358,18 @@ impl Accounts {
             }
         }
     }
-    async fn exchange(&self, token: &Value, job: Arc<Job>) -> Result<Player> {
+    async fn exchange(
+        &self,
+        token: &Value,
+        job: Arc<Job>,
+        expected_id: Option<&str>,
+    ) -> Result<Player> {
         let msa = required(token, "access_token")?;
         let refresh = required(token, "refresh_token")?;
         job.step(1, "验证 Xbox Live 与 XSTS");
-        let xbox=self.post_json("https://user.auth.xboxlive.com/user/authenticate",json!({"Properties":{"AuthMethod":"RPS","SiteName":"user.auth.xboxlive.com","RpsTicket":format!("d={msa}")},"RelyingParty":"http://auth.xboxlive.com","TokenType":"JWT"}),&job).await?;
+        let xbox=self.post_json(&self.endpoints.xbox_authenticate,json!({"Properties":{"AuthMethod":"RPS","SiteName":"user.auth.xboxlive.com","RpsTicket":format!("d={msa}")},"RelyingParty":"http://auth.xboxlive.com","TokenType":"JWT"}),&job).await?;
         let xbox_token = required(&xbox, "Token")?;
-        let xsts=self.post_json("https://xsts.auth.xboxlive.com/xsts/authorize",json!({"Properties":{"SandboxId":"RETAIL","UserTokens":[xbox_token]},"RelyingParty":"rp://api.minecraftservices.com/","TokenType":"JWT"}),&job).await?;
+        let xsts=self.post_json(&self.endpoints.xsts_authorize,json!({"Properties":{"SandboxId":"RETAIL","UserTokens":[xbox_token]},"RelyingParty":"rp://api.minecraftservices.com/","TokenType":"JWT"}),&job).await?;
         let uhs = xsts["DisplayClaims"]["xui"][0]["uhs"]
             .as_str()
             .context("XSTS 未返回用户标识")?;
@@ -337,7 +377,10 @@ impl Accounts {
         job.step(2, "获取 Minecraft 游戏资料");
         let minecraft = self
             .post_json(
-                "https://api.minecraftservices.com/authentication/login_with_xbox",
+                &format!(
+                    "{}/authentication/login_with_xbox",
+                    self.endpoints.minecraft
+                ),
                 json!({"identityToken":format!("XBL3.0 x={uhs};{xsts_token}")}),
                 &job,
             )
@@ -345,7 +388,7 @@ impl Accounts {
         let access = required(&minecraft, "access_token")?;
         let request = self
             .client
-            .get("https://api.minecraftservices.com/minecraft/profile")
+            .get(format!("{}/minecraft/profile", self.endpoints.minecraft))
             .bearer_auth(&access)
             .send();
         let response = tokio::select! { _=job.cancel.cancelled()=>bail!(job.cancellation_message()),r=request=>r? };
@@ -354,6 +397,9 @@ impl Accounts {
         }
         let profile: Value = response.error_for_status()?.json().await?;
         let player = player_from_profile(&profile)?;
+        if expected_id.is_some_and(|id| id != player.uuid) {
+            bail!("刷新返回的角色与当前账号不一致，请重新登录微软账号");
+        }
         if job.cancel.is_cancelled() {
             bail!(job.cancellation_message());
         }
@@ -367,7 +413,9 @@ impl Accounts {
             },
         )?;
         self.upsert(player.clone())?;
-        self.select(&player.uuid)?;
+        if expected_id.is_none() {
+            self.select(&player.uuid)?;
+        }
         Ok(player)
     }
     async fn post_json(&self, url: &str, body: Value, job: &Job) -> Result<Value> {
@@ -385,6 +433,9 @@ impl Accounts {
     }
     pub async fn refresh(self: &Arc<Self>, id: &str) -> Result<Player> {
         let _gate = self.login_gate.lock().await;
+        self.refresh_locked(id).await
+    }
+    async fn refresh_locked(&self, id: &str) -> Result<Player> {
         let player = self
             .list()
             .into_iter()
@@ -411,7 +462,7 @@ impl Accounts {
             job.step(0, "刷新微软凭据");
             let response = self
                 .client
-                .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
+                .post(&self.endpoints.microsoft_token)
                 .form(&[
                     ("client_id", self.client_id()?),
                     ("refresh_token", credentials.refresh),
@@ -423,7 +474,7 @@ impl Accounts {
                 .error_for_status()?
                 .json::<Value>()
                 .await?;
-            self.exchange(&response, job.clone()).await
+            self.exchange(&response, job.clone(), Some(id)).await
         }
         .await;
         job.finish(
@@ -493,6 +544,7 @@ impl Accounts {
                     skin.into()
                 },
                 cape: String::new(),
+                capes: None,
                 slim: false,
             })?;
             count += 1;
@@ -525,6 +577,10 @@ fn player_from_profile(profile: &Value) -> Result<Player> {
         online: true,
         skin: skin.and_then(|s| s["url"].as_str()).unwrap_or("").into(),
         cape: cape.and_then(|c| c["url"].as_str()).unwrap_or("").into(),
+        capes: profile
+            .get("capes")
+            .map(|_| profile::owned_capes(profile))
+            .transpose()?,
         slim: skin.and_then(|s| s["variant"].as_str()) == Some("SLIM"),
     })
 }
@@ -579,6 +635,20 @@ async fn read_texture_image(response: reqwest::Response, kind: TextureKind) -> R
     Ok(bytes)
 }
 
+pub async fn read_skin_file(path: &Path) -> Result<Vec<u8>> {
+    if tokio::fs::metadata(path)
+        .await
+        .context("无法读取皮肤文件")?
+        .len()
+        > 4 * 1024 * 1024
+    {
+        bail!("皮肤文件不能超过 4 MB");
+    }
+    let bytes = tokio::fs::read(path).await.context("无法读取皮肤文件")?;
+    validate_skin(&bytes)?;
+    Ok(bytes)
+}
+
 pub fn validate_skin(bytes: &[u8]) -> Result<(u32, u32)> {
     if bytes.len() < 33
         || bytes.len() > 4 * 1024 * 1024
@@ -605,18 +675,23 @@ mod tests {
             "id": "0123456789abcdef0123456789abcdef", "name": "CapePlayer",
             "skins": [{"state": "ACTIVE", "url": "https://textures.minecraft.net/texture/ab", "variant": "SLIM"}],
             "capes": [
-                {"state": "INACTIVE", "url": "https://textures.minecraft.net/texture/cd"},
-                {"state": "ACTIVE", "url": "https://textures.minecraft.net/texture/ef"}
+                {"id": "owned", "alias": "Owned", "state": "INACTIVE", "url": "https://textures.minecraft.net/texture/cd"},
+                {"id": "equipped", "alias": "Equipped", "state": "ACTIVE", "url": "https://textures.minecraft.net/texture/ef"}
             ]
         });
         let player = player_from_profile(&profile).unwrap();
         assert_eq!(player.cape, "https://textures.minecraft.net/texture/ef");
+        let capes = player.capes.as_ref().unwrap();
+        assert_eq!(capes.len(), 2);
+        assert!(!capes[0].active && capes[1].active);
         assert!(player.online && player.slim);
         assert_eq!(player.skin, "https://textures.minecraft.net/texture/ab");
         profile["capes"][1]["state"] = json!("INACTIVE");
         assert!(player_from_profile(&profile).unwrap().cape.is_empty());
         profile["capes"] = json!([]);
-        assert!(player_from_profile(&profile).unwrap().cape.is_empty());
+        let player = player_from_profile(&profile).unwrap();
+        assert!(player.cape.is_empty());
+        assert!(player.capes.unwrap().is_empty());
         profile.as_object_mut().unwrap().remove("capes");
         assert!(player_from_profile(&profile).unwrap().cape.is_empty());
     }
@@ -645,6 +720,7 @@ mod tests {
         let accounts = open();
         let mut player = accounts.list().remove(0);
         assert!(player.cape.is_empty());
+        assert!(player.capes.is_none());
         player.cape = "https://textures.minecraft.net/texture/ef".into();
         accounts.upsert(player.clone()).unwrap();
         assert_eq!(open().list()[0].cape, player.cape);
@@ -667,6 +743,36 @@ mod tests {
             .to_string()
             .contains("不属于"));
     }
+    #[test]
+    fn owned_unequipped_cape_textures_can_be_previewed_without_equipping() {
+        let directory = tempfile::tempdir().unwrap();
+        let accounts = Accounts::open(
+            directory.path(),
+            Arc::new(Vault::open(directory.path()).unwrap()),
+            Arc::new(ConfigStore::open(directory.path()).unwrap()),
+            Arc::new(Jobs::default()),
+        )
+        .unwrap();
+        let url = "https://textures.minecraft.net/texture/cd";
+        let mut player = player_from_profile(&json!({
+            "id":"0123456789abcdef0123456789abcdef", "name":"CapePlayer", "skins":[],
+            "capes":[{"id":"owned", "alias":"Owned", "state":"INACTIVE", "url":url}]
+        }))
+        .unwrap();
+        accounts.upsert(player.clone()).unwrap();
+        assert!(matches!(
+            accounts.texture_kind(url).unwrap(),
+            TextureKind::Cape
+        ));
+        assert!(accounts.list()[0].cape.is_empty());
+        assert!(accounts
+            .texture_kind("https://textures.minecraft.net/texture/ef")
+            .is_err());
+        player.online = false;
+        accounts.upsert(player).unwrap();
+        assert!(accounts.texture_kind(url).is_err());
+    }
+
     #[test]
     fn official_skin_urls_upgrade_to_https() {
         let path = format!("textures.minecraft.net/texture/{}", "ab".repeat(32));

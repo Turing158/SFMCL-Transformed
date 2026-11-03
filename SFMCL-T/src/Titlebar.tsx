@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { desktop } from "./api";
 import { useApp } from "./store";
 import { entryLabel, pagePath } from "./navigation";
+import { minimizeWindow } from "./windowMotion";
 
 export function Titlebar() {
   const { route, navigate, run } = useApp();
@@ -125,7 +126,10 @@ export function Titlebar() {
   }, []);
 
   const control = (action: "minimize" | "toggleMaximize" | "close") => {
-    if (desktop) void run(() => getCurrentWindow()[action]());
+    if (desktop)
+      void run(() =>
+        action === "minimize" ? minimizeWindow() : getCurrentWindow()[action](),
+      );
   };
   const maximizeLabel = maximized ? "还原窗口" : "最大化窗口";
   const buttonTitle = (label: string) =>

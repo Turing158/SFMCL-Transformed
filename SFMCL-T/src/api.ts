@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { beginStartupWork } from "./startupReadiness";
+import { flushAutoSaves } from "./autoSave";
 export { confirmAction } from "./confirmation";
 export const desktop = isTauri();
 export async function api<T = unknown>(
@@ -12,6 +13,8 @@ export async function api<T = unknown>(
     throw new Error(
       "此操作需要在 SFMCL-T 桌面应用中运行。请使用 npm run desktop 启动。",
     );
+  if (operation === "launch" && !(await flushAutoSaves()))
+    throw new Error("设置暂时无法自动保存，请稍后重试启动游戏。");
   const done = beginStartupWork();
   try {
     return await invoke<T>("request", { operation, payload });

@@ -3,6 +3,12 @@ import { closeStartupWork, waitForStartupPaint } from "./startupReadiness";
 import { isTauri } from "@tauri-apps/api/core";
 import { setStartupWindow } from "./startupWindow";
 import { startupTimeout } from "./startupTimeout";
+import {
+  revealDuration,
+  revealSurface,
+  surfaceMotionFrames,
+  visibleSurface,
+} from "./surfaceMotion";
 
 let animation: StartupAnimation | undefined;
 let revealing = false;
@@ -64,19 +70,16 @@ export async function revealStartup(root: HTMLElement, signal: AbortSignal) {
   document.documentElement.dataset.startup = "revealing";
   const splash = document.getElementById("startup-screen")!;
   const enter = root.animate(
-    [
-      { transform: "scale(0.8)", opacity: 0 },
-      { transform: "scale(1)", opacity: 1 },
-    ],
+    surfaceMotionFrames(revealSurface, visibleSurface, true),
     {
       id: "sfmcl-t-startup-reveal",
-      duration: 380,
-      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+      duration: revealDuration,
+      easing: "linear",
       fill: "both",
     },
   );
   const exit = splash.animate([{ opacity: 1 }, { opacity: 0 }], {
-    duration: 160,
+    duration: 60,
     easing: "ease-out",
     fill: "both",
   });
@@ -90,7 +93,7 @@ export async function revealStartup(root: HTMLElement, signal: AbortSignal) {
   exit.cancel();
   animation?.dispose();
   splash.remove();
-  // Native shadows also restore Windows 11 corners. Wait until the transparent
-  // reveal finishes so the full window frame does not appear behind the splash.
+  // Wait until the transparent reveal finishes before restoring the native
+  // shadow, so the full window frame does not appear behind the splash.
   await setStartupWindow("shown").catch(console.error);
 }

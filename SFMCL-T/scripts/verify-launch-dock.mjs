@@ -23,6 +23,31 @@ const dock = page.locator(".launch-dock");
 const primary = dock.locator(".launch-primary");
 const change = dock.locator(".launch-switch");
 const picker = page.getByRole("dialog", { name: "选择游戏版本", exact: true });
+const viewport = picker.locator(".launch-version-viewport");
+const edgeOpacity = (pseudo) =>
+  viewport.evaluate(
+    (node, pseudo) => Number(getComputedStyle(node, pseudo).opacity),
+    pseudo,
+  );
+const scrollFrames = (position) =>
+  viewport.evaluate(async (node, position) => {
+    const list = node.querySelector(".launch-version-list");
+    const frames = [];
+    list.scrollTop = (list.scrollHeight - list.clientHeight) * position;
+    const start = performance.now();
+    await new Promise((resolve) => {
+      const sample = (time) => {
+        frames.push({
+          top: Number(getComputedStyle(node, "::before").opacity),
+          bottom: Number(getComputedStyle(node, "::after").opacity),
+        });
+        if (time - start < 360) requestAnimationFrame(sample);
+        else resolve();
+      };
+      requestAnimationFrame(sample);
+    });
+    return frames;
+  }, position);
 const nav = (name) =>
   page
     .getByRole("navigation", { name: "主导航" })
@@ -68,6 +93,12 @@ try {
     exact: true,
   });
   await expect(search).toBeFocused();
+  await expect(picker.locator(".launch-picker-footer")).toHaveCount(0);
+  expect(await edgeOpacity("::before")).toBe(0);
+  expect(await edgeOpacity("::after")).toBe(0);
+  await expect(
+    picker.getByRole("button", { name: "安装新版本", exact: true }),
+  ).toHaveCount(0);
   await shot("desktop-picker");
   await search.fill("fabric");
   await expect(picker.getByRole("option")).toHaveCount(1);
@@ -91,9 +122,18 @@ try {
   await expect(
     picker.getByText("没有找到这个版本", { exact: true }),
   ).toBeVisible();
+  await expect(
+    picker
+      .locator(".launch-picker-empty")
+      .getByRole("button", { name: "安装新版本", exact: true }),
+  ).toBeVisible();
+  await expect(picker.locator(".launch-picker-footer")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(search).toHaveValue("");
   await expect(picker).toBeVisible();
+  await expect(
+    picker.getByRole("button", { name: "安装新版本", exact: true }),
+  ).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(picker).toBeHidden();
   await change.click();
@@ -225,7 +265,7 @@ try {
   ).toHaveCount(0);
   await primary.click();
   await expect(change).toBeEnabled();
-  await expect(page.locator(".sidebar-downloads")).toHaveCount(0);
+  await expect(page.locator(".sidebar-downloads")).toBeVisible();
   await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
   await state("running");
   await change.click();
@@ -233,7 +273,7 @@ try {
     page.getByRole("heading", { name: "操作步骤", exact: true }),
   ).toBeVisible();
   checks.push(
-    "Launch jobs without downloads keep the sidebar task area hidden; the log action still opens task details",
+    "Launch jobs without downloads show sidebar task progress; the log action still opens task details",
   );
 
   await ready("empty");
@@ -243,7 +283,16 @@ try {
     dock.getByRole("heading", { name: "选择你的第一个版本", exact: true }),
   ).toBeVisible();
   await change.click();
-  await picker.getByRole("button", { name: "安装新版本", exact: true }).click();
+  await expect(picker.getByRole("option")).toHaveCount(2);
+  await expect(
+    picker.getByRole("button", { name: "安装新版本", exact: true }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await nav("版本管理");
+  await page
+    .locator(".version-management")
+    .getByRole("button", { name: "安装新版本", exact: true })
+    .click();
   await expect(
     page.getByRole("region", { name: "安装 Minecraft", exact: true }),
   ).toBeVisible();
@@ -252,7 +301,7 @@ try {
   ).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   checks.push(
-    "No-version state blocks launch and opens the Minecraft tab in the resource center",
+    "No selection blocks launch; populated pickers omit installation and version management still opens the Minecraft installation tab",
   );
 
   await ready("no-dir");
@@ -260,7 +309,11 @@ try {
   await expect(
     picker.getByText("还没有本地游戏", { exact: true }),
   ).toBeVisible();
-  await picker.getByRole("button", { name: "安装新版本", exact: true }).click();
+  await expect(picker.locator(".launch-picker-footer")).toHaveCount(0);
+  await picker
+    .locator(".launch-picker-empty")
+    .getByRole("button", { name: "安装新版本", exact: true })
+    .click();
   await page
     .getByRole("button", {
       name: "查看 Minecraft 1.21.4 安装配置",
@@ -278,7 +331,7 @@ try {
     page.getByRole("heading", { name: "版本管理", exact: true }),
   ).toBeVisible();
   checks.push(
-    "The Minecraft tab guides a first-time user to add a game directory before installation",
+    "The footer is removed; installation remains centered in the empty placeholder and guides first-time users to add a game directory",
   );
 
   await ready("no-player");
@@ -379,6 +432,67 @@ try {
   await ready("many");
   await page.setViewportSize({ width: 375, height: 568 });
   await change.click();
+  await expect(viewport).not.toHaveAttribute("data-scroll-top");
+  await expect(viewport).toHaveAttribute("data-scroll-bottom", "true");
+  await expect.poll(() => edgeOpacity("::before")).toBe(0);
+  await expect.poll(() => edgeOpacity("::after")).toBe(1);
+  const fadeBounds = await viewport.evaluate((node) => {
+    const list = node
+      .querySelector(".launch-version-list")
+      .getBoundingClientRect();
+    const viewport = node.getBoundingClientRect();
+    const picker = node.closest(".launch-version-picker");
+    const panel = picker.getBoundingClientRect();
+    const stroke = parseFloat(
+      getComputedStyle(picker).getPropertyValue("--surface-stroke"),
+    );
+    return {
+      uncoveredBottom:
+        list.bottom -
+        (viewport.bottom -
+          parseFloat(getComputedStyle(node, "::after").bottom)),
+      frameGap: panel.bottom - list.bottom,
+      leftGap: viewport.left - panel.left,
+      rightGap: panel.right - viewport.right,
+      stroke,
+    };
+  });
+  expect(Math.abs(fadeBounds.uncoveredBottom)).toBeLessThan(0.5);
+  expect(fadeBounds.frameGap).toBeGreaterThanOrEqual(fadeBounds.stroke);
+  expect(fadeBounds.leftGap).toBeGreaterThanOrEqual(fadeBounds.stroke);
+  expect(fadeBounds.rightGap).toBeGreaterThanOrEqual(fadeBounds.stroke);
+  const middle = await scrollFrames(0.5);
+  expect(middle.some((frame) => frame.top > 0 && frame.top < 1)).toBe(true);
+  expect(await edgeOpacity("::before")).toBe(1);
+  expect(await edgeOpacity("::after")).toBe(1);
+  await shot("picker-scroll-middle");
+  const bottom = await scrollFrames(1);
+  expect(bottom.some((frame) => frame.bottom > 0 && frame.bottom < 1)).toBe(
+    true,
+  );
+  await expect(viewport).not.toHaveAttribute("data-scroll-bottom");
+  expect(await edgeOpacity("::before")).toBe(1);
+  expect(await edgeOpacity("::after")).toBe(0);
+  await shot("picker-scroll-bottom");
+  const top = await scrollFrames(0);
+  expect(top.some((frame) => frame.top > 0 && frame.top < 1)).toBe(true);
+  expect(top.some((frame) => frame.bottom > 0 && frame.bottom < 1)).toBe(true);
+  await expect(viewport).not.toHaveAttribute("data-scroll-top");
+  expect(await edgeOpacity("::before")).toBe(0);
+  expect(await edgeOpacity("::after")).toBe(1);
+  await shot("picker-scroll-top");
+  await search.fill("1.21.4");
+  await expect(picker.getByRole("option")).toHaveCount(1);
+  await expect(viewport).not.toHaveAttribute("data-scroll-top");
+  await expect(viewport).not.toHaveAttribute("data-scroll-bottom");
+  await expect.poll(() => edgeOpacity("::before")).toBe(0);
+  await expect.poll(() => edgeOpacity("::after")).toBe(0);
+  await search.fill("");
+  await expect(picker.getByRole("option")).toHaveCount(26);
+  await expect(viewport).toHaveAttribute("data-scroll-bottom", "true");
+  checks.push(
+    "List edge fades match favorites: both show mid-list, the reached edge hides with intermediate animation frames, and filtering to a non-scrollable list removes both fades even under reduced-motion preference",
+  );
   await search.press("ArrowDown");
   await page.keyboard.press("End");
   await expect(picker.getByRole("option").last()).toBeFocused();

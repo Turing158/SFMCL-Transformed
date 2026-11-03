@@ -21,8 +21,18 @@ function texturePixels(image: HTMLImageElement) {
   return canvas.toDataURL();
 }
 
+type PreviewTextures = {
+  request: string;
+  image: HTMLImageElement;
+  cape: HTMLImageElement | null;
+  skinPixels: string;
+  capePixels: string;
+};
+
 export default function SkinPreview3D({
   player,
+  frameRate,
+  defaultAction,
   onReady,
   onFailure,
   camera,
@@ -36,8 +46,8 @@ export default function SkinPreview3D({
   const failureCallback = useRef(onFailure);
   failureCallback.current = onFailure;
   const [generation, setGeneration] = useState(0);
-  const [action, setAction] = useState<Player3DAction>("still");
-  const currentAction = useRef<Player3DAction>("still");
+  const [action, setAction] = useState<Player3DAction>(defaultAction);
+  const currentAction = useRef<Player3DAction>(defaultAction);
   const { url, ready, revision } = useImageResource(
     player?.skin || "",
     "/assets/steve.png",
@@ -49,6 +59,14 @@ export default function SkinPreview3D({
     "",
     true,
   );
+  const textureRequest = JSON.stringify([
+    player?.uuid,
+    player?.skin,
+    capePath,
+    capeUrl,
+    url,
+    revision,
+  ]);
   const request = JSON.stringify([
     player?.uuid,
     player?.skin,
@@ -64,6 +82,8 @@ export default function SkinPreview3D({
   const currentRequest = useRef(request);
   currentRequest.current = request;
   const committed = useRef("");
+  const textures = useRef<PreviewTextures | null>(null);
+  const committedTextures = useRef("");
   const pendingCommit = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -275,9 +295,20 @@ export default function SkinPreview3D({
       input.current = null;
       renderer.current = null;
       committed.current = "";
+      textures.current = null;
+      committedTextures.current = "";
       pendingCommit.current = null;
     };
   }, [camera, surface]);
+
+  useEffect(() => {
+    currentAction.current = defaultAction;
+    setAction(defaultAction);
+  }, [defaultAction]);
+
+  useEffect(() => {
+    renderer.current?.setFrameRate(frameRate);
+  }, [frameRate, generation]);
 
   useEffect(() => {
     renderer.current?.setAction(action);
@@ -306,23 +337,35 @@ export default function SkinPreview3D({
       currentRequest.current === request;
     const commit = async () => {
       try {
-        // Resolve both textures before committing so a delayed cape never lands
-        // on a different account. A missing or damaged cape leaves the skin usable.
-        const [image, cape] = await Promise.all([
-          decodeImage(url).catch(() => decodeImage("/assets/steve.png")),
-          capeUrl
-            ? decodeImage(capeUrl)
-                .then((image) =>
-                  image.width === 64 && image.height === 32 ? image : null,
-                )
-                .catch(() => null)
-            : Promise.resolve(null),
-        ]);
+        let resolved = textures.current;
+        if (resolved?.request !== textureRequest) {
+          // Resolve both textures before committing so a delayed cape never lands
+          // on a different account. Reuse decoded pixels when only the model changes.
+          const [image, cape] = await Promise.all([
+            decodeImage(url).catch(() => decodeImage("/assets/steve.png")),
+            capeUrl
+              ? decodeImage(capeUrl)
+                  .then((image) =>
+                    image.width === 64 && image.height === 32 ? image : null,
+                  )
+                  .catch(() => null)
+              : Promise.resolve(null),
+          ]);
+          if (!isCurrent()) return;
+          resolved = {
+            request: textureRequest,
+            image,
+            cape,
+            skinPixels: texturePixels(image),
+            capePixels: cape ? texturePixels(cape) : "",
+          };
+          textures.current = resolved;
+        }
         if (!isCurrent()) return;
         const fingerprint = JSON.stringify([
-          texturePixels(image),
-          !!player?.slim && image.width === image.height,
-          cape ? texturePixels(cape) : "",
+          resolved.skinPixels,
+          !!player?.slim,
+          resolved.capePixels,
         ]);
         const outgoing = document.createElement("canvas");
         outgoing.width = target.width;
@@ -347,8 +390,17 @@ export default function SkinPreview3D({
           notify();
           return;
         }
-        adapter.loadSkin(image, !!player?.slim);
-        adapter.loadCape(cape);
+        const textureFingerprint = JSON.stringify([
+          resolved.skinPixels,
+          resolved.capePixels,
+        ]);
+        if (committedTextures.current === textureFingerprint) {
+          adapter.setModel(!!player?.slim);
+        } else {
+          adapter.loadSkin(resolved.image, !!player?.slim);
+          adapter.loadCape(resolved.cape);
+          committedTextures.current = textureFingerprint;
+        }
         committed.current = fingerprint;
         pendingCommit.current = notify;
         adapter.renderNow();
@@ -366,6 +418,7 @@ export default function SkinPreview3D({
     };
   }, [
     request,
+    textureRequest,
     url,
     ready,
     capeUrl,

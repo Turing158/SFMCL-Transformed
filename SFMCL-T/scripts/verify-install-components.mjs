@@ -26,8 +26,38 @@ const card = (name) =>
   page.getByRole("region", { name: `${name} 组件`, exact: true });
 const toggle = (name) =>
   page.getByRole("button", { name: `选择 ${name}`, exact: true });
-const back = () =>
-  page.getByRole("button", { name: "返回上一级", exact: true }).click();
+const versionName = page.getByPlaceholder("自定义版本名称");
+const back = async () => {
+  await page.getByRole("button", { name: "返回上一级", exact: true }).click();
+  const heading = page.getByRole("heading", {
+    name: "安装 Minecraft 1.20.1",
+    exact: true,
+  });
+  if (!(await heading.isVisible())) return;
+  // Returning retains the install page. Start each independent scenario with
+  // explicit empty selections so the previous compatibility filter is cleared.
+  const selected = page.getByRole("button", {
+    name: /^取消选择 (Forge|OptiFine|Fabric|Fabric API|NeoForge|Quilt|LiteLoader)$/,
+  });
+  while (await selected.count()) await selected.first().click();
+  await settle();
+  for (const name of [
+    "Forge",
+    "OptiFine",
+    "Fabric",
+    "NeoForge",
+    "Quilt",
+    "LiteLoader",
+  ]) {
+    const button = toggle(name);
+    if (!(await button.isVisible())) continue;
+    const expanded = (await button.getAttribute("aria-expanded")) === "true";
+    if (!expanded) await button.click();
+    const search = card(name).getByRole("searchbox");
+    if (await search.count()) await search.fill("");
+    if (!expanded) await button.click();
+  }
+};
 const settle = () =>
   page.evaluate(() =>
     Promise.allSettled(
@@ -105,12 +135,23 @@ const payload = () =>
 try {
   await page.goto(process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/");
   await openInstall();
+  await expect(versionName).toHaveValue("1.20.1");
   await expect(page.locator(".install-component")).toHaveCount(7);
   await expect(
     page.getByRole("combobox", { name: "加载器", exact: true }),
   ).toHaveCount(0);
   await expect(toggle("Fabric API")).toHaveCount(0);
-  await expect(card("LiteLoader")).toContainText("暂无可用");
+  await expect(toggle("LiteLoader")).toHaveCount(0);
+  await expect(card("LiteLoader")).toHaveCount(0);
+  await settle();
+  expect(
+    await page
+      .locator(
+        '.install-component-presence:has([aria-label="LiteLoader 组件"])',
+      )
+      .evaluate((el) => el.getBoundingClientRect().height),
+  ).toBe(0);
+  checks.push("没有可安装版本的加载器隐藏且不占空间，隐藏控件退出辅助功能导航");
   await toggle("Forge").click();
   await expect(card("Forge").getByRole("searchbox")).toBeVisible();
   const forgePanel = card("Forge").locator(".install-component-expand");
@@ -169,11 +210,22 @@ try {
   checks.push(
     "依赖与互斥卡片显隐时高度和透明度连续变化，其余条目双向平滑补位，隐藏控件退出键盘与辅助功能导航",
   );
+  await choose("Quilt", "0.27.0");
+  await expect(versionName).toHaveValue("1.20.1-quilt-0.27.0");
+  await versionName.fill("手动名称");
+  await clear("Quilt");
+  await expect(versionName).toHaveValue("1.20.1");
+  await choose("Forge", "47.4.0");
+  await expect(versionName).toHaveValue("1.20.1-forge-47.4.0");
+  await expect(toggle("OptiFine")).toHaveCount(0);
+  await clear("Forge");
+  await expect(toggle("OptiFine")).toBeVisible();
   await choose("Forge", "47.2.18");
   await toggle("OptiFine").click();
   await expect(card("OptiFine").getByRole("radio")).toHaveCount(2);
   await expect(card("OptiFine")).toContainText("兼容 Forge 47.2.18");
   await choose("OptiFine", "HD_U_I6");
+  await expect(versionName).toHaveValue("1.20.1-forge-47.2.18");
   await expect(page.locator(".minecraft-install-summary")).toContainText(
     "Forge 47.2.18 + OptiFine HD_U_I6",
   );
@@ -188,6 +240,7 @@ try {
   ).toContainText("模拟组合安装失败");
   expect(await payload()).toMatchObject({
     minecraft: "1.20.1",
+    name: "1.20.1-forge-47.2.18",
     loader: { kind: "Forge", version: "47.2.18" },
     optifine: { kind: "OptiFine", version: "HD_U_I6" },
     fabricApi: null,
@@ -220,6 +273,7 @@ try {
   ]);
   await choose("Forge", "47.1.0");
   await clear("Forge");
+  await expect(versionName).toHaveValue("1.20.1-optifine_1.20.1_HD_U_I5");
   await expect(card("OptiFine")).toContainText("已选择 HD_U_I5");
   await submit();
   expect(await payload()).toMatchObject({
@@ -240,11 +294,15 @@ try {
   );
 
   await choose("Fabric", "0.16.10");
+  await expect(versionName).toHaveValue("1.20.1-fabric-0.16.10");
+  await versionName.fill("我的 Fabric");
   await toggle("Fabric API").click();
   await expect(card("Fabric API").getByRole("radio")).toHaveCount(2);
   await choose("Fabric API", "0.92.12+1.20.1");
+  await expect(versionName).toHaveValue("我的 Fabric");
   await submit();
   expect(await payload()).toMatchObject({
+    name: "我的 Fabric",
     loader: { kind: "Fabric", version: "0.16.10" },
     optifine: null,
     fabricApi: { path: "fabric-api-current.jar" },
@@ -291,7 +349,12 @@ try {
     }),
   ).toBeVisible();
   await choose("NeoForge", "47.1.106");
+  await expect(versionName).toHaveValue("1.20.1-neoforge-47.1.106");
   await clear("NeoForge");
+  await expect(versionName).toHaveValue("1.20.1");
+  checks.push(
+    "选择和取消加载器同步版本名称；Fabric/Quilt 名称省略 loader，Forge 联装沿用主加载器名称，Fabric API 保留手动名称并按该名称提交安装",
+  );
   await toggle("Fabric").focus();
   await page.keyboard.press("Enter");
   await card("Fabric")

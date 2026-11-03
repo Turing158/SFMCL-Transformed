@@ -6,10 +6,20 @@ import {
   componentBlockReason,
   emptyInstallSelection,
   installSelectionPayload,
+  installVersionName,
   selectInstallLoader,
 } from "./installOptions";
 import type { Loader, ResourceFile } from "./types";
 describe("安装选项与原版分类兼容", () => {
+  it.each(["26w14a", "22w13oneblockatatime", "22w13oneBlockAtATime"])(
+    "%s 属于愚人节分类，排除普通快照分类",
+    (id) => {
+      const version = { id, type: "snapshot" };
+      expect(matchesVersionFilter(version, "april")).toBe(true);
+      expect(matchesVersionFilter(version, "snapshot")).toBe(false);
+      expect(matchesVersionFilter(version, "all")).toBe(true);
+    },
+  );
   it("愚人节版本独立分类，历史版包含 alpha 与 beta", () => {
     const version = {
       id: "24w14potato",
@@ -89,6 +99,9 @@ describe("组合安装", () => {
         optifine,
         fabricApi: null,
       });
+      expect(installVersionName("1.20.1", selected)).toBe(
+        "1.20.1-forge-47.2.18",
+      );
       expect(componentBlockReason("Fabric", selected)).toContain(
         "不能同时安装",
       );
@@ -130,6 +143,23 @@ describe("组合安装", () => {
     ).toBe(unavailable);
   });
   it("取消 Forge 后保留独立 OptiFine，取消 Fabric 同时清除 API", () => {
+    expect(
+      installVersionName(
+        "1.20.1",
+        selectInstallLoader(
+          { ...emptyInstallSelection, loader: forge, optifine },
+          "Forge",
+          null,
+        ),
+      ),
+    ).toBe("1.20.1-optifine_1.20.1_HD_U_I6");
+    expect(
+      installVersionName("1.20.1", {
+        ...emptyInstallSelection,
+        loader: fabric,
+        fabricApi,
+      }),
+    ).toBe("1.20.1-fabric-0.16.10");
     expect(
       installSelectionPayload(
         selectInstallLoader(
@@ -175,5 +205,43 @@ describe("组合安装", () => {
       optifine: null,
       fabricApi: null,
     });
+  });
+});
+
+describe("安装版本自动命名", () => {
+  it("官网和镜像的旧版 NeoForge 使用相同名称，并保留实际安装版本", () => {
+    for (const version of ["47.1.105", "1.20.1-47.1.105"]) {
+      const loader: Loader = {
+        kind: "NeoForge",
+        version,
+        metadata: { rawVersion: "1.20.1-forge-47.1.105" },
+      };
+      const selection = { ...emptyInstallSelection, loader };
+      expect(installVersionName("1.20.1", selection)).toBe(
+        "1.20.1-neoforge-47.1.105",
+      );
+      expect(installSelectionPayload(selection).loader?.version).toBe(version);
+    }
+  });
+
+  it("保留新版 NeoForge 完整的加载器版本号", () => {
+    expect(
+      installVersionName("26.3", {
+        ...emptyInstallSelection,
+        loader: { kind: "NeoForge", version: "26.3.0.100", metadata: {} },
+      }),
+    ).toBe("26.3-neoforge-26.3.0.100");
+  });
+
+  it("Fabric 与 Quilt 省略 loader，空选择恢复原版名称", () => {
+    for (const kind of ["Fabric", "Quilt"]) {
+      expect(
+        installVersionName("1.20.1", {
+          ...emptyInstallSelection,
+          loader: { kind, version: "0.27.0", metadata: {} },
+        }),
+      ).toBe(`1.20.1-${kind.toLowerCase()}-0.27.0`);
+    }
+    expect(installVersionName("1.20.1", emptyInstallSelection)).toBe("1.20.1");
   });
 });

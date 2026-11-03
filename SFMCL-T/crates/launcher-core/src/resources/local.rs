@@ -389,7 +389,7 @@ fn read_directory_icon(path: &Path, name: &str) -> Option<Vec<u8>> {
     std::fs::read(icon).ok()
 }
 
-fn parse_world_data(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn parse_world_data(bytes: &[u8]) -> Result<Value> {
     let mut decompressed = vec![];
     if bytes.starts_with(&[0x1f, 0x8b]) {
         flate2::read::GzDecoder::new(bytes)

@@ -3,8 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { resourceCenterFixture } from "./fixtures/resource-center.mjs";
 import { playersFixture } from "./fixtures/players.mjs";
-import { answerConfirmation } from "./lib/confirmation.mjs";
 import { runtimePath } from "./lib/paths.mjs";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 
 const evidence = runtimePath("evidence/page-retention");
 await mkdir(evidence, { recursive: true });
@@ -21,7 +21,7 @@ await page.addInitScript(pixelAppFixture, { components: true });
 await page.addInitScript(resourceCenterFixture);
 await page.addInitScript(playersFixture);
 await page.addInitScript(() => {
-  window.__pixelTest.data.settings.showNotices = true;
+  window.__pixelTest.data.settings.homeCleanMode = false;
   window.__pixelTest.tasks.jobs.push({
     id: "retained-job",
     title: "安装 Minecraft 1.21.4",
@@ -32,15 +32,21 @@ await page.addInitScript(() => {
   });
   const invoke = window.__TAURI_INTERNALS__.invoke;
   window.__TAURI_INTERNALS__.invoke = async (command, args) => {
-    if (command === "request" && args.operation === "notices.list") {
+    if (
+      command === "request" &&
+      ["notices.list", "notices.refresh"].includes(args.operation)
+    ) {
       window.__pixelTest.requests.push({ operation: args.operation });
-      return Array.from({ length: 12 }, (_, i) => ({
+      const items = Array.from({ length: 12 }, (_, i) => ({
         title: `测试公告 ${i + 1}`,
         source: `notice-${i}`,
         icon: "",
         content:
           "公告内容\n\n" + "保留公告的展开状态和页面滚动位置。\n\n".repeat(15),
       }));
+      return args.operation === "notices.refresh"
+        ? { items, error: "" }
+        : items;
     }
     const result = await invoke(command, args);
     if (
@@ -137,6 +143,7 @@ try {
     exact: true,
   });
   await memory.fill("7168");
+  await waitForAutoSave(page);
   const settingsReads = await count("versions.settings.get");
   await nav("资源中心");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -149,11 +156,15 @@ try {
   await expect(memory).toHaveValue("7168");
   expect(await count("versions.settings.get")).toBe(settingsReads);
   await back();
-  await answerConfirmation(page, false);
-  await expect(memory).toHaveValue("7168");
-  await back();
-  await answerConfirmation(page, true);
-  check("版本筛选与未保存设置在切页和下载往返中保留，明确返回才确认放弃修改");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.__pixelTest.versionSettings["1.21.4"]?.settings.memoryMb,
+      ),
+    )
+    .toBe(7168);
+  check("版本筛选与设置在切页和下载往返中保留，返回时自动保存且无需确认");
 
   await page
     .getByRole("button", { name: "查看 1.21.4 本地资源", exact: true })
@@ -328,7 +339,7 @@ try {
   ).toHaveAttribute("aria-selected", "true");
   await expect(title).toHaveValue("保留全局草稿");
   expect(await scrollPosition()).toBeCloseTo(settingsPosition, 0);
-  check("设置保留当前分类、未保存输入及滚动位置");
+  check("设置保留当前分类、输入及滚动位置，修改自动保存");
 
   await nav("角色管理");
   await page.locator('[data-player-login="offline"]').click();

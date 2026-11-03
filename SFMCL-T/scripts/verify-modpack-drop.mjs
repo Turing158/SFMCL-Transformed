@@ -23,7 +23,7 @@ await page.addInitScript(() => {
   let nextCallback = 0,
     nextListener = 0,
     nextToken = 0;
-  state.data.settings.showNotices = false;
+  state.data.settings.homeCleanMode = true;
   state.dropError = "";
   state.dropDelay = 0;
   native.transformCallback = (callback) => {

@@ -318,7 +318,7 @@ try {
   await page.setViewportSize({ width: 1024, height: 768 });
   await versions.focus();
   for (const theme of ["light", "dark"]) {
-    for (const accent of ["forest", "puce", "ebony"]) {
+    for (const accent of ["forest", "nether", "end", "sift"]) {
       await page.evaluate(
         ({ theme, accent }) => {
           document.documentElement.dataset.theme = theme;
@@ -353,7 +353,7 @@ try {
   await page.keyboard.press("Escape");
   await expect(tooltip).toHaveCount(0);
   checks.push(
-    "all six theme palettes; requested animations remain enabled under reduced motion",
+    "all eight theme palettes; requested animations remain enabled under reduced motion",
   );
   expect(errors).toEqual([]);
   await writeFile(
@@ -361,7 +361,7 @@ try {
     JSON.stringify({ checks, errors }, null, 2),
   );
   console.log(
-    `Passed ${checks.length} tooltip interaction groups and all six theme palettes.`,
+    `Passed ${checks.length} tooltip interaction groups and all eight theme palettes.`,
   );
 } finally {
   await browser.close();
