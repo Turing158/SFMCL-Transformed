@@ -44,7 +44,9 @@ export function ModpackDropTarget() {
     const animations = [
       element.animate([{ opacity: from }, { opacity: visible ? 0.75 : 0 }], {
         ...timing,
-        id: visible ? "sfmcl-t-modpack-drop-enter" : "sfmcl-t-modpack-drop-exit",
+        id: visible
+          ? "sfmcl-t-modpack-drop-enter"
+          : "sfmcl-t-modpack-drop-exit",
       }),
     ];
     if (content)
@@ -91,23 +93,34 @@ export function ModpackDropTarget() {
   useEffect(() => {
     if (!desktop) return;
     let disposed = false;
+    let draggingFiles = false;
     const listener = getCurrentWebview().onDragDropEvent(({ payload }) => {
       if (disposed) return;
       if (payload.type === "leave") {
+        draggingFiles = false;
         if (!checking.current) setPhase("idle");
         return;
       }
-      if (payload.type === "enter" || payload.type === "over") {
+      if (payload.type === "enter") {
         if (!checking.current) {
-          if (payload.type === "enter") setPaths(payload.paths);
-          setPhase("hover");
+          draggingFiles = payload.paths.length > 0;
+          setPaths(payload.paths);
+          setPhase(draggingFiles ? "hover" : "idle");
         }
         return;
       }
+      if (payload.type === "over") {
+        // WebView2 may keep emitting over events for text after a file drag.
+        // Only an active enter with file paths can show the import overlay.
+        if (draggingFiles && !checking.current) setPhase("hover");
+        return;
+      }
+      draggingFiles = false;
       if (checking.current) return;
       const dropped = payload.paths;
-      setPaths(dropped);
       setPhase("idle");
+      if (!dropped.length) return;
+      setPaths(dropped);
       const busy = latest.current.busy;
       checking.current = true;
       void latest.current.run(async () => {

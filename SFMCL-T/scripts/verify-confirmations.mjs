@@ -103,6 +103,44 @@ const assertOpen = async (message, operation) => {
 try {
   await go("角色管理");
   const removePlayer = button("移除 Steve");
+  await removePlayer.click();
+  await assertOpen(
+    "移除角色 Steve？此操作不会删除游戏存档。",
+    "players.remove",
+  );
+  await dialog.evaluate(async (element) => {
+    await Promise.allSettled(
+      element.getAnimations().map((animation) => animation.finished),
+    );
+  });
+  const bounds = await dialog.boundingBox();
+  const heading = await dialog.getByRole("heading").boundingBox();
+  const insidePoints = [
+    { x: heading.x + heading.width / 2, y: heading.y + heading.height / 2 },
+    // Empty dialog padding targets the dialog itself, just like its backdrop.
+    { x: bounds.x + bounds.width / 2, y: bounds.y + 5 },
+  ];
+  for (const point of insidePoints) {
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+    await page.mouse.move(4, 4, { steps: 10 });
+    await page.mouse.up();
+    await expect(dialog).not.toHaveAttribute("data-closing", "true");
+    await expect(dialog).toBeVisible();
+    expect(await count("players.remove")).toBe(0);
+  }
+  await page.mouse.move(4, 4);
+  await page.mouse.down();
+  await page.mouse.move(insidePoints[1].x, insidePoints[1].y, { steps: 10 });
+  await page.mouse.up();
+  await expect(dialog).not.toHaveAttribute("data-closing", "true");
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(4, 4);
+  await expect(dialog).toHaveCount(0);
+  expect(await count("players.remove")).toBe(0);
+  check(
+    "Dragging from dialog content or padding onto the backdrop, or from the backdrop into the dialog, keeps it open; a complete backdrop click still closes it",
+  );
   for (const method of ["cancel", "escape", "close", "backdrop", "enter"]) {
     await removePlayer.click();
     await assertOpen(

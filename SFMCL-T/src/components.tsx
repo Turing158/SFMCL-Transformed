@@ -7,6 +7,7 @@ import { useModalMotion } from "./useModalMotion";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
+  MouseEvent,
   ReactNode,
   Ref,
 } from "react";
@@ -253,6 +254,17 @@ export function TabPanel({
     />
   );
 }
+function isDialogBackdrop(event: MouseEvent<HTMLDialogElement>) {
+  if (event.target !== event.currentTarget) return false;
+  const rect = event.currentTarget.getBoundingClientRect();
+  return (
+    event.clientX < rect.left ||
+    event.clientX > rect.right ||
+    event.clientY < rect.top ||
+    event.clientY > rect.bottom
+  );
+}
+
 export function Modal({
   title,
   children,
@@ -273,6 +285,7 @@ export function Modal({
   showError?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const startedOnBackdrop = useRef(false);
   const titleId = useId();
   const { error, clearError } = useApp();
   const requestClose = useModalMotion(ref, onClose, closeDisabled);
@@ -286,16 +299,20 @@ export function Modal({
         e.preventDefault();
         requestClose();
       }}
-      onClick={(e) => {
-        if (e.target !== ref.current) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        if (
-          e.clientX < rect.left ||
-          e.clientX > rect.right ||
-          e.clientY < rect.top ||
-          e.clientY > rect.bottom
-        )
-          requestClose();
+      onPointerDownCapture={(event) => {
+        // A drag from the content to the backdrop can also target the dialog
+        // in its final click. Only a press that began outside may dismiss it.
+        startedOnBackdrop.current =
+          event.button === 0 && isDialogBackdrop(event);
+      }}
+      onPointerCancelCapture={() => {
+        startedOnBackdrop.current = false;
+      }}
+      onClick={(event) => {
+        const shouldClose =
+          startedOnBackdrop.current && isDialogBackdrop(event);
+        startedOnBackdrop.current = false;
+        if (shouldClose) requestClose();
       }}
     >
       <PixelFrame />

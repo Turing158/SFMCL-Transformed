@@ -62,7 +62,8 @@
   gap: calc(8px * var(--brand-scale) * var(--rail-open));
   height: var(--topbar-height);
   min-height: var(--topbar-height);
-  padding: 0;
+  /* Balance the navigation gap below with space above the brand. */
+  padding: 10px 0 0;
   color: #fff;
   background: none;
   text-align: left;
@@ -116,24 +117,6 @@
   content: "";
   order: 1;
   flex: 0 0 calc(var(--topbar-height) * var(--brand-scale) * var(--rail-open));
-}
-.sidebar .brand::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 0;
-  height: 2px;
-  background-image: repeating-linear-gradient(
-    90deg,
-    #fff 0 7px,
-    transparent 7px 13px
-  );
-  opacity: 0.16;
-  transition: opacity 220ms;
-}
-.sidebar .brand:hover::after {
-  opacity: 0.44;
 }
 .sidebar nav {
   display: grid;

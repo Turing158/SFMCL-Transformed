@@ -220,10 +220,11 @@ try {
   await brand.focus();
   record("品牌区保留键盘焦点", await brand.evaluate((el) => el === document.activeElement && el.tabIndex === 0));
   record("点击品牌区回首页且菜单始终有一个选中项", await nav.locator('[aria-current="page"]').count() === 1 && await nav.locator('[aria-current="page"]').getAttribute("aria-label") === "开始游戏");
-  record("品牌区有 2px 像素虚线并显示软件图标", await brand.evaluate((el) => {
+  record("品牌标题下无分割线并显示软件图标", await brand.evaluate((el) => {
     const heading = el.closest('.brand');
     const icon = heading.querySelector('img.brand-mark');
-    return getComputedStyle(heading, "::after").height === "2px" && getComputedStyle(heading, "::after").backgroundImage.includes("repeating-linear-gradient") && icon?.complete && icon.naturalWidth > 0 && !heading.querySelector('.surface-frame');
+    const divider = getComputedStyle(heading, "::after");
+    return divider.content === "none" && divider.backgroundImage === "none" && icon?.complete && icon.naturalWidth > 0 && !heading.querySelector('.surface-frame');
   }));
 
   const source = await readFile(projectPath("src/App.tsx"), "utf8");

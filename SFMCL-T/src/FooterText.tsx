@@ -6,10 +6,11 @@ import {
   useRef,
 } from "react";
 import type { ComponentProps, ReactNode } from "react";
+import { footerFrames, footerTiming } from "./footerMotion";
 
 type TextSlot = "message" | "player" | "step";
 type FooterKind = "launch" | "status";
-type TextFrame = { text: string; opacity: string; transform: string };
+type TextFrame = { text: string; opacity: string; top: string };
 type TextSnapshot = {
   text: string;
   kind: FooterKind;
@@ -20,12 +21,6 @@ const TextHistory = createContext<{
   kind: FooterKind;
   history: Map<TextSlot, TextSnapshot>;
 } | null>(null);
-const timing = {
-  duration: 260,
-  easing: "cubic-bezier(0.22, 0.8, 0.25, 1)",
-  fill: "both",
-} as const;
-
 export function FooterTextProvider({
   kind,
   children,
@@ -73,13 +68,14 @@ export function FooterText({
     const snapshot: TextSnapshot = {
       text,
       kind,
-      frame: { text, opacity: "1", transform: "none" },
+      frame: { text, opacity: "1", top: "0px" },
       position: { x: target.x, y: target.y },
     };
     history.set(slot, snapshot);
     const animations: Animation[] = [];
     let outgoing: HTMLSpanElement | undefined;
 
+    // Layout offsets and painted alpha keep glyphs out of a second GPU texture.
     // The status line has different icon spacing and vertical alignment in each
     // footer. Move from its visible origin even when both say "准备就绪".
     if (slot === "message" && previous && text) {
@@ -89,11 +85,11 @@ export function FooterText({
       if (previous.kind !== kind || Math.abs(x) + Math.abs(y) > 0.1) {
         animations.push(
           container.animate(
-            [
-              { transform: `translate(${x}px, ${y}px)` },
-              { transform: "translate(0, 0)" },
-            ],
-            { ...timing, id: "sfmcl-t-footer-text-position" },
+            footerFrames(
+              { left: `${x}px`, top: `${y}px` },
+              { left: "0px", top: "0px" },
+            ),
+            { ...footerTiming, id: "sfmcl-t-footer-text-position" },
           ),
         );
       }
@@ -108,24 +104,24 @@ export function FooterText({
         container.append(outgoing);
         animations.push(
           outgoing.animate(
-            [
+            footerFrames(
               {
-                opacity: previous.frame.opacity,
-                transform: previous.frame.transform,
+                "--footer-text-alpha": previous.frame.opacity,
+                top: previous.frame.top,
               },
-              { opacity: 0, transform: "translateY(-6px)" },
-            ],
-            { ...timing, id: "sfmcl-t-footer-text-out" },
+              { "--footer-text-alpha": 0, top: "-6px" },
+            ),
+            { ...footerTiming, id: "sfmcl-t-footer-text-out" },
           ),
         );
       }
       animations.push(
         line.animate(
-          [
-            { opacity: 0, transform: "translateY(6px)" },
-            { opacity: 1, transform: "translateY(0)" },
-          ],
-          { ...timing, id: "sfmcl-t-footer-text-in" },
+          footerFrames(
+            { "--footer-text-alpha": 0, top: "6px" },
+            { "--footer-text-alpha": 1, top: "0px" },
+          ),
+          { ...footerTiming, id: "sfmcl-t-footer-text-in" },
         ),
       );
     }
@@ -153,7 +149,7 @@ export function FooterText({
       snapshot.frame = {
         text: useOutgoing ? previous!.frame.text : text,
         opacity: visible.opacity,
-        transform: visible.transform,
+        top: visible.top,
       };
       clear();
     };

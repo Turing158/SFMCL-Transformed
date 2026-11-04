@@ -175,9 +175,11 @@ try {
   await expect(overlay).toBeVisible();
   await emit("leave");
   await expect(overlay).toHaveCount(0);
+  await emit("over");
+  await expect(overlay).toHaveCount(0);
   expect(await requests("modpacks.inspect")).toEqual([]);
   checks.push(
-    "Dragging over any page covers the full viewport; leaving cancels without inspecting.",
+    "Dragging over any page covers the full viewport; leaving cancels without inspecting, and stray over events cannot reopen it.",
   );
 
   const entering = await motionFrame("enter", "enter", 90, [
@@ -315,6 +317,41 @@ try {
   expect(await requests("modpacks.discard")).toEqual([]);
   checks.push(
     "Drop inspects once, preserves the checking view through fade-out, then opens installation with its prepared token even in StrictMode.",
+  );
+
+  const nameInput = dialog.getByRole("textbox", { name: "整合包游戏名称" });
+  await nameInput.focus();
+  await nameInput.evaluate((element) => element.setSelectionRange(0, 2));
+  // WebView2 can emit over/drop without a new file enter when selected text is
+  // dragged after a file drop; the text drop carries no file paths.
+  await emit("over");
+  await emit("over");
+  await expect(overlay).toHaveCount(0);
+  await emit("drop");
+  await expect(overlay).toHaveCount(0);
+  await expect(dialog.locator('[role="alert"]')).toHaveCount(0);
+  await emit("enter");
+  await emit("over");
+  await expect(overlay).toHaveCount(0);
+  await emit("drop");
+  await emit("leave");
+  await emit("over");
+  await expect(overlay).toHaveCount(0);
+  await expect(nameInput).toBeFocused();
+  await expect(nameInput).toHaveValue("探索整合包 1.0");
+  expect(
+    await nameInput.evaluate((element) => [
+      element.selectionStart,
+      element.selectionEnd,
+    ]),
+  ).toEqual([0, 2]);
+  await expect(dialog.locator('[role="alert"]')).toHaveCount(0);
+  expect((await requests("modpacks.inspect")).length).toBe(beforeMultiple + 1);
+  expect(await requests("modpacks.install")).toEqual([]);
+  expect(await requests("modpacks.discard")).toEqual([]);
+  await capture("text-drag-over-dialog");
+  checks.push(
+    "Dragging selected input text after a file drop ignores pathless enter/over/drop events, preserves focus and selection, and creates no overlay, error or import request.",
   );
 
   await emit("enter", ["C:/Packs/another.zip"]);

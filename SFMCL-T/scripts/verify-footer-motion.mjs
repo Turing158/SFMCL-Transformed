@@ -47,7 +47,10 @@ const sample = (time) =>
     const inner = document
       .querySelector(".workspace-footer-content")
       .getBoundingClientRect();
-    const main = document.querySelector("main").getBoundingClientRect();
+    const main = document.querySelector("main.page").getBoundingClientRect();
+    const status = document.querySelector(".launch-status, .workspace-footer");
+    const statusBounds = status.getBoundingClientRect();
+    const statusHeight = parseFloat(getComputedStyle(status, "::before").height);
     return {
       height: host.height,
       bottom: host.bottom,
@@ -55,6 +58,10 @@ const sample = (time) =>
       mainBottom: main.bottom,
       contentBottom: inner.bottom,
       target: inner.height,
+      statusHeight,
+      statusTop: statusBounds.bottom - statusHeight,
+      statusBottom: statusBounds.bottom,
+      statusTarget: statusBounds.height,
       overflow: document.body.scrollWidth > innerWidth,
     };
   }, time);
@@ -69,11 +76,16 @@ const checkTransition = async (name, direction) => {
   expect((middle.height - start.height) * direction).toBeGreaterThan(0);
   expect((end.height - middle.height) * direction).toBeGreaterThan(0);
   expect(end.height).toBeCloseTo(end.target, 1);
+  expect(end.statusHeight).toBeCloseTo(end.statusTarget, 1);
   for (const frame of [start, middle, end]) {
     expect(frame.bottom).toBe(640);
     expect(frame.contentBottom).toBe(640);
     expect(frame.mainBottom).toBe(frame.top);
     expect(frame.overflow).toBe(false);
+    expect(frame.statusBottom).toBe(640);
+    expect(frame.statusTop).toBeGreaterThanOrEqual(605);
+    expect(frame.statusHeight).toBeGreaterThanOrEqual(28);
+    expect(frame.statusHeight).toBeLessThanOrEqual(35);
   }
   await sample(110);
   await page.screenshot({ path: `${evidence}/${name}.png` });
@@ -104,6 +116,7 @@ try {
   await nav("开始游戏");
   const resumed = await sample(0);
   expect(resumed.height).toBeCloseTo(interrupted.height, 1);
+  expect(resumed.statusHeight).toBeCloseTo(interrupted.statusHeight, 1);
   expect(
     await page.evaluate(() => window.__footerMotions.at(-2).playState),
   ).toBe("idle");
@@ -121,7 +134,7 @@ try {
     exact: true,
   });
   await expect(picker).toBeVisible();
-  await expect(region).toHaveCSS("overflow-y", "visible");
+  await expect(page.locator(".workspace-footer-clip")).toHaveCSS("overflow-y", "visible");
   await finish();
   await page.keyboard.press("Escape");
   await expect(picker).toBeHidden();
@@ -135,6 +148,7 @@ try {
   await expect.poll(count).toBe(beforeResizeCount + 1);
   const afterResize = await sample(0);
   expect(afterResize.height).toBeCloseTo(beforeResize.height, 1);
+  expect(afterResize.statusHeight).toBeCloseTo(beforeResize.statusHeight, 1);
   await checkTransition("resize-during-expansion", 1);
 
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -154,7 +168,7 @@ try {
     JSON.stringify({ checks, errors }, null, 2),
   );
   console.log(
-    "PASS Footer height and page layout animate together in both directions; initial render and same-kind navigation stay still, rapid reversals and viewport changes remain continuous, and the version picker stays usable.",
+    "PASS Status background stays in the bottom 28-35px while footer/page height animates; initial render and same-kind navigation stay still, reversals and resizing remain continuous, and the version picker stays usable.",
   );
 } finally {
   await browser.close();

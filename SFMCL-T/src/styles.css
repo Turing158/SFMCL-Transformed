@@ -26,6 +26,11 @@
   --background-overlay: color-mix(in srgb, var(--bg) 93%, transparent);
   --sidebar: #173e2e;
   --sidebar-muted: color-mix(in srgb, var(--sidebar), white 76%);
+  --chrome-ink: #fff;
+  --chrome-muted: var(--sidebar-muted);
+  --chrome-line: color-mix(in srgb, var(--sidebar), white 17%);
+  --chrome-hover: color-mix(in srgb, var(--sidebar), white 14%);
+  --chrome-accent: color-mix(in srgb, var(--accent), white 55%);
   --preview-accent: #32785b;
   --preview-light-bg: color-mix(in srgb, var(--preview-accent), white 94%);
   --preview-light-panel: white;
@@ -306,21 +311,51 @@ pre {
   background-position: center;
 }
 .workspace {
+  --workspace-corner-radius: 16px;
+  --workspace-inset-color: color-mix(in srgb, var(--sidebar), #000 60%);
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: clip;
 }
+.workspace::before,
+.workspace-footer-region::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: calc(2 * var(--workspace-corner-radius));
+  height: calc(2 * var(--workspace-corner-radius));
+  /* A native rounded shadow preserves smooth pixel coverage along the arc.
+     Clip its top-left quadrant to paint only the outside of the content corner. */
+  border-radius: 50%;
+  box-shadow: 0 0 0 var(--workspace-corner-radius) var(--sidebar);
+  clip-path: inset(
+    0 var(--workspace-corner-radius) var(--workspace-corner-radius) 0
+  );
+  pointer-events: none;
+}
+.workspace::before {
+  top: var(--topbar-height);
+  z-index: 40;
+}
 .topbar {
+  /* Window controls and breadcrumbs share the sidebar's dark surface. */
+  --ink: var(--chrome-ink);
+  --muted: var(--chrome-muted);
+  --line: var(--chrome-line);
+  --soft: var(--chrome-hover);
+  --accent: var(--chrome-accent);
   display: flex;
   align-items: center;
   height: var(--topbar-height);
   min-height: var(--topbar-height);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid transparent;
   padding-left: 22px;
   font-size: 11px;
-  background: var(--panel);
+  color: var(--chrome-ink);
+  background: var(--sidebar);
   user-select: none;
 }
 .topbar[data-tauri-drag-region] {
@@ -466,20 +501,42 @@ pre {
   flex: 1;
   min-height: 0;
 }
+@property --footer-status-height {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 35px;
+}
 .workspace-footer-region {
   position: relative;
+  will-change: transform;
   z-index: 30;
   flex: 0 0 auto;
   min-width: 0;
   background: var(--panel);
 }
+.workspace-footer-region[data-kind="launch"] {
+  box-shadow: 0 -5px 20px
+    color-mix(in srgb, var(--shadow-color), transparent 75%);
+}
 .workspace-footer-region::before {
   content: "";
   position: absolute;
-  inset: 0 0 auto;
-  height: 1px;
-  background: var(--line);
-  z-index: 31;
+  left: 0;
+  right: -16px;
+  bottom: var(--footer-status-height);
+  height: calc(
+    100dvh - var(--topbar-height) - var(--footer-status-height)
+  );
+  border-radius: var(--workspace-corner-radius) 0 0
+    var(--workspace-corner-radius);
+  /* The footer anchors this overlay to the moving status strip. Extend the
+     right edge out of view so only the top, left and bottom cast an inset shade. */
+  box-shadow:
+    inset 3px 3px 8px
+      color-mix(in srgb, var(--workspace-inset-color), transparent 92%),
+    inset 0 -3px 8px
+      color-mix(in srgb, var(--workspace-inset-color), transparent 94%);
+  z-index: 32;
   pointer-events: none;
 }
 .workspace-footer-content {
@@ -487,24 +544,51 @@ pre {
   inset: auto 0 0;
   display: flow-root;
 }
-.workspace-footer-content > :is(.launch-dock, .workspace-footer) {
-  border-top-color: transparent;
-}
-/* Reveal the bottom-anchored controls while preserving the picker's overflow. */
-.workspace-footer-region[data-resizing]:not(:has(.launch-version-picker)) {
+.workspace-footer-clip {
+  position: absolute;
+  inset: 0;
   overflow: clip;
+}
+/* Match the top corner and follow the status strip's existing height motion. */
+.workspace-footer-region::after {
+  bottom: var(--footer-status-height);
+  transform: scaleY(-1);
+  z-index: 31;
+}
+/* Retain the same clipping surface during and after motion. Only an open
+   version picker needs to extend above the launch controls. */
+.workspace-footer-region:has(.launch-version-picker) .workspace-footer-clip {
+  overflow: visible;
 }
 .workspace-footer {
   height: 35px;
   min-height: 35px;
   padding: 0 35px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid transparent;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--muted);
+  color: var(--chrome-muted);
   font-size: 10px;
-  background: var(--panel);
+  background: transparent;
+}
+/* Only the status strip changes its background height; the launch controls
+   keep their panel surface while the page reclaims the space above it. */
+:is(.workspace-footer, .launch-status) {
+  position: relative;
+  isolation: isolate;
+}
+:is(.workspace-footer, .launch-status)::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--footer-status-height);
+  background: var(--footer-status-fill, var(--sidebar));
+  z-index: -1;
+  pointer-events: none;
+}
+.workspace-footer .status-dot {
+  background: var(--chrome-accent);
 }
 .workspace-footer-status {
   display: flex;
@@ -520,6 +604,10 @@ pre {
   place-items: center;
   flex: 0 0 auto;
   vertical-align: middle;
+}
+:is(.footer-status-icon, .footer-icon-current) {
+  /* Keep icon motion independent; text uses native font rendering at rest. */
+  will-change: transform, opacity;
 }
 .footer-icon-current,
 .footer-icon-outgoing {
@@ -543,6 +631,17 @@ pre {
   min-width: 0;
   vertical-align: bottom;
   overflow: hidden;
+  /* One clipping layer stays stable; glyphs must not get a second texture. */
+  will-change: opacity;
+}
+@property --footer-text-alpha {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+.footer-text-current {
+  position: relative;
+  top: 0;
 }
 .footer-text-current,
 .footer-text-outgoing {
@@ -550,6 +649,8 @@ pre {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Keep text motion in layout to avoid resampling glyphs in nested layers. */
+  opacity: var(--footer-text-alpha);
 }
 .footer-text-outgoing {
   position: absolute;

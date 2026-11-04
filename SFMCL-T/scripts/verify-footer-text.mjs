@@ -178,7 +178,7 @@ const sample = (slot, time) =>
         return {
           text: node.dataset.text || node.textContent,
           opacity: Number(style.opacity),
-          y: new DOMMatrixReadOnly(style.transform).m42,
+          y: node.getBoundingClientRect().top - host.getBoundingClientRect().top,
         };
       };
       return {

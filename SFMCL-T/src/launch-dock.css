@@ -33,6 +33,7 @@
 }
 .launch-dock .overline {
   display: block;
+  color: var(--muted);
   font-size: 10px;
   line-height: 14px;
 }
@@ -46,6 +47,7 @@
 .launch-dock .launch-version h3 {
   min-width: 0;
   margin: 0;
+  color: var(--ink);
   font-size: 18px;
   line-height: 24px;
   white-space: nowrap;
@@ -78,6 +80,7 @@
   transform: translateY(-1px);
 }
 .launch-dock .launch-version p {
+  color: var(--muted);
   font-size: 10px;
   line-height: 15px;
   white-space: nowrap;
@@ -238,8 +241,9 @@
   justify-content: space-between;
   gap: 18px;
   padding: 0 var(--launch-gutter);
-  border-top: 1px solid var(--line);
-  color: var(--muted);
+  border-top: 1px solid transparent;
+  background: transparent;
+  color: var(--chrome-muted);
   font-size: 10px;
 }
 .launch-status-detail {
@@ -252,7 +256,7 @@
 }
 .launch-status-detail > .footer-status-icon {
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--chrome-accent);
 }
 .launch-status-message {
   white-space: nowrap;
@@ -266,7 +270,7 @@
   flex: 0 0 auto;
   min-width: 0;
   max-width: 50%;
-  color: var(--muted);
+  color: var(--chrome-muted);
 }
 .launch-status-player > svg {
   flex-shrink: 0;
@@ -283,11 +287,11 @@
 }
 .launch-dock[data-warning] .launch-status-detail,
 .launch-dock[data-warning] .launch-status-detail > .footer-status-icon {
-  color: var(--surface-warning);
+  color: color-mix(in srgb, var(--surface-warning), white 55%);
 }
 .launch-dock[data-error] .launch-status {
+  --footer-status-fill: var(--surface-danger-bg);
   color: var(--danger);
-  background: var(--surface-danger-bg);
 }
 .launch-dock[data-error] .launch-status-detail > .footer-status-icon {
   color: var(--danger);

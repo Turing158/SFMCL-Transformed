@@ -53,6 +53,7 @@
     "test:launch-dock": "node scripts/verify-launch-dock.mjs",
     "test:footer-motion": "node scripts/verify-footer-motion.mjs",
     "test:footer-text": "node scripts/verify-footer-text.mjs",
+    "test:footer-settle": "node scripts/verify-footer-settle.mjs",
     "test:downloads": "node scripts/verify-downloads.mjs",
     "test:download-clear": "node scripts/verify-download-clear.mjs",
     "test:notifications": "node scripts/verify-notifications.mjs",

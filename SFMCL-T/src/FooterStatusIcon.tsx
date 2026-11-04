@@ -6,6 +6,7 @@ import {
   useRef,
 } from "react";
 import type { ReactNode, RefObject } from "react";
+import { footerFrames, footerTiming } from "./footerMotion";
 
 type FooterKind = "launch" | "status";
 type IconSnapshot = {
@@ -17,12 +18,6 @@ const IconHistory = createContext<{
   kind: FooterKind;
   previous: RefObject<IconSnapshot | null>;
 } | null>(null);
-const timing = {
-  duration: 260,
-  easing: "cubic-bezier(0.22, 0.8, 0.25, 1)",
-  fill: "both",
-} as const;
-
 function centerOf(node: HTMLElement) {
   const rect = node.getBoundingClientRect();
   return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
@@ -96,13 +91,13 @@ export function FooterStatusIcon({
     if (previous && previous.identity !== identity) {
       animations.push(
         container.animate(
-          [
+          footerFrames(
             {
               transform: `translate(${previous.center.x - destination.x}px, ${previous.center.y - destination.y}px)`,
             },
             { transform: "translate(0, 0)" },
-          ],
-          { ...timing, id: "sfmcl-t-footer-icon-position" },
+          ),
+          { ...footerTiming, id: "sfmcl-t-footer-icon-position" },
         ),
       );
       outgoing = previous.frame.node.cloneNode(true) as HTMLElement;
@@ -113,21 +108,21 @@ export function FooterStatusIcon({
       container.append(outgoing);
       animations.push(
         outgoing.animate(
-          [
+          footerFrames(
             {
               opacity: previous.frame.opacity,
               transform: previous.frame.transform,
             },
             { opacity: 0, transform: "rotate(-30deg) scale(0.7)" },
-          ],
-          { ...timing, id: "sfmcl-t-footer-icon-out" },
+          ),
+          { ...footerTiming, id: "sfmcl-t-footer-icon-out" },
         ),
         icon.animate(
-          [
+          footerFrames(
             { opacity: 0, transform: "rotate(30deg) scale(0.7)" },
             { opacity: 1, transform: "rotate(0deg) scale(1)" },
-          ],
-          { ...timing, id: "sfmcl-t-footer-icon-in" },
+          ),
+          { ...footerTiming, id: "sfmcl-t-footer-icon-in" },
         ),
       );
     }

@@ -133,6 +133,23 @@ try {
     .getByRole("checkbox", { name: "安装附加模组和材质包等等（1 个）" })
     .check();
   await settleDialog();
+  const nameInput = dialog().getByRole("textbox", { name: "整合包游戏名称" });
+  const field = await nameInput.boundingBox();
+  await page.mouse.move(field.x + field.width - 12, field.y + field.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(4, 4, { steps: 10 });
+  await page.mouse.up();
+  await expect(dialog()).not.toHaveAttribute("data-closing", "true");
+  await expect(nameInput).toHaveValue("探索整合包 1.0");
+  await expect(
+    dialog().getByRole("checkbox", {
+      name: "安装附加模组和材质包等等（1 个）",
+    }),
+  ).toBeChecked();
+  expect(await last("modpacks.discard")).toBeUndefined();
+  checks.push(
+    "Releasing an input selection drag outside the import dialog keeps its name, optional-file selection and prepared archive intact.",
+  );
   await page.screenshot({ path: `${evidence}/local-import.png` });
   await dialog().getByRole("button", { name: "开始安装" }).click();
   await expect(dialog()).toHaveCount(0);
