@@ -36,6 +36,9 @@ export function useNavigationTransition(route: NavigationEntry) {
                 : [
                     entry.page,
                     entry.page === "players" ? entry.login : undefined,
+                    entry.page === "players" && entry.login === "yggdrasil"
+                      ? entry.yggdrasilImport?.id
+                      : undefined,
                   ],
           ),
         ],
@@ -49,14 +52,12 @@ export function useNavigationTransition(route: NavigationEntry) {
     previous.current = { key, page, depth, route };
     if (last.key === key || !workspace.current) return;
 
-    const returningFromDownloads =
-      last.route.page === "downloads" &&
+    const returningToParent =
+      (last.route.page === "downloads" || last.route.page === "players") &&
       JSON.stringify(last.route.returnTo ?? { page: "home" }) ===
         JSON.stringify(route);
     const direction =
-      returningFromDownloads || (last.page === page && last.depth > depth)
-        ? -1
-        : 1;
+      returningToParent || (last.page === page && last.depth > depth) ? -1 : 1;
     const targets = [
       { selector: ".page", distance: 24, opacity: 0.2, id: "content" },
       {

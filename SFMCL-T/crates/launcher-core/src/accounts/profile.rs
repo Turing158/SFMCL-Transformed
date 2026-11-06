@@ -25,7 +25,7 @@ impl Accounts {
             .into_iter()
             .find(|p| p.uuid == id)
             .context("角色不存在")?;
-        if !player.online {
+        if !player.online || player.yggdrasil.is_some() {
             bail!("此操作仅支持 Microsoft 登录的正版角色");
         }
         Ok(player)

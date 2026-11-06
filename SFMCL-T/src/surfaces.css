@@ -8,7 +8,7 @@
 :root {
   --surface-depth-transition: --surface-depth 180ms
     cubic-bezier(0.22, 0.8, 0.25, 1);
-  --surface-line: color-mix(in srgb, var(--muted), var(--panel) 65%);
+  --surface-line: color-mix(in srgb, var(--muted), var(--panel) 74%);
   --surface-strong-line: color-mix(in srgb, var(--muted), var(--accent) 25%);
   --surface-shadow: color-mix(in srgb, var(--line), var(--muted) 12%);
   --surface-well: color-mix(in srgb, var(--bg), var(--soft) 45%);
@@ -96,11 +96,15 @@
 }
 
 .button,
+.icon-button,
+.players-split-button {
+  --surface-edge: var(--surface-line);
+  --surface-base: var(--surface-shadow);
+  --surface-depth: 1px;
+  --surface-highlight: transparent;
+}
+.button,
 .icon-button {
-  --surface-edge: var(--surface-strong-line);
-  --surface-base: color-mix(in srgb, var(--surface-edge), #000 22%);
-  --surface-depth: 2px;
-  --surface-highlight: color-mix(in srgb, var(--surface-fill), #fff 14%);
   min-height: var(--button-height);
   line-height: 20px;
   transition:
@@ -109,9 +113,9 @@
     color 220ms ease,
     opacity 220ms ease;
 }
-:is(.button, .icon-button) > .surface-frame,
-:is(.button, .icon-button) > .surface-frame::before,
-:is(.button, .icon-button) > .surface-frame::after {
+:is(.button, .icon-button, .players-split-button) > .surface-frame,
+:is(.button, .icon-button, .players-split-button) > .surface-frame::before,
+:is(.button, .icon-button, .players-split-button) > .surface-frame::after {
   transition: background-color 220ms ease;
 }
 .button {
@@ -137,6 +141,8 @@
 .button.primary {
   --surface-fill: var(--accent);
   --surface-edge: color-mix(in srgb, var(--accent), #000 24%);
+  --surface-base: color-mix(in srgb, var(--accent), #000 38%);
+  --surface-depth: 2px;
   color: var(--pixel-on-accent);
 }
 .button.primary:is(:hover, :active):not(:disabled) {
@@ -202,6 +208,10 @@
   --surface-shape-1: var(--corner-card-inset-1);
   --surface-shape-2: var(--corner-card-inset-2);
   --surface-depth: 2px;
+}
+/* Static containers sit behind actions; selection keeps its accent outline. */
+.panel:not(.modal) {
+  --surface-depth: 0px;
 }
 :is(.version-card, .character-panel, .player-row) {
   overflow: visible;

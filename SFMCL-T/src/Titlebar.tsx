@@ -109,7 +109,10 @@ export function Titlebar() {
     let active = true;
     const syncMaximized = async () => {
       const next = await currentWindow.isMaximized();
-      if (active) setMaximized(next);
+      if (active) {
+        setMaximized(next);
+        document.documentElement.dataset.windowMaximized = String(next);
+      }
     };
     const reportError = (error: unknown) =>
       console.error("无法同步窗口状态", error);
@@ -121,6 +124,7 @@ export function Titlebar() {
     void syncMaximized().catch(reportError);
     return () => {
       active = false;
+      delete document.documentElement.dataset.windowMaximized;
       void listener.then((unlisten) => unlisten()).catch(reportError);
     };
   }, []);
@@ -142,11 +146,7 @@ export function Titlebar() {
       aria-label="窗口标题栏"
       data-tauri-drag-region={desktop ? "deep" : undefined}
     >
-      <nav
-        className="topbar-breadcrumb"
-        aria-label="页面路径"
-        data-tauri-drag-region="false"
-      >
+      <nav className="topbar-breadcrumb" aria-label="页面路径">
         <ol ref={breadcrumbs}>
           {parent && (
             <li key="back">
@@ -225,11 +225,7 @@ export function Titlebar() {
         <button className="breadcrumb-ellipsis">...</button>
         <span className="breadcrumb-separator">/</span>
       </div>
-      <div
-        ref={dragSpace}
-        className="topbar-drag-space"
-        data-tooltip={desktop ? "拖动窗口，双击最大化或还原" : undefined}
-      />
+      <div ref={dragSpace} className="topbar-drag-space" />
       <div
         ref={controls}
         className="window-controls"

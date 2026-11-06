@@ -58,8 +58,8 @@ html[data-startup="loading"] #root {
   pointer-events: none;
 }
 html[data-startup="revealing"] #root {
-  background: var(--bg, var(--startup-bg));
-  clip-path: inset(0 round 8px);
+  background: var(--sidebar, var(--startup-bg));
+  clip-path: inset(0 round var(--window-corner-radius, 12px));
   transform-origin: center;
   will-change: transform, opacity;
 }
@@ -259,6 +259,7 @@ html[data-startup="revealing"] #root {
   outline-offset: -3px;
 }
 .startup-drag-region {
+  cursor: default;
   display: none;
   position: absolute;
   top: 0;

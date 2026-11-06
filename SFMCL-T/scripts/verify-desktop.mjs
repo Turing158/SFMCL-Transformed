@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 import { chromium, expect } from "@playwright/test";
 import { waitForAutoSave } from "./lib/auto-save.mjs";
@@ -45,7 +46,7 @@ let player;
 try {
   await save({ ...original.settings, downloadTaskDisplay: "always" });
   await nav("角色管理");
-  await page.getByRole("button", { name: "离线登录", exact: true }).click();
+  await openPlayerLogin(page, "offline");
   await page.getByRole("textbox", { name: "角色名称" }).fill(`QA_${stamp}`);
   await page.getByRole("button", { name: "创建角色", exact: true }).click();
   await expect(page.locator(".players-page")).not.toHaveAttribute("data-login");

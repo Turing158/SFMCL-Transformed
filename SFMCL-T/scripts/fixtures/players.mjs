@@ -74,6 +74,19 @@ export function playersFixture() {
       case "players.select":
         fixture.data.settings.activePlayer = player.uuid;
         break;
+      case "players.list":
+        return structuredClone(fixture.data.players);
+      case "players.reorder": {
+        const ranks = new Map(payload.ids.map((id, index) => [id, index]));
+        if (ranks.size !== payload.ids.length)
+          throw new Error("重复的角色排序");
+        fixture.data.players.sort(
+          (a, b) =>
+            (ranks.get(a.uuid) ?? payload.ids.length) -
+            (ranks.get(b.uuid) ?? payload.ids.length),
+        );
+        return structuredClone(fixture.data.players);
+      }
       case "players.skin":
         player.skin = payload.path || "";
         player.slim = payload.slim;

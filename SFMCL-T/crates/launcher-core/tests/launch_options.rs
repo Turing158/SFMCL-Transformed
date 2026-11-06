@@ -271,6 +271,7 @@ fn generated_launch_arguments_contain_one_quick_play_target_and_no_unresolved_to
         uuid: "uuid",
         access_token: "0",
         online: false,
+        yggdrasil: false,
     };
     let settings = Settings {
         quick_play_enabled: true,

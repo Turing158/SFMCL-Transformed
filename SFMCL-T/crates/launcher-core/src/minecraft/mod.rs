@@ -1,4 +1,5 @@
 pub mod arguments;
+mod authlib_injector;
 pub mod download_source;
 pub mod installer;
 pub mod java;

@@ -78,13 +78,27 @@ try {
             page.locator(".workspace-footer-region"),
           ).toHaveAttribute("data-kind", name === "设置" ? "status" : "launch");
           const clip = await page
-            .locator(".launch-status, .workspace-footer")
-            .boundingBox();
+            .locator(".workspace-footer-content")
+            .evaluate((element) => {
+              const bounds = element.getBoundingClientRect();
+              // Compare complete device pixels. Fractional viewport edges can
+              // add a partly covered screenshot column outside the UI canvas.
+              const scale = devicePixelRatio;
+              const x = Math.ceil(bounds.left * scale) / scale;
+              const y = Math.ceil(bounds.top * scale) / scale;
+              return {
+                x,
+                y,
+                width: Math.floor(bounds.right * scale) / scale - x,
+                height: Math.floor(bounds.bottom * scale) / scale - y,
+              };
+            });
           // Keep the page behind a fractional footer edge still while comparing
           // footer frames; the page has its own independent navigation motion.
           await page.evaluate(() => {
             for (const animation of document.getAnimations()) {
-              if (animation.id.startsWith("sfmcl-t-navigation-")) animation.finish();
+              if (animation.id.startsWith("sfmcl-t-navigation-"))
+                animation.finish();
             }
           });
           const label = `${width}-${scale}-${theme}-${name === "设置" ? "leave" : "return"}`;

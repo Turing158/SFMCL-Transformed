@@ -1,19 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   Check,
   Pencil,
-  UserPlus,
   RefreshCw,
   RotateCcw,
   Shirt,
   Flag,
   Trash2,
+  Globe,
+  ExternalLink,
+  ChevronDown,
+  KeyRound,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
 import { useApp } from "../store";
 import { usePageActive } from "../PageActivity";
 import { usePlayerViewTransition } from "../usePlayerViewTransition";
+import { usePointerReorder } from "../usePointerReorder";
+import type { PointerReorderOptions } from "../usePointerReorder";
 import { usePlayerAppearanceTransition } from "../usePlayerAppearanceTransition";
-import { confirmAction, pick } from "../api";
+import { confirmAction, pick, external } from "../api";
 import { Badge, Button, Skin, PixelFrame } from "../components";
 import { PageTitle } from "../PageHeader";
 import { usePlayerLogin } from "../usePlayerLogin";
@@ -23,8 +30,20 @@ import { PlayerSkinPreview } from "../PlayerSkinPreview";
 import { useImageResource } from "../useImageResource";
 import { nextPreviewMode, previewModeLabel } from "../playerPreview";
 import type { PlayerPreviewMode } from "../playerPreview";
+import { ContextMenu } from "../ContextMenu";
+import type {
+  ContextMenuAnchor,
+  ContextMenuHandle,
+  ContextMenuItem,
+} from "../ContextMenu";
 import type { PlayerLoginKind } from "../navigation";
 import { PlayerProfileDialog } from "./PlayerProfileDialog";
+import { PlayerYggdrasilLogin } from "./PlayerYggdrasilLogin";
+import { yggdrasilServerLabel } from "../yggdrasilDrop";
+import {
+  thirdPartyOAuthEnabled,
+  thirdPartyOAuthMenuLabel,
+} from "../playerLoginAvailability";
 import type { PlayerProfileAction } from "./PlayerProfileDialog";
 import {
   MicrosoftIcon,
@@ -35,6 +54,27 @@ import {
 } from "./PlayerLogin";
 type PlayerView = "grove" | "gallery";
 const viewKey = "sfmcl-t.players.view";
+const reorderOptions: PointerReorderOptions = {
+  rowSelector: ".players-card",
+  keyAttribute: "data-player-key",
+  allowedControl: ".players-select",
+  overlayClass: "players-drag-overlay",
+  draggingAttribute: "data-player-dragging",
+  animationPrefix: "sfmcl-t-player",
+  overlayParent: (list) =>
+    list.closest<HTMLElement>(".players-page") ?? document.body,
+};
+const loginMethods = [
+  { id: "offline", label: "离线登录", icon: <UserPlus size={16} /> },
+  { id: "microsoft", label: "Microsoft 登录", icon: <MicrosoftIcon /> },
+  { id: "yggdrasil", label: "第三方账号登录", icon: <Globe size={16} /> },
+  {
+    id: "yggdrasil-oauth",
+    label: thirdPartyOAuthMenuLabel,
+    icon: <KeyRound size={16} />,
+    disabled: !thirdPartyOAuthEnabled,
+  },
+] satisfies (ContextMenuItem & { id: PlayerLoginKind })[];
 
 // Pixel silhouettes from the approved preview.
 function PlayerIcon({ kind = "user" }: { kind?: "user" | "users" | "grid" }) {
@@ -125,6 +165,22 @@ export function Players() {
   const app = useApp();
   const pageActive = usePageActive();
   const loginKind = app.route.page === "players" ? app.route.login : undefined;
+  const loginMenuId = useId();
+  const loginMenu = useRef<ContextMenuHandle>(null);
+  const [loginMenuAnchor, setLoginMenuAnchor] =
+    useState<ContextMenuAnchor | null>(null);
+  const imported =
+    app.route.page === "players" && app.route.login === "yggdrasil"
+      ? app.route.yggdrasilImport
+      : undefined;
+  const thirdPartyLogin =
+    loginKind === "yggdrasil" || loginKind === "yggdrasil-oauth";
+  const yggdrasilTitle = imported
+    ? "外置登录"
+    : loginKind === "yggdrasil-oauth"
+      ? "第三方授权登录"
+      : "第三方账号登录";
+  const importedName = imported ? yggdrasilServerLabel(imported.server) : "";
   const auth = usePlayerLogin(loginKind === "microsoft");
   const { root, animateView } = usePlayerViewTransition();
   const loginState = usePlayerLoginTransition(
@@ -140,17 +196,36 @@ export function Players() {
     }
   });
   const viewSwitchLabel = `切换为${view === "grove" ? "方块展台" : "林间营地"}`;
+  const [modal, setModal] = useState<PlayerProfileAction | null>(null);
+  const cardsRoot = useRef<HTMLDivElement>(null);
+  const playerKeys = app.data.players.map((player) => player.uuid);
+  const {
+    order,
+    draggingKey,
+    cancel: cancelReorder,
+  } = usePointerReorder(
+    cardsRoot,
+    playerKeys,
+    view,
+    reorderOptions,
+    !app.busy && !loginKind && !modal ? app.reorderPlayers : undefined,
+  );
+  const playersById = new Map(
+    app.data.players.map((player) => [player.uuid, player]),
+  );
+  const orderedPlayers = (order ?? playerKeys)
+    .map((id) => playersById.get(id))
+    .filter((player): player is Player => !!player);
   const defaultPreviewMode = app.data.settings.playerPreviewMode;
   const [previewMode, setPreviewMode] =
     useState<PlayerPreviewMode>(defaultPreviewMode);
-  const [modal, setModal] = useState<PlayerProfileAction | null>(null);
   const [offlineName, setOfflineName] = useState("");
   const [loginPreviewMode, setLoginPreviewMode] =
     useState<PlayerPreviewMode>(defaultPreviewMode);
   const mode = loginKind ? loginPreviewMode : previewMode;
   // The authorization stage shows no scenery, so it must not resolve images.
   const backgroundType =
-    mode === "3d" && loginKind !== "microsoft"
+    mode === "3d" && (!loginKind || loginKind === "offline")
       ? app.data.settings.player3dBackgroundType
       : "current";
   const scene = `/assets/players/${view === "grove" ? "grass" : "gallery"}.svg`;
@@ -169,7 +244,7 @@ export function Players() {
     brokenBackground !== backgroundPath;
   const scenerySource = customBackground ? backgroundUrl : scene;
   const lastLogin = useRef(loginKind);
-  const focusAfterReturn = useRef<PlayerLoginKind | null>(null);
+  const focusAfterReturn = useRef(false);
   const selected = app.data.players.find(
     (p) => p.uuid === app.data.settings.activePlayer,
   );
@@ -202,7 +277,7 @@ export function Players() {
   }, [view]);
   useEffect(() => {
     if (lastLogin.current !== loginKind) {
-      if (!loginKind) focusAfterReturn.current = lastLogin.current || null;
+      if (!loginKind) focusAfterReturn.current = !!lastLogin.current;
       if (loginKind === "offline") {
         setOfflineName("");
         setLoginPreviewMode(defaultPreviewMode);
@@ -211,17 +286,29 @@ export function Players() {
     }
     if (pageActive && !loginKind && !app.busy && focusAfterReturn.current) {
       root.current
-        ?.querySelector<HTMLButtonElement>(
-          `[data-player-login="${focusAfterReturn.current}"]`,
-        )
+        ?.querySelector<HTMLButtonElement>("[data-player-login-trigger]")
         ?.focus();
-      focusAfterReturn.current = null;
+      focusAfterReturn.current = false;
     }
   }, [loginKind, app.busy, root, pageActive, defaultPreviewMode]);
   const close = () => setModal(null);
   useEffect(() => {
     if (!pageActive || loginKind) setModal(null);
   }, [pageActive, loginKind]);
+  useEffect(() => {
+    if (!pageActive || loginKind || app.busy) setLoginMenuAnchor(null);
+  }, [pageActive, loginKind, app.busy]);
+  const openLoginMenu = (element: HTMLButtonElement) => {
+    const positionElement = element.parentElement ?? element;
+    const rect = positionElement.getBoundingClientRect();
+    setLoginMenuAnchor({
+      element,
+      positionElement,
+      x: rect.right,
+      y: rect.bottom,
+      placement: "bottom-end",
+    });
+  };
 
   return (
     <div
@@ -240,44 +327,104 @@ export function Players() {
               ? "离线登录"
               : loginKind === "microsoft"
                 ? "Microsoft 登录"
-                : "角色管理"
+                : thirdPartyLogin
+                  ? yggdrasilTitle
+                  : "角色管理"
           }
           eyebrow={
             loginKind === "offline"
               ? "OFFLINE LOGIN"
               : loginKind === "microsoft"
                 ? "MICROSOFT LOGIN"
-                : "PLAYER INVENTORY"
+                : thirdPartyLogin
+                  ? imported
+                    ? "EXTERNAL LOGIN"
+                    : loginKind === "yggdrasil-oauth"
+                      ? "THIRD-PARTY AUTHORIZATION"
+                      : "YGGDRASIL LOGIN"
+                  : "PLAYER INVENTORY"
           }
         />
-        <div className="players-login-actions">
-          <Button
-            primary={!loginKind}
-            disabled={app.busy}
-            data-player-login="offline"
-            aria-pressed={loginKind === "offline"}
-            onClick={() => app.openPlayerLogin("offline")}
-          >
-            <UserPlus size={15} />
-            离线登录
-          </Button>
-          <Button
-            disabled={app.busy}
-            data-player-login="microsoft"
-            aria-pressed={loginKind === "microsoft"}
-            onClick={() => app.openPlayerLogin("microsoft")}
-          >
-            <MicrosoftIcon />
-            Microsoft 登录
-          </Button>
-        </div>
+        {!loginKind && (
+          <div className="players-login-actions">
+            <Button
+              primary
+              disabled={app.busy}
+              data-player-login-trigger
+              aria-haspopup="menu"
+              aria-expanded={!!loginMenuAnchor}
+              aria-controls={loginMenuAnchor ? loginMenuId : undefined}
+              onClick={(event) => {
+                if (loginMenuAnchor) loginMenu.current?.close();
+                else openLoginMenu(event.currentTarget);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  openLoginMenu(event.currentTarget);
+                }
+              }}
+            >
+              <LogIn size={15} aria-hidden="true" />
+              登录
+              <ChevronDown
+                size={12}
+                aria-hidden="true"
+                className="players-login-chevron"
+              />
+            </Button>
+          </div>
+        )}
       </header>
+      {loginMenuAnchor && pageActive && !loginKind && !app.busy && (
+        <ContextMenu
+          ref={loginMenu}
+          anchor={loginMenuAnchor}
+          title="登录方式"
+          ariaLabel="登录方式"
+          menuId={loginMenuId}
+          showHeading={false}
+          className="favorite-context-menu"
+          items={loginMethods
+            .filter(
+              (method) =>
+                method.id !== "yggdrasil-oauth" || thirdPartyOAuthEnabled,
+            )
+            .map((method) => ({
+              ...method,
+              onSelect: () => app.openPlayerLogin(method.id),
+            }))}
+          onClose={() => setLoginMenuAnchor(null)}
+        />
+      )}
       <div className="players-workspace">
         <section className="player-preview has-surface" aria-label="角色预览">
           <PixelFrame />
           <div className="players-stage">
             {loginKind === "microsoft" ? (
               <PlayerAuthStage auth={auth} />
+            ) : thirdPartyLogin ? (
+              <div className="players-yggdrasil-stage">
+                <Globe size={80} strokeWidth={1} />
+                <strong>
+                  {imported
+                    ? importedName
+                    : loginKind === "yggdrasil-oauth"
+                      ? thirdPartyOAuthEnabled
+                        ? "LITTLESKIN"
+                        : "第三方授权"
+                      : "YGGDRASIL"}
+                </strong>
+                <span>
+                  {imported
+                    ? "连接你的皮肤站账号"
+                    : loginKind === "yggdrasil-oauth"
+                      ? thirdPartyOAuthEnabled
+                        ? "通过浏览器授权连接你的角色"
+                        : "授权登录暂未开放"
+                      : "你的站点，你的角色"}
+                </span>
+              </div>
             ) : (
               <>
                 <div
@@ -367,6 +514,17 @@ export function Players() {
           <div className="players-identity">
             {loginKind === "microsoft" ? (
               <PlayerAuthIdentity auth={auth} />
+            ) : thirdPartyLogin ? (
+              <div className="players-identity-top">
+                <div className="players-identity-name">
+                  <h2>{imported ? "站点登录" : "第三方验证"}</h2>
+                  <span className="players-kind">
+                    {imported
+                      ? "验证服务器已从链接导入"
+                      : "登录后可加入使用相同验证服务的服务器"}
+                  </span>
+                </div>
+              </div>
             ) : (
               <>
                 <div className="players-identity-top">
@@ -381,9 +539,11 @@ export function Players() {
                         kind={previewPlayer?.online ? "grid" : "user"}
                       />
                       {previewPlayer
-                        ? previewPlayer.online
-                          ? "Microsoft"
-                          : "离线角色"
+                        ? previewPlayer.yggdrasil
+                          ? previewPlayer.yggdrasil.serverName
+                          : previewPlayer.online
+                            ? "Microsoft"
+                            : "离线角色"
                         : "未选择角色"}
                     </span>
                   </div>
@@ -394,117 +554,138 @@ export function Players() {
                     </span>
                   )}
                 </div>
-                {!loginKind && (
-                  <div
-                    className={`players-actions${selected?.online ? " players-actions-online" : ""}`}
-                  >
-                    <div
-                      className="players-skin-split players-split-button has-surface"
-                      role="group"
-                      aria-label="皮肤操作"
-                    >
-                      <PixelFrame />
-                      <button
-                        type="button"
-                        className="players-skin-change players-action"
-                        aria-label="更换皮肤"
-                        disabled={!selected || app.busy}
-                        onClick={() =>
-                          void app.run(async () => {
-                            if (!selected) return;
-                            if (selected.online) {
-                              app.clearError();
-                              setModal({
-                                kind: "skin",
-                                player: selected,
-                                previewMode: mode,
-                              });
-                              return;
-                            }
-                            const path = await pick(false, ["png"]);
-                            if (path)
-                              await app.update(
-                                "players.skin",
-                                {
-                                  id: selected.uuid,
-                                  path,
-                                  slim: selected.slim,
-                                },
-                                "皮肤已更新",
-                              );
-                          })
-                        }
-                      >
-                        <Shirt size={15} aria-hidden="true" />
-                        <span
-                          className="players-action-label"
-                          aria-hidden="true"
-                        >
-                          <span>更换皮肤</span>
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="players-skin-reset players-split-secondary"
-                        aria-label="重置皮肤"
-                        data-tooltip={
-                          selected?.online ? "恢复正版账号默认皮肤" : "重置皮肤"
-                        }
-                        disabled={!selected || app.busy}
-                        onClick={async () => {
-                          if (!selected) return;
-                          if (
-                            selected.online &&
-                            !(await confirmAction(
-                              `将 ${selected.name} 的正版皮肤恢复为默认皮肤？`,
-                            ))
-                          )
-                            return;
-                          await app.mutate(
-                            "players.skin",
-                            { id: selected.uuid, path: null, slim: false },
-                            "已重置默认皮肤",
-                          );
-                        }}
-                      >
-                        <RotateCcw size={14} />
-                      </button>
-                    </div>
-                    {selected?.online && (
-                      <Button
-                        className="players-action"
-                        aria-label="更换披风"
-                        disabled={app.busy}
-                        onClick={() => {
-                          app.clearError();
-                          setModal({ kind: "cape", player: selected });
-                        }}
-                      >
-                        <Flag size={14} aria-hidden="true" />
-                        <span
-                          className="players-action-label"
-                          aria-hidden="true"
-                        >
-                          <span>更换披风</span>
-                        </span>
-                      </Button>
-                    )}
+                {!loginKind && selected?.yggdrasil ? (
+                  <div className="players-yggdrasil-manage">
                     <Button
-                      className="players-action"
-                      aria-label="更改名称"
-                      disabled={!selected || app.busy}
-                      onClick={() => {
-                        if (!selected) return;
-                        app.clearError();
-                        setModal({ kind: "rename", player: selected });
-                      }}
+                      disabled={app.busy}
+                      onClick={() =>
+                        void app.run(() =>
+                          external(selected.yggdrasil!.homepage),
+                        )
+                      }
                     >
-                      <Pencil size={14} aria-hidden="true" />
-                      <span className="players-action-label" aria-hidden="true">
-                        <span>更改名称</span>
-                      </span>
+                      <ExternalLink size={15} />
+                      打开验证站点
                     </Button>
                   </div>
+                ) : (
+                  !loginKind && (
+                    <div
+                      className={`players-actions${selected?.online ? " players-actions-online" : ""}`}
+                    >
+                      <div
+                        className="players-skin-split players-split-button has-surface"
+                        role="group"
+                        aria-label="皮肤操作"
+                      >
+                        <PixelFrame />
+                        <button
+                          type="button"
+                          className="players-skin-change players-action"
+                          aria-label="更换皮肤"
+                          disabled={!selected || app.busy}
+                          onClick={() =>
+                            void app.run(async () => {
+                              if (!selected) return;
+                              if (selected.online) {
+                                app.clearError();
+                                setModal({
+                                  kind: "skin",
+                                  player: selected,
+                                  previewMode: mode,
+                                });
+                                return;
+                              }
+                              const path = await pick(false, ["png"]);
+                              if (path)
+                                await app.update(
+                                  "players.skin",
+                                  {
+                                    id: selected.uuid,
+                                    path,
+                                    slim: selected.slim,
+                                  },
+                                  "皮肤已更新",
+                                );
+                            })
+                          }
+                        >
+                          <Shirt size={15} aria-hidden="true" />
+                          <span
+                            className="players-action-label"
+                            aria-hidden="true"
+                          >
+                            <span>更换皮肤</span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="players-skin-reset players-split-secondary"
+                          aria-label="重置皮肤"
+                          data-tooltip={
+                            selected?.online
+                              ? "恢复正版账号默认皮肤"
+                              : "重置皮肤"
+                          }
+                          disabled={!selected || app.busy}
+                          onClick={async () => {
+                            if (!selected) return;
+                            if (
+                              selected.online &&
+                              !(await confirmAction(
+                                `将 ${selected.name} 的正版皮肤恢复为默认皮肤？`,
+                              ))
+                            )
+                              return;
+                            await app.mutate(
+                              "players.skin",
+                              { id: selected.uuid, path: null, slim: false },
+                              "已重置默认皮肤",
+                            );
+                          }}
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      </div>
+                      {selected?.online && (
+                        <Button
+                          className="players-action"
+                          aria-label="更换披风"
+                          disabled={app.busy}
+                          onClick={() => {
+                            app.clearError();
+                            setModal({ kind: "cape", player: selected });
+                          }}
+                        >
+                          <Flag size={14} aria-hidden="true" />
+                          <span
+                            className="players-action-label"
+                            aria-hidden="true"
+                          >
+                            <span>更换披风</span>
+                          </span>
+                        </Button>
+                      )}
+                      <Button
+                        className="players-action"
+                        aria-label="更改名称"
+                        disabled={!selected || app.busy}
+                        onClick={() => {
+                          if (!selected) return;
+                          app.clearError();
+                          setModal({ kind: "rename", player: selected });
+                        }}
+                      >
+                        <Pencil size={14} aria-hidden="true" />
+                        <span
+                          className="players-action-label"
+                          aria-hidden="true"
+                        >
+                          <span>更改名称</span>
+                        </span>
+                      </Button>
+                    </div>
+                  )
                 )}
               </>
             )}
@@ -520,6 +701,8 @@ export function Players() {
                 "离线登录"
               ) : loginKind === "microsoft" ? (
                 "Microsoft 登录"
+              ) : thirdPartyLogin ? (
+                yggdrasilTitle
               ) : (
                 <>
                   我的角色{" "}
@@ -535,13 +718,14 @@ export function Players() {
                 className="players-view-switch has-surface"
                 aria-label={viewSwitchLabel}
                 data-tooltip={viewSwitchLabel}
-                onClick={() =>
+                onClick={() => {
+                  cancelReorder();
                   animateView(() =>
                     setView((current) =>
                       current === "grove" ? "gallery" : "grove",
                     ),
-                  )
-                }
+                  );
+                }}
               >
                 <PixelFrame />
                 <PlayerIcon kind={view === "grove" ? "grid" : "users"} />
@@ -555,6 +739,12 @@ export function Players() {
             />
           ) : loginKind === "microsoft" ? (
             <PlayerMicrosoftLogin auth={auth} />
+          ) : thirdPartyLogin ? (
+            <PlayerYggdrasilLogin
+              key={imported?.id ?? loginKind}
+              method={loginKind === "yggdrasil-oauth" ? "browser" : "password"}
+              importedServer={imported?.server}
+            />
           ) : (
             <>
               {app.data.players.length === 0 ? (
@@ -564,14 +754,21 @@ export function Players() {
                 </div>
               ) : (
                 <div
+                  ref={cardsRoot}
                   className="players-cards"
+                  data-player-sortable={!app.busy}
                   role="region"
                   aria-label="角色列表"
                   tabIndex={0}
                 >
-                  {app.data.players.map((player) => (
+                  {orderedPlayers.map((player) => (
                     <div
                       key={player.uuid}
+                      data-player-key={player.uuid}
+                      data-window-drag="false"
+                      data-player-placeholder={
+                        draggingKey === player.uuid ? "true" : undefined
+                      }
                       className={`players-card has-surface ${selected?.uuid === player.uuid ? "selected" : ""}`}
                       style={{
                         viewTransitionName: `sfmcl-t-player-card-${CSS.escape(player.uuid)}`,
@@ -590,7 +787,30 @@ export function Players() {
                         className="players-select"
                         aria-label={`选择角色 ${player.name}`}
                         aria-pressed={selected?.uuid === player.uuid}
+                        aria-description="拖动调整顺序；也可按 Alt 加方向键移动角色"
                         disabled={app.busy}
+                        onKeyDown={(event) => {
+                          if (!event.altKey || app.busy) return;
+                          const direction =
+                            event.key === "ArrowUp" || event.key === "ArrowLeft"
+                              ? -1
+                              : event.key === "ArrowDown" ||
+                                  event.key === "ArrowRight"
+                                ? 1
+                                : 0;
+                          if (!direction) return;
+                          event.preventDefault();
+                          cancelReorder();
+                          const next = [...playerKeys];
+                          const from = next.indexOf(player.uuid);
+                          const to = from + direction;
+                          if (to < 0 || to >= next.length) return;
+                          next.splice(from, 1);
+                          next.splice(to, 0, player.uuid);
+                          const control = event.currentTarget;
+                          void app.reorderPlayers(next);
+                          requestAnimationFrame(() => control.focus());
+                        }}
                         onClick={() => void app.selectPlayer(player.uuid)}
                       >
                         <span className="players-avatar has-surface">
@@ -603,7 +823,11 @@ export function Players() {
                             <PlayerIcon
                               kind={player.online ? "grid" : "user"}
                             />
-                            {player.online ? "Microsoft" : "离线角色"}
+                            {player.yggdrasil
+                              ? player.yggdrasil.serverName
+                              : player.online
+                                ? "Microsoft"
+                                : "离线角色"}
                           </small>
                         </span>
                       </button>

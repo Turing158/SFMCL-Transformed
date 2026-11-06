@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { chromium, expect } from "@playwright/test";
@@ -406,7 +407,7 @@ try {
   expect(
     await page.evaluate(() => window.__pixelTest.data.players[0].slim),
   ).toBe(true);
-  await page.getByRole("button", { name: "离线登录", exact: true }).click();
+  await openPlayerLogin(page, "offline");
   await page
     .getByRole("textbox", { name: "角色名称", exact: true })
     .fill("invalid name");

@@ -50,14 +50,35 @@ const sample = (time) =>
     const main = document.querySelector("main.page").getBoundingClientRect();
     const status = document.querySelector(".launch-status, .workspace-footer");
     const statusBounds = status.getBoundingClientRect();
-    const statusHeight = parseFloat(getComputedStyle(status, "::before").height);
+    const statusHeight = parseFloat(
+      getComputedStyle(status, "::before").height,
+    );
+    const card = document.querySelector(".launch-dock-main");
+    const cardBounds = card.getBoundingClientRect();
+    const cardStyle = getComputedStyle(card);
     return {
       height: host.height,
       bottom: host.bottom,
       top: host.top,
       mainBottom: main.bottom,
       contentBottom: inner.bottom,
-      target: inner.height,
+      target:
+        animation.effect.target.dataset.kind === "launch"
+          ? inner.height
+          : statusBounds.height,
+      cardTop: cardBounds.top,
+      cardBottom: cardBounds.bottom,
+      cardHeight: cardBounds.height,
+      cardLayoutHeight: card.offsetHeight,
+      cardOpacity: Number(cardStyle.opacity),
+      leftGap: cardBounds.left - host.left,
+      rightGap: host.right - cardBounds.right,
+      radii: [
+        cardStyle.borderTopLeftRadius,
+        cardStyle.borderTopRightRadius,
+        cardStyle.borderBottomLeftRadius,
+        cardStyle.borderBottomRightRadius,
+      ],
       statusHeight,
       statusTop: statusBounds.bottom - statusHeight,
       statusBottom: statusBounds.bottom,
@@ -75,18 +96,33 @@ const checkTransition = async (name, direction) => {
   const end = await sample(259.99);
   expect((middle.height - start.height) * direction).toBeGreaterThan(0);
   expect((end.height - middle.height) * direction).toBeGreaterThan(0);
+  expect((start.cardTop - middle.cardTop) * direction).toBeGreaterThan(0);
+  expect((middle.cardTop - end.cardTop) * direction).toBeGreaterThan(0);
+  expect((middle.cardOpacity - start.cardOpacity) * direction).toBeGreaterThan(
+    0,
+  );
+  expect(end.cardOpacity).toBe(direction === 1 ? 1 : 0);
   expect(end.height).toBeCloseTo(end.target, 1);
   expect(end.statusHeight).toBeCloseTo(end.statusTarget, 1);
   for (const frame of [start, middle, end]) {
     expect(frame.bottom).toBe(640);
     expect(frame.contentBottom).toBe(640);
-    expect(frame.mainBottom).toBe(frame.top);
+    expect(frame.mainBottom).toBeCloseTo(frame.statusTop, 1);
     expect(frame.overflow).toBe(false);
     expect(frame.statusBottom).toBe(640);
     expect(frame.statusTop).toBeGreaterThanOrEqual(605);
     expect(frame.statusHeight).toBeGreaterThanOrEqual(28);
     expect(frame.statusHeight).toBeLessThanOrEqual(35);
+    expect(frame.cardHeight).toBeCloseTo(start.cardHeight, 3);
+    expect(frame.leftGap).toBeCloseTo(frame.rightGap, 3);
+    expect(frame.leftGap).toBeGreaterThanOrEqual(10);
+    expect(frame.radii).toEqual(["12px", "12px", "0px", "0px"]);
   }
+  expect(direction === 1 ? end.cardBottom : end.cardTop).toBeCloseTo(
+    end.statusTop +
+      (direction === 1 ? 0 : end.cardLayoutHeight - end.cardHeight),
+    1,
+  );
   await sample(110);
   await page.screenshot({ path: `${evidence}/${name}.png` });
   await finish();
@@ -117,6 +153,8 @@ try {
   const resumed = await sample(0);
   expect(resumed.height).toBeCloseTo(interrupted.height, 1);
   expect(resumed.statusHeight).toBeCloseTo(interrupted.statusHeight, 1);
+  expect(resumed.cardTop).toBeCloseTo(interrupted.cardTop, 1);
+  expect(resumed.cardOpacity).toBeCloseTo(interrupted.cardOpacity, 3);
   expect(
     await page.evaluate(() => window.__footerMotions.at(-2).playState),
   ).toBe("idle");
@@ -134,7 +172,10 @@ try {
     exact: true,
   });
   await expect(picker).toBeVisible();
-  await expect(page.locator(".workspace-footer-clip")).toHaveCSS("overflow-y", "visible");
+  await expect(page.locator(".workspace-footer-clip")).toHaveCSS(
+    "overflow-y",
+    "visible",
+  );
   await finish();
   await page.keyboard.press("Escape");
   await expect(picker).toBeHidden();
@@ -149,6 +190,7 @@ try {
   const afterResize = await sample(0);
   expect(afterResize.height).toBeCloseTo(beforeResize.height, 1);
   expect(afterResize.statusHeight).toBeCloseTo(beforeResize.statusHeight, 1);
+  expect(afterResize.cardTop).toBeCloseTo(beforeResize.cardTop, 1);
   await checkTransition("resize-during-expansion", 1);
 
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -168,7 +210,7 @@ try {
     JSON.stringify({ checks, errors }, null, 2),
   );
   console.log(
-    "PASS Status background stays in the bottom 28-35px while footer/page height animates; initial render and same-kind navigation stay still, reversals and resizing remain continuous, and the version picker stays usable.",
+    "PASS Inset launch card slides up/down with square bottom corners; card and page motion remain continuous through reversals and resizing, the bottom status strip stays anchored, and keyboard version selection remains usable.",
   );
 } finally {
   await browser.close();

@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -38,7 +39,7 @@ const nav = (name) =>
         .click();
 const enter = async (kind) => {
   const view = await ui.getAttribute("data-view");
-  await ui.locator(`[data-player-login="${kind}"]`).click();
+  await openPlayerLogin(page, kind);
   await expect(ui).toHaveAttribute("data-view", view);
 };
 const back = () =>
@@ -101,7 +102,11 @@ try {
   await ui.locator(".players-view-switch").click();
   await expect(ui).toHaveAttribute("data-view", "gallery");
   await enter("offline");
-  await expect(path.locator("button, strong")).toHaveText(["", "离线登录"]);
+  await expect(path.locator("button, strong")).toHaveText([
+    "",
+    "角色管理",
+    "离线登录",
+  ]);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(ui.locator(".players-identity h2")).toHaveText("Steve");
   await expect(ui.locator(".players-model")).toHaveAttribute(
@@ -134,7 +139,7 @@ try {
   await back();
   await expect(ui).toHaveAttribute("data-view", "gallery");
   await expect(ui.locator(".players-identity h2")).toHaveText("Alex");
-  await expect(ui.locator('[data-player-login="offline"]')).toBeFocused();
+  await expect(ui.locator("[data-player-login-trigger]")).toBeFocused();
   check(
     "Offline child route, live name, validation, inline API errors and preserved selected player / gallery view",
   );
@@ -144,11 +149,11 @@ try {
   await ui.getByRole("button", { name: "创建角色", exact: true }).click();
   await expect(ui).not.toHaveAttribute("data-login");
   await expect(ui).toHaveAttribute("data-view", "gallery");
-  await expect(path.locator("button, strong")).toHaveText(["角色管理"]);
+  await expect(path.locator("button, strong")).toHaveText(["", "角色管理"]);
   await expect(
     ui.getByRole("button", { name: "选择角色 Created_Player", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(ui.locator('[data-player-login="offline"]')).toBeFocused();
+  await expect(ui.locator("[data-player-login-trigger]")).toBeFocused();
   check(
     "Offline creation automatically returns to the saved list view with the new character selected",
   );
@@ -183,6 +188,7 @@ try {
   await enter("microsoft");
   await expect(path.locator("button, strong")).toHaveText([
     "",
+    "角色管理",
     "Microsoft 登录",
   ]);
   await expect(ui.getByRole("alert")).toContainText("Client ID");
@@ -286,11 +292,11 @@ try {
   });
   await expect(ui).not.toHaveAttribute("data-login");
   await expect(ui).toHaveAttribute("data-view", "gallery");
-  await expect(path.locator("button, strong")).toHaveText(["角色管理"]);
+  await expect(path.locator("button, strong")).toHaveText(["", "角色管理"]);
   await expect(
     ui.getByRole("button", { name: "选择角色 Online_Player", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(ui.locator('[data-player-login="microsoft"]')).toBeFocused();
+  await expect(ui.locator("[data-player-login-trigger]")).toBeFocused();
   expect(await count("jobs.cancel")).toBe(completedCancels);
   check(
     "Microsoft steps update from the real job; completion returns to the saved list view with the account selected, without cancelling the completed job",

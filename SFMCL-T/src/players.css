@@ -66,7 +66,8 @@
     background-color 180ms ease,
     opacity 180ms ease;
 }
-.players-page button:is(:hover, :focus-visible):not(:disabled),
+.players-page
+  button:is(:hover, :focus-visible):not(:disabled, [data-player-login-trigger]),
 .players-page
   .players-split-button:has(button:is(:hover, :focus-visible):not(:disabled)) {
   transform: translateY(-2px);
@@ -500,9 +501,18 @@
   display: inline-flex;
   align-items: stretch;
   height: var(--players-split-size);
-  --surface-edge: var(--surface-strong-line);
-  --surface-depth: 2px;
-  --surface-base: color-mix(in srgb, var(--surface-edge), #000 22%);
+}
+.players-split-button:has(button:is(:hover, :focus-visible):not(:disabled)) {
+  --surface-edge: var(--accent);
+}
+.players-split-button:not(:has(button:enabled)) {
+  --surface-depth: 0px;
+  --surface-fill: var(--surface-well);
+  color: var(--muted);
+}
+.players-split-button button:disabled {
+  opacity: 1;
+  color: var(--muted);
 }
 .players-split-button button {
   position: relative;
@@ -531,7 +541,7 @@
   top: 3px;
   bottom: 3px;
   width: 1px;
-  background: var(--surface-strong-line);
+  background: var(--surface-line);
 }
 .players-split-button button::before {
   content: "";
@@ -539,6 +549,7 @@
   inset: 2px;
   z-index: -1;
   clip-path: var(--corner-control);
+  transition: background-color 220ms ease;
 }
 .players-split-button > button:first-of-type::before {
   inset: 2px 0 calc(2px + var(--surface-depth)) 2px;
@@ -562,7 +573,7 @@
   outline: none;
 }
 .players-split-button button:active:not(:disabled)::before {
-  background: color-mix(in srgb, var(--accent) 22%, var(--panel));
+  background: var(--soft);
 }
 .players-actions .players-action {
   min-width: var(--button-compact-height);
@@ -656,6 +667,7 @@
   color: var(--accent);
 }
 .players-cards {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -668,6 +680,44 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   scroll-padding-block: 6px;
+  overflow-anchor: none;
+}
+.players-cards[data-player-sortable="true"] .players-card,
+.players-cards[data-player-sortable="true"] .players-select {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.players-card[data-player-placeholder="true"] {
+  --surface-edge: var(--accent);
+  --surface-fill: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+.players-card[data-player-placeholder="true"] > :not(.surface-frame) {
+  visibility: hidden;
+}
+.players-page .players-drag-overlay {
+  position: fixed;
+  z-index: 110;
+  margin: 0;
+  pointer-events: none;
+  transform: scale(1.025);
+  transform-origin: center;
+  --surface-edge: var(--accent);
+  filter: drop-shadow(
+    0 8px 12px color-mix(in srgb, var(--bg) 30%, transparent)
+  );
+  will-change: left, top, transform;
+}
+.players-page .players-drag-overlay :is(button, .players-avatar) {
+  transform: none;
+  transition: none;
+}
+body[data-player-dragging="true"],
+body[data-player-dragging="true"] * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 .players-card {
   --surface-shape: var(--corner-card);
@@ -687,9 +737,6 @@
   --surface-edge: var(--accent);
   --surface-fill: var(--soft);
   --surface-base: color-mix(in srgb, var(--accent) 55%, var(--bg));
-}
-.players-card:has(.players-select:enabled) {
-  cursor: pointer;
 }
 .players-card:has(.players-select:enabled):hover {
   --surface-edge: var(--accent);

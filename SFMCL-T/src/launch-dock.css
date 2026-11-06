@@ -1,21 +1,38 @@
 .launch-dock {
-  --launch-gutter: 36px;
+  --launch-gutter: var(--workspace-gutter);
+  --launch-card-inset: 16px;
   position: relative;
   z-index: 30;
   flex: 0 0 auto;
   min-width: 0;
-  border-top: 1px solid var(--line);
-  background: var(--panel);
-  box-shadow: 0 -5px 20px
-    color-mix(in srgb, var(--shadow-color), transparent 75%);
+  padding-top: 8px;
 }
 .launch-dock-main {
-  min-height: 83px;
+  position: relative;
+  min-height: 84px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 12px var(--launch-gutter);
+  margin-inline: var(--launch-card-inset);
+  padding: 12px calc(var(--launch-gutter) - var(--launch-card-inset));
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--panel);
+  box-shadow: 0 -4px 16px
+    color-mix(in srgb, var(--shadow-color), transparent 50%);
+  overflow: clip;
+  /* Keep the raster layer stable through exit; alpha and inert hide the card. */
+  opacity: var(--launch-card-alpha);
+  will-change: translate, scale, opacity;
+  translate: 0 var(--launch-card-offset);
+  scale: 0.98;
+  transform-origin: center bottom;
+  transition: scale 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.launch-dock-main:hover {
+  scale: 1;
 }
 .launch-dock .launch-version {
   flex: 1;
@@ -244,7 +261,7 @@
   border-top: 1px solid transparent;
   background: transparent;
   color: var(--chrome-muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .launch-status-detail {
   display: flex;
@@ -271,9 +288,12 @@
   min-width: 0;
   max-width: 50%;
   color: var(--chrome-muted);
+  font-size: 11px;
 }
 .launch-status-player > svg {
   flex-shrink: 0;
+  /* Keep the small stroke raster stable when the adjacent caption settles. */
+  will-change: transform;
 }
 .launch-status-player > span {
   white-space: nowrap;
@@ -282,7 +302,7 @@
 }
 .launch-status-caption {
   flex-shrink: 0;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.3px;
 }
 .launch-dock[data-warning] .launch-status-detail,
@@ -298,7 +318,7 @@
 }
 .launch-progress {
   position: absolute;
-  top: -1px;
+  top: 0;
   left: 0;
   width: 100%;
   height: 2px;
@@ -327,7 +347,7 @@
   }
 }
 .app.has-launch-dock > .notification-deck {
-  --notification-bottom: calc(var(--launch-dock-height, 112px) + 8px);
+  --notification-bottom: calc(var(--launch-dock-height, 120px) + 8px);
 }
 
 .launch-version-picker.panel {
@@ -338,7 +358,7 @@
   flex-direction: column;
   width: 400px;
   max-width: calc(100% - var(--launch-gutter) * 2);
-  max-height: calc(100dvh - var(--launch-dock-height, 112px) - 68px);
+  max-height: calc(100dvh - var(--launch-dock-height, 120px) - 68px);
   padding: 0;
   filter: drop-shadow(0 12px 20px var(--shadow-color));
   animation: launch-picker-enter 180ms ease-out;
@@ -578,22 +598,17 @@
   font-size: 10px;
 }
 
-@media (min-width: 1500px) {
-  .launch-dock {
-    --launch-gutter: 48px;
-  }
-}
 @media (max-width: 1100px) {
-  .launch-dock {
-    --launch-gutter: 25px;
-  }
   .launch-dock-main {
     gap: 18px;
   }
 }
 @media (max-width: 760px) {
+  .launch-dock {
+    --launch-card-inset: 12px;
+  }
   .launch-dock-main {
-    min-height: 135px;
+    min-height: 136px;
     flex-wrap: wrap;
     gap: 12px;
   }
@@ -645,7 +660,10 @@
 }
 @media (max-width: 650px) {
   .launch-dock {
-    --launch-gutter: 17px;
+    --launch-card-inset: 10px;
+  }
+  .launch-status-player {
+    max-width: 45%;
   }
   .launch-dock .launch-version {
     gap: 10px;

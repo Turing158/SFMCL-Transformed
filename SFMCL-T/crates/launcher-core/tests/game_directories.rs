@@ -156,6 +156,7 @@ fn scan_launch_and_local_resources_use_the_nested_minecraft_directory() {
                 uuid: "test",
                 access_token: "",
                 online: false,
+                yggdrasil: false,
             },
             2048,
         )

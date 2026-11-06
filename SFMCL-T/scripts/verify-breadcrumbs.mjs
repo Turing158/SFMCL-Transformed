@@ -1,5 +1,5 @@
 import { runtimePath } from "./lib/paths.mjs";
-import { answerConfirmation } from "./lib/confirmation.mjs";
+import { waitForAutoSave } from "./lib/auto-save.mjs";
 import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
@@ -111,14 +111,7 @@ try {
   await page.goto(process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/");
   await expect(labels()).toHaveText(["开始游戏"]);
   let previousName = "开始游戏";
-  for (const name of [
-    "角色管理",
-    "版本管理",
-    "资源中心",
-    "设置",
-    "设置",
-    "开始游戏",
-  ]) {
+  for (const name of ["版本管理", "资源中心", "设置", "设置", "开始游戏"]) {
     const before = await motionCount();
     await nav(name);
     const label = name === "资源中心" ? "Minecraft资源" : name;
@@ -131,20 +124,23 @@ try {
   }
   checks.push("各主页面独立作为父页面，切换或重复点击后只显示当前页面名称");
 
-  for (const name of ["开始游戏", "角色管理", "版本管理", "资源中心", "设置"]) {
+  for (const name of ["开始游戏", "版本管理", "资源中心", "设置"]) {
     await nav(name);
     const parentLabel = name === "资源中心" ? "Minecraft资源" : name;
     await holdMotion();
-    await openDownloads();
-    await expect(labels()).toHaveText(["", "下载中心"]);
+    await nav("角色管理");
+    await expect(labels()).toHaveText(["", "角色管理"]);
     await expect(backButton).toHaveAttribute(
       "data-tooltip",
       `返回${parentLabel}`,
     );
     await verifyMotion(1);
     const beforeRepeat = await motionCount();
-    await openDownloads();
-    await expect(labels()).toHaveText(["", "下载中心"]);
+    await nav("角色管理");
+    await expect(backButton).toHaveAttribute(
+      "data-tooltip",
+      `返回${parentLabel}`,
+    );
     expect(await motionCount()).toBe(beforeRepeat);
     await holdMotion();
     await back();
@@ -152,7 +148,61 @@ try {
     await verifyMotion(-1);
   }
   checks.push(
-    "下载中心始终是进入前页面的子页面；五个主页面都可通过返回箭头回到原页，重复点击下载不改变父页面或重播动画",
+    "角色管理作为本次进入前页面的子页面，重复点击保留父页面，返回同步播放反向动画",
+  );
+
+  await nav("版本管理");
+  await openSettings();
+  for (const width of [1440, 768, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await holdMotion();
+    await nav("角色管理");
+    await expect(path.locator("strong")).toHaveText("角色管理");
+    await expect(backButton).toHaveAttribute(
+      "data-tooltip",
+      "返回1.21.4 · 游戏设置",
+    );
+    await expect(backButton).toBeInViewport();
+    await expect(path.locator("strong")).toBeInViewport();
+    await verifyMotion(1, `players-forward-${width}`);
+    await holdMotion();
+    await back();
+    await expect(path.locator("strong")).toHaveText("1.21.4 · 游戏设置");
+    await expect(
+      page.getByRole("heading", { name: "游戏设置", exact: true }),
+    ).toBeVisible();
+    await verifyMotion(-1, `players-back-${width}`);
+  }
+  await back();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  checks.push(
+    "从版本设置进入角色管理后准确返回原子页面，1440/768/375px 下返回箭头和当前页可见",
+  );
+
+  for (const name of ["开始游戏", "角色管理", "版本管理", "资源中心", "设置"]) {
+    await nav(name);
+    const parentLabel = name === "资源中心" ? "Minecraft资源" : name;
+    const parentLabels = await labels().allTextContents();
+    await holdMotion();
+    await openDownloads();
+    const downloadLabels = ["", ...parentLabels.slice(1), "下载中心"];
+    await expect(labels()).toHaveText(downloadLabels);
+    await expect(backButton).toHaveAttribute(
+      "data-tooltip",
+      `返回${parentLabel}`,
+    );
+    await verifyMotion(1);
+    const beforeRepeat = await motionCount();
+    await openDownloads();
+    await expect(labels()).toHaveText(downloadLabels);
+    expect(await motionCount()).toBe(beforeRepeat);
+    await holdMotion();
+    await back();
+    await expect(labels()).toHaveText(parentLabels);
+    await verifyMotion(-1);
+  }
+  checks.push(
+    "下载中心始终是进入前页面的子页面，四个主页面及角色管理都可准确返回，重复点击下载不改变父页面或重播动画",
   );
 
   await nav("版本管理");
@@ -169,21 +219,22 @@ try {
     exact: true,
   });
   await independent.click();
-  const beforeCancelledNavigation = await motionCount();
+  await waitForAutoSave(page);
   await back();
-  await answerConfirmation(page, false);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(labels()).toHaveText(["版本管理"]);
+  await openSettings();
   await expect(independent).toBeChecked();
   await expect(path.locator("strong")).toHaveText("1.21.4 · 游戏设置");
-  expect(await motionCount()).toBe(beforeCancelledNavigation);
   await back();
-  await answerConfirmation(page, true);
   await expect(labels()).toHaveText(["版本管理"]);
   checks.push(
-    "版本游戏设置接入路径；未保存时取消会留在原页，确认后返回版本管理",
+    "版本游戏设置接入路径；修改自动保存，返回版本管理后重新进入仍保留设置",
   );
 
   await openSettings();
   await independent.click();
+  await waitForAutoSave(page);
   await openDownloads();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(labels()).toHaveText(["", "1.21.4 · 游戏设置", "下载中心"]);
@@ -193,11 +244,11 @@ try {
   );
   await back();
   await expect(labels()).toHaveText(["", "1.21.4 · 游戏设置"]);
-  await expect(independent).toBeChecked();
+  await expect(independent).not.toBeChecked();
   await back();
-  await answerConfirmation(page, true);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   checks.push(
-    "从未保存的版本设置进入下载保留草稿，下载返回对应版本设置；明确返回版本列表仍确认放弃修改",
+    "从版本设置进入下载再返回，恢复对应版本和自动保存的设置；返回版本列表无多余确认",
   );
 
   await page
@@ -273,7 +324,7 @@ try {
     "1440/768/375px 下上一级与当前页可见，无标题栏溢出，键盘 Enter 可返回",
   );
   checks.push(
-    "父子页面与面包屑在 1440/768/375px 同步滑动淡入，返回方向相反；重复点击与取消未保存确认不重播动画",
+    "父子页面与面包屑在 1440/768/375px 同步滑动淡入，返回方向相反；重复点击不重播动画",
   );
 
   await page.setViewportSize({ width: 1440, height: 900 });

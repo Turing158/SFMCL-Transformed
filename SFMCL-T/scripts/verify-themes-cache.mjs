@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 import { chromium, expect } from "@playwright/test";
 import { waitForAutoSave } from "./lib/auto-save.mjs";
@@ -300,9 +301,7 @@ try {
         .evaluate((el) => getComputedStyle(el, "::after").backgroundColor);
       await nav("角色管理");
       await shot(`${key}-players`);
-      await page
-        .getByRole("button", { name: "Microsoft 登录", exact: true })
-        .click();
+      await openPlayerLogin(page, "microsoft");
       await expect(
         page.getByRole("heading", {
           name: "Microsoft 登录",

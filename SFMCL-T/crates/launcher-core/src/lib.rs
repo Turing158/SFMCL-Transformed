@@ -4,6 +4,7 @@ pub mod config;
 pub mod download_sources;
 pub mod downloads;
 pub mod jobs;
+pub mod local_data;
 pub mod minecraft;
 pub mod notices;
 pub mod paths;

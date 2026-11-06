@@ -215,7 +215,9 @@ try {
   await expect(
     page.getByRole("heading", { name: "下载中心", exact: true }),
   ).toBeVisible();
-  await expect(dock).toHaveCount(0);
+  await expect(dock).toHaveAttribute("aria-hidden", "true");
+  await expect(dock).toHaveAttribute("inert", "");
+  await expect(dock.locator(".launch-dock-main")).toHaveCSS("opacity", "0");
   await expect(page.locator(".workspace-footer")).toBeVisible();
   await nav("开始游戏");
   await state("running");
@@ -391,13 +393,23 @@ try {
           bottom: footer.bottom,
           top: footer.top,
           mainBottom: main.getBoundingClientRect().bottom,
-          last: main.lastElementChild.getBoundingClientRect().bottom,
+          statusTop: document
+            .querySelector(".launch-status")
+            .getBoundingClientRect().top,
+          last: Math.max(
+            ...Array.from(
+              main.querySelectorAll(
+                ".page-heading, .notice-card, .notices .helper, .notices .inline-error",
+              ),
+              (item) => item.getBoundingClientRect().bottom,
+            ),
+          ),
           overflow: document.body.scrollWidth > innerWidth,
         };
       });
       expect(geometry.bottom).toBe(height);
       expect(geometry.top).toBe(before.y);
-      expect(geometry.mainBottom).toBe(geometry.top);
+      expect(geometry.mainBottom).toBe(geometry.statusTop);
       expect(geometry.last).toBeLessThanOrEqual(geometry.top);
       expect(geometry.overflow).toBe(false);
       await page.locator("main").evaluate((main) => (main.scrollTop = 0));
@@ -419,7 +431,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.locator(".brand-logo").hover();
   await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
-  await expect.poll(async () => (await dock.boundingBox()).x).toBe(66);
+  await expect.poll(async () => (await dock.boundingBox()).x).toBe(60);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await change.click();
   expect(

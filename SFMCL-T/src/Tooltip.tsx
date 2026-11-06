@@ -1,5 +1,17 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { RefObject } from "react";
+import { desktop } from "./api";
+import { canDragWindowFrom } from "./windowDrag";
+
+function windowDragAnchor(element: HTMLElement) {
+  if (!desktop) return false;
+  const rect = element.getBoundingClientRect();
+  return canDragWindowFrom(
+    element,
+    rect.left + rect.width / 2,
+    rect.top + rect.height / 2,
+  );
+}
 
 // Measure the untransformed box so an interrupted transition never shifts its anchor.
 export function positionTooltip(
@@ -17,6 +29,7 @@ export function positionTooltip(
   const gap = 10;
   if (
     !anchor.isConnected ||
+    windowDragAnchor(anchor) ||
     anchor.closest(
       '[hidden], [inert], [aria-hidden="true"], [data-notice-list-moving="true"]',
     ) ||
@@ -131,11 +144,15 @@ export function TooltipHost() {
     let dismissalPoint: { x: number; y: number } | null = null;
     let pointerPoint = { x: 0, y: 0 };
     const retiring = new Set<HTMLDivElement>();
-    const trigger = (target: EventTarget | null) =>
-      target instanceof Element &&
-      !target.closest('[data-notice-list-moving="true"]')
-        ? target.closest<HTMLElement>("[data-tooltip]")
-        : null;
+    const trigger = (target: EventTarget | null) => {
+      if (
+        !(target instanceof Element) ||
+        target.closest('[data-notice-list-moving="true"]')
+      )
+        return null;
+      const anchor = target.closest<HTMLElement>("[data-tooltip]");
+      return anchor && !windowDragAnchor(anchor) ? anchor : null;
+    };
     const content = (element: HTMLElement) =>
       element.dataset.tooltip?.trim() ?? "";
     const placement = (element: HTMLElement) =>

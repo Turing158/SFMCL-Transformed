@@ -24,7 +24,7 @@
   pointer-events: auto;
   filter: drop-shadow(5px 5px 0 var(--context-shadow));
   transform-origin: top left;
-  animation: context-menu-in 280ms steps(6, end) both;
+  animation: context-menu-in 220ms steps(6, end) both;
   overflow: auto;
   scrollbar-width: thin;
 }
@@ -32,12 +32,29 @@
   visibility: hidden;
 }
 .favorite-context-menu {
-  width: 128px;
+  width: max-content;
+  min-width: 128px;
 }
 .favorite-context-menu .pixel-context-item {
   min-height: 34px;
   padding: 6px 8px;
   gap: 8px;
+}
+.favorite-context-menu .pixel-context-icon {
+  transform-origin: center;
+  rotate: 0deg;
+  scale: 1;
+  transition:
+    transform 200ms cubic-bezier(0.32, 0.72, 0, 1),
+    rotate 180ms cubic-bezier(0.32, 0.72, 0, 1),
+    scale 180ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 160ms;
+}
+.favorite-context-menu
+  .pixel-context-item:hover:not(:disabled)
+  .pixel-context-icon {
+  rotate: 8deg;
+  scale: 1.1;
 }
 .pixel-context-frame {
   padding: 2px;
@@ -87,8 +104,8 @@
   color: var(--context-text);
   font-size: 12px;
   text-align: left;
-  animation: context-menu-row-in 240ms steps(4, end) both;
-  animation-delay: calc(var(--menu-order, 0) * 20ms);
+  animation: context-menu-row-in 180ms steps(4, end) both;
+  animation-delay: calc(var(--menu-order, 0) * 15ms);
   transition: color 100ms steps(2, end);
 }
 .pixel-context-item::before {
@@ -138,6 +155,10 @@
 .pixel-context-arrow {
   display: flex;
   flex: none;
+}
+.pixel-context-icon > svg {
+  width: 16px;
+  height: 16px;
 }
 .pixel-context-arrow {
   margin-left: 10px;

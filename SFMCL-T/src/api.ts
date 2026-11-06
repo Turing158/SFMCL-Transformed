@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { beginStartupWork } from "./startupReadiness";
 import { flushAutoSaves } from "./autoSave";
@@ -49,6 +49,19 @@ export async function pickJava(): Promise<string | null> {
     );
   }
   return path;
+}
+export async function saveFile(options: {
+  title: string;
+  defaultPath: string;
+  filterName: string;
+  extensions: string[];
+}): Promise<string | null> {
+  if (!desktop) throw new Error("文件选择器需要桌面环境");
+  return save({
+    title: options.title,
+    defaultPath: options.defaultPath,
+    filters: [{ name: options.filterName, extensions: options.extensions }],
+  });
 }
 export async function external(url: string) {
   if (!/^https?:\/\//.test(url)) throw new Error("无效网页地址");

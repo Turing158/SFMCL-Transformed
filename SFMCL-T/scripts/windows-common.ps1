@@ -14,6 +14,32 @@ function Invoke-Checked {
     }
 }
 
+function Get-AvailableDevelopmentPort {
+    param([ValidateRange(1024, 65535)][int]$PreferredPort = 1420)
+    # Vite binds IPv4 loopback. ExclusiveAddressUse also detects wildcard
+    # listeners and Windows-reserved ports without stopping their owners.
+    $lastPort = [Math]::Min(65535, $PreferredPort + 99)
+    for ($candidate = $PreferredPort; $candidate -le $lastPort; $candidate++) {
+        $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $candidate)
+        try {
+            $probe.Server.ExclusiveAddressUse = $true
+            $probe.Start()
+            if ($candidate -ne $PreferredPort) {
+                Write-Host "Development port $PreferredPort is unavailable; using $candidate instead."
+            }
+            return $candidate
+        } catch [Net.Sockets.SocketException] {
+            if ($_.Exception.SocketErrorCode -notin @(
+                [Net.Sockets.SocketError]::AddressAlreadyInUse,
+                [Net.Sockets.SocketError]::AccessDenied
+            )) { throw }
+        } finally {
+            $probe.Stop()
+        }
+    }
+    throw "No development port is available between $PreferredPort and $lastPort. Choose another range with -Port."
+}
+
 function Remove-PackagingScratch {
     param([string]$Path, [string]$Root)
     if (-not (Test-Path -LiteralPath $Path)) { return }

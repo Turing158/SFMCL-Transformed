@@ -88,6 +88,12 @@ try {
     );
     await expect(page.locator("body")).toHaveCSS("transform", "none");
     await expect.poll(async () => (await native()).rendering).toBe(1);
+    const maximized = await invoke("plugin:window|is_maximized", {
+      label: "main",
+    });
+    await expect
+      .poll(async () => (await native()).shadowVisible)
+      .toBe(!maximized);
   };
   const geometry = () =>
     page.evaluate(async () => ({
@@ -130,6 +136,22 @@ try {
     expect(edge.topInset).toBe(0);
     expect(edge.leftColor).toBe(expected.left);
     expect(edge.rightColor).toBe(expected.right);
+    expect(edge.shadowVisible).toBe(true);
+    expect(edge.shadowPassThrough).toBe(true);
+    expect(edge.shadowLeft).toBeLessThan(edge.clientLeft);
+    expect(edge.shadowTop).toBeLessThan(edge.clientTop);
+    expect(edge.shadowRight).toBeGreaterThan(
+      edge.clientLeft + edge.clientWidth,
+    );
+    expect(edge.shadowBottom).toBeGreaterThan(
+      edge.clientTop + edge.clientHeight,
+    );
+    expect(edge.shadowLeft + edge.shadowRight).toBe(
+      2 * edge.clientLeft + edge.clientWidth,
+    );
+    expect(edge.shadowTop + edge.shadowBottom).toBe(
+      2 * edge.clientTop + edge.clientHeight,
+    );
     checks.push(
       `${label}: the first native pixel row paints the sidebar and titlebar, with no caption strip.`,
     );
@@ -246,6 +268,7 @@ try {
     const outgoing = await native();
     expect(outgoing.rendering).toBe(1);
     expect(outgoing.corners).toBe(2);
+    expect(outgoing.shadowVisible).toBe(false);
     expect(outgoing.width).toBe(outgoing.clientWidth);
     expect(outgoing.height).toBe(outgoing.clientHeight);
     await finishMotion();
@@ -260,6 +283,7 @@ try {
     const incoming = await native();
     expect(incoming.rendering).toBe(1);
     expect(incoming.corners).toBe(2);
+    expect(incoming.shadowVisible).toBe(false);
     await finishMotion();
     await idle();
     expect(await geometry()).toEqual(original);
@@ -385,6 +409,7 @@ try {
   await assertStable("startup-finish");
   await assertTopEdge("top-edge-startup");
   checks.push(
+    "External shadow follows move/resize/restore, stays outside the client, cannot take mouse input or focus, and hides during motion and maximization.",
     "Native corner preference remains rounded while hiding/restoring the shadow, and the moving startup surface paints four transparent rounded corners.",
   );
   await writeFile(

@@ -32,6 +32,7 @@ import type {
   Bootstrap,
   FavoriteVersion,
   Page,
+  Player,
   Settings,
   Tasks,
   Version,
@@ -105,6 +106,7 @@ interface AppState {
   clearError: () => void;
   refresh: () => Promise<void>;
   selectPlayer: (id: string) => Promise<void>;
+  reorderPlayers: (ids: string[]) => Promise<void>;
   selectVersion: (version: Version) => Promise<void>;
   run: <T>(
     action: () => Promise<T>,
@@ -135,7 +137,7 @@ export function Provider({ children }: { children: ReactNode }) {
     settings: fallback,
     players: [],
     dataDir: "",
-    version: "0.1.0",
+    version: "0.1.1",
   });
   const [versions, setVersions] = useState<Version[]>([]);
   const [versionsRevision, setVersionsRevision] = useState(0);
@@ -173,6 +175,7 @@ export function Provider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState(0);
   const refreshGeneration = useRef(0);
   const selectionWrites = useRef<Promise<void>>(Promise.resolve());
+  const playerOrderRevision = useRef(0);
   const queueSettingsWrite = useCallback(<T,>(action: () => Promise<T>) => {
     const write = selectionWrites.current.then(action);
     selectionWrites.current = write.then(
@@ -260,6 +263,39 @@ export function Provider({ children }: { children: ReactNode }) {
       return selection;
     },
     [setError],
+  );
+  const reorderPlayers = useCallback(
+    (ids: string[]) => {
+      const revision = ++playerOrderRevision.current;
+      const ranks = new Map(ids.map((id, index) => [id, index]));
+      setData((current) => ({
+        ...current,
+        players: [...current.players].sort(
+          (a, b) =>
+            (ranks.get(a.uuid) ?? ids.length) -
+            (ranks.get(b.uuid) ?? ids.length),
+        ),
+      }));
+      return queueSettingsWrite(async () => {
+        setError("");
+        try {
+          const players = await api<Player[]>("players.reorder", { ids });
+          if (revision === playerOrderRevision.current)
+            setData((current) => ({ ...current, players }));
+        } catch (error) {
+          setError(String(error));
+          if (revision !== playerOrderRevision.current) return;
+          try {
+            const players = await api<Player[]>("players.list");
+            if (revision === playerOrderRevision.current)
+              setData((current) => ({ ...current, players }));
+          } catch (reloadError) {
+            setError(String(reloadError));
+          }
+        }
+      });
+    },
+    [queueSettingsWrite, setError],
   );
   const selectVersion = useCallback(
     (version: Version) => {
@@ -527,6 +563,15 @@ export function Provider({ children }: { children: ReactNode }) {
       active = false;
     };
   }, [refresh]);
+  const localDataResultShown = useRef(false);
+  useEffect(() => {
+    if (!initialized || !data.localDataResult || localDataResultShown.current)
+      return;
+    localDataResultShown.current = true;
+    setPage("settings");
+    if (data.localDataResult.success) notify(data.localDataResult.message);
+    else setError(data.localDataResult.message);
+  }, [initialized, data.localDataResult, setPage, notify, setError]);
   useEffect(() => {
     if (!desktop || !initialized) return;
     let active = true;
@@ -607,6 +652,7 @@ export function Provider({ children }: { children: ReactNode }) {
         clearError: () => setError(""),
         refresh,
         selectPlayer,
+        reorderPlayers,
         selectVersion,
         run,
         mutate,

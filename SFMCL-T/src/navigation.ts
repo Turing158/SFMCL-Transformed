@@ -35,7 +35,19 @@ export type ResourcePage =
       gameVersion: string;
       loader: string;
     };
-export type PlayerLoginKind = "offline" | "microsoft";
+export type PlayerLoginKind =
+  "offline" | "microsoft" | "yggdrasil" | "yggdrasil-oauth";
+export type PlayerNavigationEntry = {
+  page: "players";
+  returnTo?: NavigationEntry;
+  detail?: never;
+} & (
+  | { login?: never }
+  | {
+      login: PlayerLoginKind;
+      yggdrasilImport?: { server: string; id: string };
+    }
+);
 export type ResourceNavigationEntry = {
   page: "resources";
   tab?: ResourceTab;
@@ -45,11 +57,11 @@ export type ResourceNavigationEntry = {
 };
 export type PrimaryNavigationEntry =
   | {
-      page: Exclude<Page, "resources" | "downloads">;
+      page: Exclude<Page, "resources" | "downloads" | "players">;
       detail?: never;
       login?: never;
     }
-  | { page: "players"; login: PlayerLoginKind; detail?: never }
+  | PlayerNavigationEntry
   | ResourceNavigationEntry
   | {
       page: "versions";
@@ -103,7 +115,11 @@ export function navigateTo(
   const nextPage = navigationPage(next);
   if (sourcePage && navigationPage(current.route) !== sourcePage) {
     if (nextPage !== sourcePage) return current;
-    return { ...current, pages: { ...current.pages, [nextPage]: next } };
+    const route = resolveNavigation(
+      current.pages[sourcePage] ?? current.route,
+      next,
+    );
+    return { ...current, pages: { ...current.pages, [nextPage]: route } };
   }
   const route = resolveNavigation(current.route, next);
   return { route, pages: { ...current.pages, [navigationPage(route)]: route } };
@@ -120,6 +136,12 @@ export function switchPage(
   // Downloads retain their UI, but their back button belongs to this visit.
   if (page === "downloads") return navigateTo(current, { page });
   const saved = current.pages[page];
+  // Keep the login draft, but make the back button belong to this visit.
+  if (page === "players")
+    return navigateTo(current, {
+      ...(saved?.page === "players" ? saved : { page }),
+      returnTo: undefined,
+    });
   if (saved) return navigateTo(current, saved);
   return navigateTo(
     current,
@@ -131,6 +153,16 @@ export function resolveNavigation(
   current: NavigationEntry,
   next: NavigationEntry,
 ): NavigationEntry {
+  if (next.page === "players") {
+    if (next.returnTo) return next;
+    return {
+      ...next,
+      returnTo:
+        current.page === "players"
+          ? (current.returnTo ?? { page: "home" })
+          : current,
+    };
+  }
   if (next.page !== "downloads") return next;
   return {
     ...next,
@@ -150,7 +182,15 @@ export function entryLabel(entry: NavigationEntry) {
     return `${resourceTabNames[entry.tab ?? "minecraft"]}资源`;
   }
   if (entry.page === "players" && entry.login)
-    return entry.login === "offline" ? "离线登录" : "Microsoft 登录";
+    return entry.login === "offline"
+      ? "离线登录"
+      : entry.login === "yggdrasil"
+        ? entry.yggdrasilImport
+          ? "外置登录"
+          : "第三方账号登录"
+        : entry.login === "yggdrasil-oauth"
+          ? "第三方授权登录"
+          : "Microsoft 登录";
   if (!entry.detail) return pageNames[entry.page];
   if (entry.detail.kind === "resources" && entry.detail.resource)
     return entry.detail.resource.name;
@@ -161,6 +201,14 @@ export function entryLabel(entry: NavigationEntry) {
 export function pagePath(entry: NavigationEntry): NavigationEntry[] {
   if (entry.page === "downloads")
     return [...pagePath(entry.returnTo ?? { page: "home" }), entry];
+  if (entry.page === "players") {
+    const parent = entry.returnTo ?? { page: "home" };
+    const players: PlayerNavigationEntry = {
+      page: "players",
+      returnTo: parent,
+    };
+    return [...pagePath(parent), ...(entry.login ? [players] : []), entry];
+  }
   if (entry.page === "resources" && entry.resource)
     return [
       ...(entry.returnTo
@@ -177,7 +225,5 @@ export function pagePath(entry: NavigationEntry): NavigationEntry[] {
       },
       entry,
     ];
-  return entry.detail || (entry.page === "players" && entry.login)
-    ? [{ page: entry.page }, entry]
-    : [entry];
+  return entry.detail ? [{ page: entry.page }, entry] : [entry];
 }

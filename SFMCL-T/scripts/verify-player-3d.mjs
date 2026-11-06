@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { runtimePath } from "./lib/paths.mjs";
@@ -872,7 +873,7 @@ try {
   check(
     "20 page round trips and 20 mode round trips retain camera state and at most one active viewer",
   );
-  await ui.getByRole("button", { name: "离线登录", exact: true }).click();
+  await openPlayerLogin(page, "offline");
   await expect(figure).toHaveAttribute("data-preview-mode", "front");
   expect((await stats()).active).toBe(0);
   await cycle();
@@ -884,7 +885,7 @@ try {
   await page.getByLabel("角色名称", { exact: true }).fill("Offline3D");
   await expect(title).toHaveText("Offline3D");
   await expect(input).toHaveAttribute("data-action", "walk");
-  await ui.getByRole("button", { name: "Microsoft 登录", exact: true }).click();
+  await openPlayerLogin(page, "microsoft");
   await expect(ui.locator(".device-code")).toBeVisible();
   await expect.poll(async () => (await stats()).active).toBe(0);
   await page
@@ -999,7 +1000,9 @@ try {
           return getContext.call(this, type, ...args);
         };
       });
-    await failurePage.goto(process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/");
+    await failurePage.goto(
+      process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/",
+    );
     await expect(failurePage.locator("html")).not.toHaveAttribute(
       "data-startup",
       /loading|revealing/,

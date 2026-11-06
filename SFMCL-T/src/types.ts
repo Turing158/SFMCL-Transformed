@@ -74,7 +74,19 @@ export interface Settings extends GameSettings {
   microsoftClientId: string;
   closeOnLaunch: boolean;
 }
+export interface YggdrasilLogin {
+  sessionId: string;
+  server: string;
+  serverName: string;
+  profiles: { id: string; name: string }[];
+}
 export interface Player {
+  yggdrasil?: {
+    server: string;
+    serverName: string;
+    homepage: string;
+    profileId: string;
+  };
   uuid: string;
   name: string;
   online: boolean;
@@ -237,7 +249,16 @@ export interface ResourceFile {
   file?: DownloadSpec;
   dependencies: ResourceDependency[];
 }
+export type LocalDataOperation = "migrate" | "backup" | "restore";
+export interface LocalDataResult {
+  kind: LocalDataOperation;
+  success: boolean;
+  message: string;
+  path: string;
+  recoveryPath?: string | null;
+}
 export interface Bootstrap {
+  localDataResult?: LocalDataResult | null;
   defaultDownloadCacheDir?: string;
   backgroundPath?: string;
   settings: Settings;

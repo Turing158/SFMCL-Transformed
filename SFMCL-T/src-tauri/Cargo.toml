@@ -22,9 +22,12 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt", "time"] }
 anyhow = "1"
 base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_DataExchange", "Win32_System_Ole", "Win32_System_Memory", "Win32_System_SystemServices", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-core = "0.62"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 tempfile = "3"

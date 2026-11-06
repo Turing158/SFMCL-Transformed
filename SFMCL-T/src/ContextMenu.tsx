@@ -1,5 +1,12 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode, Ref } from "react";
 import { createPortal } from "react-dom";
 import { PixelMenuIcon } from "./PixelMenuIcon";
 import "./context-menu.css";
@@ -15,7 +22,15 @@ export type ContextMenuItem = {
   children?: ContextMenuEntry[];
 };
 export type ContextMenuEntry = ContextMenuItem | { separator: true };
-export type ContextMenuAnchor = { x: number; y: number; element: HTMLElement };
+export type ContextMenuAnchor = {
+  x: number;
+  y: number;
+  element: HTMLElement;
+  /** Stable layout reference when the trigger itself animates. */
+  positionElement?: HTMLElement;
+  placement?: "bottom-end";
+};
+export type ContextMenuHandle = { close: () => void };
 
 const buttons = (panel: HTMLElement | null) =>
   panel
@@ -27,19 +42,25 @@ const buttons = (panel: HTMLElement | null) =>
     : [];
 
 export function ContextMenu({
+  ref,
   anchor,
   title,
   description,
   showHeading = true,
   className = "",
+  ariaLabel,
+  menuId,
   items,
   onClose,
 }: {
+  ref?: Ref<ContextMenuHandle>;
   anchor: ContextMenuAnchor;
   title: string;
   description?: string;
   showHeading?: boolean;
   className?: string;
+  ariaLabel?: string;
+  menuId?: string;
   items: ContextMenuEntry[];
   onClose: () => void;
 }) {
@@ -63,6 +84,7 @@ export function ContextMenu({
   );
   const latest = useRef({ anchor, onClose });
   latest.current = { anchor, onClose };
+  useImperativeHandle(ref, () => ({ close: () => close() }));
 
   function close(restore = true, immediate = false) {
     if (closingRef.current) return;
@@ -107,13 +129,24 @@ export function ContextMenu({
     const margin = 12;
     panel.style.maxWidth = `${width - margin * 2}px`;
     panel.style.maxHeight = `${height - margin * 2}px`;
+    let anchorX = anchor.x;
+    let anchorY = anchor.y;
+    if (anchor.placement === "bottom-end") {
+      const rect = (
+        anchor.positionElement ?? anchor.element
+      ).getBoundingClientRect();
+      anchorX = rect.right - panel.offsetWidth;
+      anchorY = rect.bottom + 8;
+      if (anchorY + panel.offsetHeight > top + height - margin)
+        anchorY = rect.top - panel.offsetHeight - 8;
+    }
     const x = Math.max(
       left + margin,
-      Math.min(anchor.x, left + width - panel.offsetWidth - margin),
+      Math.min(anchorX, left + width - panel.offsetWidth - margin),
     );
     const y = Math.max(
       top + margin,
-      Math.min(anchor.y, top + height - panel.offsetHeight - margin),
+      Math.min(anchorY, top + height - panel.offsetHeight - margin),
     );
     panel.style.left = `${Math.round(x)}px`;
     panel.style.top = `${Math.round(y)}px`;
@@ -291,8 +324,9 @@ export function ContextMenu({
     >
       <div
         ref={root}
+        id={menuId}
         role="menu"
-        aria-label={`${title} 的版本操作`}
+        aria-label={ariaLabel ?? `${title} 的版本操作`}
         aria-hidden={(compact && !!submenu) || undefined}
         className={`pixel-context-menu ${className}${compact && submenu ? " covered" : ""}`}
         onPointerEnter={() => clearTimeout(subTimer.current)}

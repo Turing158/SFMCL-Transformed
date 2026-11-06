@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
@@ -225,9 +226,12 @@ try {
   await expect(page.getByRole("listbox")).toBeVisible();
   await nav("开始游戏");
   await expect(page.getByRole("listbox")).toHaveCount(0);
-  await page.locator(".brand-home").focus();
+  const homeNavigation = page
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("button", { name: "开始游戏", exact: true });
+  await homeNavigation.focus();
   await page.keyboard.press("Control+k");
-  await expect(page.locator(".brand-home")).toBeFocused();
+  await expect(homeNavigation).toBeFocused();
   await nav("资源中心");
   await page.keyboard.press("Control+k");
   await expect(resourceSearch).toBeFocused();
@@ -342,18 +346,34 @@ try {
   check("设置保留当前分类、输入及滚动位置，修改自动保存");
 
   await nav("角色管理");
-  await page.locator('[data-player-login="offline"]').click();
+  await expect(
+    path.getByRole("button", { name: "返回上一级", exact: true }),
+  ).toHaveAttribute("data-tooltip", "返回设置");
+  await openPlayerLogin(page, "offline");
   const playerName = page.getByRole("textbox", {
     name: "角色名称",
     exact: true,
   });
   await playerName.fill("Remember_Name");
+  await downloads();
+  await expect(
+    path.getByRole("button", { name: "返回上一级", exact: true }),
+  ).toHaveAttribute("data-tooltip", "返回离线登录");
+  await back();
+  await expect(playerName).toHaveValue("Remember_Name");
   await nav("开始游戏");
   await nav("角色管理");
   await expect(path.locator("strong")).toHaveText("离线登录");
   await expect(playerName).toHaveValue("Remember_Name");
   await back();
-  check("角色管理保留登录子页面与角色名称输入");
+  await expect(
+    path.getByRole("button", { name: "返回上一级", exact: true }),
+  ).toHaveAttribute("data-tooltip", "返回开始游戏");
+  await back();
+  await expect(path.locator("strong")).toHaveText("开始游戏");
+  check(
+    "角色管理保留登录子页面与输入，下载往返保持层级，再次进入后返回本次父页面",
+  );
 
   await downloads();
   const downloadFilter = page.getByRole("tab", { name: /^已完成/ });

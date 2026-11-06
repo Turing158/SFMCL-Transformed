@@ -28,7 +28,7 @@ try {
     # Verify with the intended service only. Never follow a redirect with the key.
     $response = Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -MaximumRedirection 0 `
         -Uri 'https://api.curseforge.com/v1/categories?gameId=432' `
-        -Headers @{ 'x-api-key' = $credential; 'User-Agent' = 'SFMCL-T/0.1.0' }
+        -Headers @{ 'x-api-key' = $credential; 'User-Agent' = 'SFMCL-T/0.1.1' }
     if ($response.StatusCode -ne 200 -or @((ConvertFrom-Json $response.Content).data).Count -eq 0) {
         throw 'Credential validation failed.'
     }

@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { runtimePath } from "./lib/paths.mjs";
@@ -281,7 +282,7 @@ try {
   await save();
   await nav("角色管理");
   await expect(figure).toHaveAttribute("data-preview-mode", "back");
-  await players.getByRole("button", { name: "离线登录", exact: true }).click();
+  await openPlayerLogin(page, "offline");
   await expect(figure).toHaveAttribute("data-preview-mode", "back");
   check(
     "Remote backgrounds load directly without the texture bridge, failures fall back to the current scene without extra requests, and the configured 2D default also applies to offline login",

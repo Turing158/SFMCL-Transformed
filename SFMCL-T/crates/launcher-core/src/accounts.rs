@@ -17,7 +17,11 @@ use std::{
 };
 
 mod profile;
+mod yggdrasil;
 pub use profile::{Cape, NameChange};
+pub use yggdrasil::oauth::OAuthDeviceLogin;
+pub(crate) use yggdrasil::server_url as yggdrasil_server_url;
+pub use yggdrasil::{YggdrasilIdentity, YggdrasilLogin};
 
 struct AccountEndpoints {
     minecraft: String,
@@ -40,6 +44,8 @@ impl Default for AccountEndpoints {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Player {
+    // Storage key. External accounts are namespaced by server; their game UUID
+    // is stored in yggdrasil.profile_id and is only used at launch time.
     pub uuid: String,
     pub name: String,
     pub online: bool,
@@ -50,6 +56,8 @@ pub struct Player {
     pub capes: Option<Vec<Cape>>,
     #[serde(default)]
     pub slim: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub yggdrasil: Option<YggdrasilIdentity>,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,6 +76,9 @@ pub struct Accounts {
     jobs: Arc<Jobs>,
     login_gate: Arc<tokio::sync::Mutex<()>>,
     endpoints: AccountEndpoints,
+    yggdrasil_pending: Mutex<std::collections::HashMap<String, yggdrasil::PendingLogin>>,
+    littleskin_pending: Mutex<std::collections::HashMap<String, Arc<yggdrasil::oauth::Flow>>>,
+    littleskin_endpoints: yggdrasil::oauth::Endpoints,
 }
 
 pub fn offline_uuid(name: &str) -> String {
@@ -107,6 +118,9 @@ impl Accounts {
             jobs,
             login_gate: Arc::new(tokio::sync::Mutex::new(())),
             endpoints: AccountEndpoints::default(),
+            yggdrasil_pending: Mutex::new(std::collections::HashMap::new()),
+            littleskin_pending: Mutex::new(std::collections::HashMap::new()),
+            littleskin_endpoints: yggdrasil::oauth::Endpoints::default(),
         }))
     }
     pub fn list(&self) -> Vec<Player> {
@@ -117,6 +131,28 @@ impl Accounts {
     }
     fn save(&self, players: &[Player]) -> Result<()> {
         atomic_write(&self.path, &serde_json::to_vec_pretty(players)?)
+    }
+    pub fn reorder(&self, ids: &[String]) -> Result<Vec<Player>> {
+        let ranks: std::collections::HashMap<_, _> = ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| (id.as_str(), index))
+            .collect();
+        if ranks.len() != ids.len() {
+            bail!("角色排序不能包含重复的角色");
+        }
+        let mut players = self.players.lock().unwrap_or_else(|e| e.into_inner());
+        let mut next = players.clone();
+        // Ignore removed IDs and keep accounts added since the UI snapshot.
+        next.sort_by_key(|player| {
+            ranks
+                .get(player.uuid.as_str())
+                .copied()
+                .unwrap_or(usize::MAX)
+        });
+        self.save(&next)?;
+        *players = next.clone();
+        Ok(next)
     }
     fn upsert(&self, player: Player) -> Result<()> {
         let mut players = self.players.lock().unwrap_or_else(|e| e.into_inner());
@@ -136,6 +172,7 @@ impl Accounts {
             bail!("角色已存在");
         }
         let player = Player {
+            yggdrasil: None,
             uuid: offline_uuid(name),
             name: name.into(),
             online: false,
@@ -246,7 +283,15 @@ impl Accounts {
         let kind = self.texture_kind(source)?;
         // Minecraft profiles can still contain HTTP texture URLs. Fetch over
         // HTTPS in Rust so WebView CSP/CORS cannot prevent canvas rendering.
-        let url = official_texture_url(source)?;
+        let url = if self
+            .list()
+            .iter()
+            .any(|p| p.yggdrasil.is_some() && (p.skin == source || p.cape == source))
+        {
+            yggdrasil::web_url(source)?
+        } else {
+            official_texture_url(source)?
+        };
         let response = self
             .client
             .get(url)
@@ -407,6 +452,8 @@ impl Accounts {
         self.vault.put(
             &player.uuid,
             Tokens {
+                littleskin: None,
+                client_token: String::new(),
                 access,
                 refresh,
                 expires_at: now() + minecraft["expires_in"].as_u64().unwrap_or(86400),
@@ -443,6 +490,9 @@ impl Accounts {
             .context("角色不存在")?;
         if !player.online {
             return Ok(player);
+        }
+        if player.yggdrasil.is_some() {
+            return self.refresh_yggdrasil(player).await;
         }
         let credentials = self
             .vault
@@ -491,17 +541,23 @@ impl Accounts {
             .into_iter()
             .find(|p| p.uuid == id)
             .context("请先选择角色")?;
-        if player.online
-            && self
-                .vault
-                .get(id)
-                .is_none_or(|t| t.expires_at < now() + 120)
+        if player.yggdrasil.is_some()
+            || (player.online
+                && self
+                    .vault
+                    .get(id)
+                    .is_none_or(|t| t.expires_at < now() + 120))
         {
             player = self.refresh(id).await?;
         }
         Ok(LaunchIdentity {
             name: player.name,
-            uuid: player.uuid.clone(),
+            uuid: player
+                .yggdrasil
+                .as_ref()
+                .map(|y| y.profile_id.clone())
+                .unwrap_or_else(|| player.uuid.clone()),
+            auth_server: player.yggdrasil.as_ref().map(|y| y.server.clone()),
             online: player.online,
             access_token: self
                 .vault
@@ -527,6 +583,8 @@ impl Accounts {
                 self.vault.put(
                     &id,
                     Tokens {
+                        littleskin: None,
+                        client_token: String::new(),
                         access: p["AccessToken"].as_str().unwrap_or("").into(),
                         refresh: p["RefreshToken"].as_str().unwrap_or("").into(),
                         expires_at: 0,
@@ -535,6 +593,7 @@ impl Accounts {
             }
             let skin = p["Skin"].as_str().unwrap_or("");
             self.upsert(Player {
+                yggdrasil: None,
                 uuid: id,
                 name: name.into(),
                 online,
@@ -572,6 +631,7 @@ fn player_from_profile(profile: &Value) -> Result<Player> {
         .as_array()
         .and_then(|capes| capes.iter().find(|cape| cape["state"] == "ACTIVE"));
     Ok(Player {
+        yggdrasil: None,
         uuid: required(profile, "id")?,
         name: required(profile, "name")?,
         online: true,
@@ -668,6 +728,81 @@ pub fn validate_skin(bytes: &[u8]) -> Result<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn open_accounts(directory: &Path) -> Arc<Accounts> {
+        Accounts::open(
+            directory,
+            Arc::new(Vault::open(directory).unwrap()),
+            Arc::new(ConfigStore::open(directory).unwrap()),
+            Arc::new(Jobs::default()),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn reorder_players_persists_profiles_and_active_selection() {
+        let directory = tempfile::tempdir().unwrap();
+        let accounts = open_accounts(directory.path());
+        let first = accounts.add_offline("First").unwrap();
+        let second = accounts.add_offline("Second").unwrap();
+        let mut online = player_from_profile(&json!({
+            "id": "0123456789abcdef0123456789abcdef", "name": "Online",
+            "skins": [{"state": "ACTIVE", "url": "https://textures.minecraft.net/texture/ab", "variant": "SLIM"}],
+            "capes": [{"id": "cape", "state": "ACTIVE", "url": "https://textures.minecraft.net/texture/cd"}]
+        })).unwrap();
+        online.capes.as_mut().unwrap()[0].name = "Cape".into();
+        accounts.upsert(online.clone()).unwrap();
+        accounts.select(&second.uuid).unwrap();
+        let reordered = accounts
+            .reorder(&[online.uuid.clone(), first.uuid.clone(), second.uuid.clone()])
+            .unwrap();
+        let expected = serde_json::to_value([online, first, second.clone()]).unwrap();
+        assert_eq!(serde_json::to_value(reordered).unwrap(), expected);
+        let reopened = open_accounts(directory.path());
+        assert_eq!(serde_json::to_value(reopened.list()).unwrap(), expected);
+        assert_eq!(reopened.config.get().active_player, second.uuid);
+    }
+
+    #[test]
+    fn reorder_players_keeps_new_accounts_and_ignores_removed_ids() {
+        let directory = tempfile::tempdir().unwrap();
+        let accounts = open_accounts(directory.path());
+        let first = accounts.add_offline("First").unwrap();
+        let second = accounts.add_offline("Second").unwrap();
+        let third = accounts.add_offline("Third").unwrap();
+        accounts.remove(&second.uuid).unwrap();
+        let added = accounts.add_offline("Added").unwrap();
+        let result = accounts
+            .reorder(&[third.uuid.clone(), second.uuid, first.uuid.clone()])
+            .unwrap();
+        assert_eq!(
+            result.iter().map(|p| &p.uuid).collect::<Vec<_>>(),
+            [&third.uuid, &first.uuid, &added.uuid]
+        );
+        assert_eq!(accounts.config.get().active_player, added.uuid);
+    }
+
+    #[test]
+    fn reorder_players_does_not_mutate_accounts_on_invalid_order_or_save_failure() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut accounts = open_accounts(directory.path());
+        let first = accounts.add_offline("First").unwrap();
+        let second = accounts.add_offline("Second").unwrap();
+        let before = serde_json::to_value(accounts.list()).unwrap();
+        let saved = std::fs::read(directory.path().join("players.json")).unwrap();
+        assert!(accounts
+            .reorder(&[first.uuid.clone(), first.uuid.clone()])
+            .is_err());
+        let blocked = directory.path().join("blocked.json");
+        std::fs::create_dir(&blocked).unwrap();
+        Arc::get_mut(&mut accounts).unwrap().path = blocked;
+        assert!(accounts.reorder(&[second.uuid, first.uuid]).is_err());
+        assert_eq!(serde_json::to_value(accounts.list()).unwrap(), before);
+        assert_eq!(
+            std::fs::read(directory.path().join("players.json")).unwrap(),
+            saved
+        );
+    }
 
     #[test]
     fn profile_selects_only_equipped_cape_and_clears_it_when_removed() {

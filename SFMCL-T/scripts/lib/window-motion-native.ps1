@@ -20,6 +20,10 @@ public static class MotionWindow {
     [DllImport("user32.dll")] public static extern bool EnumWindows(Callback callback, IntPtr parameter);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr handle, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr handle, StringBuilder text, int length);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr handle, StringBuilder text, int length);
+    [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr handle, uint command);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] public static extern int GetStyle(IntPtr handle, int index);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr handle);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr handle, int command);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr handle, out Rect rect);
     [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr handle, out Rect rect);
@@ -37,6 +41,21 @@ public static class MotionWindow {
             var title = new StringBuilder(256);
             GetWindowText(handle, title, 256);
             if (owner == processId && title.ToString().StartsWith("SFMCL-T")) {
+                result = handle;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return result;
+    }
+    public static IntPtr Shadow(int processId, IntPtr owner) {
+        IntPtr result = IntPtr.Zero;
+        EnumWindows((handle, parameter) => {
+            uint process;
+            GetWindowThreadProcessId(handle, out process);
+            var name = new StringBuilder(128);
+            GetClassName(handle, name, 128);
+            if (process == processId && GetWindow(handle, 4) == owner && name.ToString() == "Static" && (GetStyle(handle, -20) & 0x80000) != 0) {
                 result = handle;
                 return false;
             }
@@ -94,6 +113,15 @@ $rendering = 0
 [void][MotionWindow]::DwmGetWindowAttribute($handle, 1, [ref]$rendering, 4)
 $corners = 0
 [void][MotionWindow]::DwmGetWindowAttribute($handle, 33, [ref]$corners, 4)
+$shadow = [MotionWindow]::Shadow($LauncherProcessId, $handle)
+$shadowBounds = New-Object MotionWindow+Rect
+$shadowVisible = $false
+$shadowPassThrough = $false
+if ($shadow -ne [IntPtr]::Zero) {
+    [void][MotionWindow]::GetWindowRect($shadow, [ref]$shadowBounds)
+    $shadowVisible = [MotionWindow]::IsWindowVisible($shadow)
+    $shadowPassThrough = ([MotionWindow]::GetStyle($shadow, -20) -band 0x080000A0) -eq 0x080000A0
+}
 @{
     rendering = $rendering
     corners = $corners
@@ -104,4 +132,12 @@ $corners = 0
     topInset = $origin.Y - $outer.Top
     leftColor = $leftColor
     rightColor = $rightColor
+    clientLeft = $origin.X
+    clientTop = $origin.Y
+    shadowVisible = $shadowVisible
+    shadowPassThrough = $shadowPassThrough
+    shadowLeft = $shadowBounds.Left
+    shadowTop = $shadowBounds.Top
+    shadowRight = $shadowBounds.Right
+    shadowBottom = $shadowBounds.Bottom
 } | ConvertTo-Json -Compress

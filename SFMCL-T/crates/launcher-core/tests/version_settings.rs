@@ -292,6 +292,7 @@ fn launch_arguments_and_resource_directory_use_the_same_version_options() {
             uuid: "id",
             access_token: "",
             online: false,
+            yggdrasil: false,
         },
         effective.memory_mb,
     )

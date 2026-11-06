@@ -17,6 +17,7 @@ pub struct LaunchIdentity {
     pub uuid: String,
     pub access_token: String,
     pub online: bool,
+    pub auth_server: Option<String>,
 }
 
 impl Installer {
@@ -33,7 +34,7 @@ impl Installer {
             bail!("请先选择角色");
         }
         if player.online && player.access_token.is_empty() {
-            bail!("微软登录已失效，请刷新登录");
+            bail!("账号登录已失效，请刷新登录");
         }
         let settings = self.settings.get();
         let root = settings.active_game_root()?;
@@ -112,6 +113,12 @@ impl Installer {
         )
         .await?;
         job.step(3, "提取 native 并生成启动参数");
+        let injector = if let Some(server) = &player.auth_server {
+            job.log("准备第三方验证组件 authlib-injector".into());
+            Some(super::authlib_injector::prepare(root, server, &self.client, &job.cancel).await?)
+        } else {
+            None
+        };
         versions::extract_natives(root, id, &versions::libraries(&version)?)?;
         self.materialize_assets(root, &version, &settings)?;
         let identity = Identity {
@@ -119,8 +126,14 @@ impl Installer {
             uuid: &player.uuid,
             access_token: &player.access_token,
             online: player.online,
+            yggdrasil: player.auth_server.is_some(),
         };
-        let args = build(root, id, &version, &settings, &identity, memory)?;
+        let mut args = build(root, id, &version, &settings, &identity, memory)?;
+        if let Some(argument) = injector {
+            // JVM agents must precede the main class; each argument is passed
+            // directly to Command (never through a shell).
+            args.insert(0, argument);
+        }
         let directory = versions::game_directory(root, id, settings.isolation)?;
         std::fs::create_dir_all(&directory)?;
         if job.cancel.is_cancelled() {

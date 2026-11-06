@@ -40,6 +40,7 @@ try {
     }
     Set-Location -LiteralPath $projectRoot
     Sync-NodeDependencies -ProjectRoot $projectRoot -Force:$InstallDependencies
+    $Port = Get-AvailableDevelopmentPort -PreferredPort $Port
     if ($Web) {
         Invoke-Checked -File 'npm.cmd' -Arguments @('run', 'dev', '--', '--port', [string]$Port)
     } else {

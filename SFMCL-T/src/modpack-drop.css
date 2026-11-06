@@ -1,4 +1,4 @@
-.modpack-drop-overlay {
+.drop-overlay {
   position: fixed;
   inset: 0;
   z-index: 110;
@@ -13,14 +13,14 @@
   opacity: 0.75;
   pointer-events: none;
 }
-.modpack-drop-overlay::backdrop {
+.drop-overlay::backdrop {
   background: transparent;
   pointer-events: none;
 }
-.modpack-drop-overlay[data-phase="checking"] {
+.drop-overlay[data-phase="checking"] {
   pointer-events: auto;
 }
-.modpack-drop-overlay[data-exiting] {
+.drop-overlay[data-exiting] {
   pointer-events: none;
 }
 .modpack-drop-frame {

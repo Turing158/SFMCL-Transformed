@@ -9,6 +9,7 @@ pub struct Identity<'a> {
     pub uuid: &'a str,
     pub access_token: &'a str,
     pub online: bool,
+    pub yggdrasil: bool,
 }
 
 /// Tokenize arguments without invoking a shell. Backslashes in Windows paths
@@ -114,7 +115,9 @@ pub fn build(
         ),
         (
             "user_type",
-            if player.online {
+            if player.yggdrasil {
+                "mojang".into()
+            } else if player.online {
                 "msa".into()
             } else {
                 "legacy".into()

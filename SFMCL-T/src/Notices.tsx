@@ -405,13 +405,25 @@ export function useNotices(enabled: boolean) {
       setChangingVisibility(false);
     }
   };
+  // Task polling re-renders Home every 500ms. Keep unchanged collections stable
+  // so it does not rebuild the notice layout while the user is scrolling.
+  const visibleItems = useMemo(
+    () =>
+      items.filter(
+        (item) => !item.preset || !item.id || !hiddenIds.includes(item.id),
+      ),
+    [items, hiddenIds],
+  );
+  const presetItems = useMemo(
+    () =>
+      items.filter(
+        (item) => item.preset && item.id && hiddenIds.includes(item.id),
+      ),
+    [items, hiddenIds],
+  );
   return {
-    items: items.filter(
-      (item) => !item.preset || !item.id || !hiddenIds.includes(item.id),
-    ),
-    presetItems: items.filter(
-      (item) => item.preset && item.id && hiddenIds.includes(item.id),
-    ),
+    items: visibleItems,
+    presetItems,
     error: [error, preferenceError, actionError].filter(Boolean).join(" "),
     loading,
     hiding: changingVisibility || !preferencesReady,

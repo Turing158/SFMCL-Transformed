@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePageActive } from "./PageActivity";
+import { useSelectPopupMotion } from "./useSelectPopupMotion";
 import type {
   ButtonHTMLAttributes,
   CSSProperties,
@@ -21,7 +22,7 @@ import type {
   TextareaHTMLAttributes,
 } from "react";
 
-function PixelIcon({ name }: { name: "check" | "chevron" | "close" }) {
+export function PixelIcon({ name }: { name: "check" | "chevron" | "close" }) {
   const paths = {
     check:
       "M1 6H3V8H5V10H7V8H9V6H11V4H13V2H15V5H13V7H11V9H9V11H7V13H5V11H3V9H1Z",
@@ -396,7 +397,6 @@ export function Select({
   const typeahead = useRef({ text: "", time: 0 });
   const [open, setOpen] = useState(false);
   const [present, setPresent] = useState(false);
-  const popupMotion = useRef<Animation | null>(null);
   const [active, setActive] = useState(-1);
   const [actionActive, setActionActive] = useState(false);
   const [position, setPosition] = useState<CSSProperties>();
@@ -532,52 +532,7 @@ export function Select({
     };
   }, [present, choices.length, popoverSupported]);
 
-  useLayoutEffect(() => {
-    const panel = popup.current;
-    if (!present || !position || !panel) return;
-    const style = getComputedStyle(panel);
-    const collapsed = {
-      opacity: 0,
-      clipPath: style.getPropertyValue("--select-collapsed-clip").trim(),
-      transform: `translateY(${style.getPropertyValue("--select-offset").trim()})`,
-    };
-    const expanded = {
-      opacity: 1,
-      clipPath: "inset(-8px)",
-      transform: "translateY(0px)",
-    };
-    // Read the current frame before cancelling so rapid toggles reverse smoothly.
-    const from =
-      popupMotion.current || !open
-        ? {
-            opacity: style.opacity,
-            clipPath: style.clipPath,
-            transform: style.transform,
-          }
-        : collapsed;
-    popupMotion.current?.cancel();
-    const animation = panel.animate([from, open ? expanded : collapsed], {
-      id: "sfmcl-t-select-popup",
-      duration: open ? 220 : 160,
-      easing: "cubic-bezier(0.22, 0.8, 0.25, 1)",
-      fill: "both",
-    });
-    popupMotion.current = animation;
-    animation.onfinish = () => {
-      if (popupMotion.current !== animation) return;
-      popupMotion.current = null;
-      if (open) animation.cancel();
-      else setPresent(false);
-    };
-  }, [open, present, !!position]);
-
-  useLayoutEffect(
-    () => () => {
-      popupMotion.current?.cancel();
-      popupMotion.current = null;
-    },
-    [],
-  );
+  useSelectPopupMotion(popup, open, present, !!position, setPresent);
 
   useLayoutEffect(() => {
     if (open && position)

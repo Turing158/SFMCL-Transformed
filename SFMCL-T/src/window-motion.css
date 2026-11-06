@@ -10,7 +10,7 @@ html[data-window-motion] body {
   background: transparent;
   min-height: 100dvh;
   /* DWM rounds the native rectangle, not the surface moving inside it. */
-  clip-path: inset(0 round 8px);
+  clip-path: inset(0 round var(--window-corner-radius, 12px));
   transform-origin: center;
   will-change: transform, opacity;
   pointer-events: none;

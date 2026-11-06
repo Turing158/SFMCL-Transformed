@@ -11,10 +11,10 @@
 }
 .sidebar {
   --rail-inset: calc(8px + 4px * var(--rail-open));
-  --rail-edge: color-mix(in srgb, var(--sidebar), white 17%);
-  --rail-fill: color-mix(in srgb, var(--sidebar), white 5.5%);
-  --rail-edge-hover: color-mix(in srgb, var(--sidebar), white 48%);
-  --rail-fill-hover: color-mix(in srgb, var(--sidebar), white 14%);
+  --rail-edge: color-mix(in srgb, var(--sidebar), white 9%);
+  --rail-fill: color-mix(in srgb, var(--sidebar), white 4%);
+  --rail-edge-hover: color-mix(in srgb, var(--sidebar), white 22%);
+  --rail-fill-hover: color-mix(in srgb, var(--sidebar), white 10%);
   --rail-shadow: color-mix(in srgb, var(--sidebar), #000 55%);
   --sidebar-tip: color-mix(in srgb, var(--accent), #fff 55%);
   position: relative;
@@ -34,10 +34,10 @@
 }
 :root[data-theme="dark"] .sidebar {
   --rail-shadow: color-mix(in srgb, var(--sidebar), black 80%);
-  --rail-edge: color-mix(in srgb, var(--sidebar), white 14%);
-  --rail-fill: color-mix(in srgb, var(--sidebar), white 4.5%);
-  --rail-edge-hover: color-mix(in srgb, var(--sidebar), white 44%);
-  --rail-fill-hover: color-mix(in srgb, var(--sidebar), white 12%);
+  --rail-edge: color-mix(in srgb, var(--sidebar), white 9%);
+  --rail-fill: color-mix(in srgb, var(--sidebar), white 4%);
+  --rail-edge-hover: color-mix(in srgb, var(--sidebar), white 22%);
+  --rail-fill-hover: color-mix(in srgb, var(--sidebar), white 10%);
 }
 .sidebar > * {
   position: relative;
@@ -85,7 +85,7 @@
   width: calc(var(--topbar-height) * var(--brand-scale));
   height: calc(var(--topbar-height) * var(--brand-scale));
 }
-.sidebar .brand-home {
+.sidebar .brand-label {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -95,6 +95,8 @@
   line-height: 1.25;
   text-align: center;
   color: inherit;
+  cursor: default;
+  user-select: none;
 }
 .sidebar .brand-wordmark {
   display: block;
@@ -130,7 +132,7 @@
   --surface-base: var(--rail-shadow);
   --surface-stroke: 2px;
   --surface-inset-shape: var(--surface-shape-2);
-  --surface-depth: 2px;
+  --surface-depth: 0px;
   --surface-marker: transparent;
   display: flex;
   align-items: center;
@@ -146,6 +148,9 @@
     translate 160ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .sidebar nav button.has-surface {
+  --surface-edge: transparent;
+  --surface-fill: transparent;
+  --surface-base: transparent;
   height: calc(var(--button-height) + 2px * var(--rail-open));
   min-height: calc(var(--button-height) + 2px * var(--rail-open));
   width: calc(
@@ -155,7 +160,7 @@
   padding: calc(4px + 4px * var(--rail-open));
   padding-left: calc(4px + 12px * var(--rail-open));
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   animation: rail-enter 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 .sidebar :is(.nav-copy, .profile-copy, .task-copy) {
@@ -183,28 +188,17 @@
   color: #fff;
 }
 .sidebar nav button[aria-current="page"] {
-  --surface-edge: color-mix(in srgb, var(--accent), #000 34%);
+  --surface-edge: var(--accent);
   --surface-fill: var(--accent);
-  --surface-base: color-mix(in srgb, var(--accent), #000 58%);
-  --surface-depth: 3px;
+  --surface-base: transparent;
+  --surface-depth: 0px;
   color: var(--on-accent);
-  translate: 0 -2px;
+  font-weight: 650;
 }
 .sidebar nav button[aria-current="page"]:hover {
-  --surface-edge: color-mix(in srgb, var(--accent), #000 42%);
-  --surface-fill: var(--accent);
+  --surface-edge: var(--accent-hover);
+  --surface-fill: var(--accent-hover);
   color: var(--on-accent);
-}
-.sidebar nav button[aria-current="page"] > .surface-frame::after {
-  background-image: linear-gradient(
-    100deg,
-    transparent 24%,
-    rgba(255, 255, 255, 0.07) 50%,
-    transparent 76%
-  );
-  background-repeat: no-repeat;
-  background-size: 240% 100%;
-  animation: rail-sheen 4.6s ease-in-out infinite;
 }
 .sidebar nav button.has-surface:active,
 .sidebar
@@ -401,7 +395,8 @@
     color 180ms,
     opacity 220ms ease;
 }
-.sidebar .sidebar-favorite:not(.active):is(:hover, :focus-visible):not(:disabled) {
+.sidebar
+  .sidebar-favorite:not(.active):is(:hover, :focus-visible):not(:disabled) {
   --surface-edge: color-mix(in srgb, var(--sidebar), #fff 12%);
   --surface-fill: color-mix(in srgb, var(--sidebar), #fff 12%);
   color: #fff;
@@ -465,7 +460,7 @@
   margin-bottom: 12px;
 }
 .sidebar .sidebar-task {
-  --surface-depth: 1px;
+  --surface-depth: 0px;
   height: calc(var(--button-height) + 4px * var(--rail-open));
   min-height: calc(var(--button-height) + 4px * var(--rail-open));
   width: calc(
@@ -476,11 +471,27 @@
   gap: calc(7px * var(--rail-open));
 }
 .sidebar .task-count {
+  --surface-edge: transparent;
+  --surface-fill: var(--chrome-accent);
+  color: var(--sidebar);
   min-width: calc(19px * var(--rail-open));
   max-width: calc(64px * var(--rail-open));
   margin-left: 0;
   padding: calc(1px * var(--rail-open)) calc(4px * var(--rail-open));
   overflow: hidden;
+}
+.sidebar-downloads:is(
+    [data-status="paused"],
+    [data-status="pausing"],
+    [data-status="queued"]
+  )
+  .task-count {
+  --surface-fill: #eed49a;
+  color: #493812;
+}
+.sidebar-downloads[data-status="failed"] .task-count {
+  --surface-fill: #f2b3b6;
+  color: #5a2026;
 }
 .sidebar .task-copy {
   min-width: 0;
@@ -496,7 +507,7 @@
 .sidebar .task-copy small {
   display: block;
   color: var(--sidebar-muted);
-  font-size: 9px;
+  font-size: 10px;
 }
 .sidebar-progress-motion {
   display: grid;
@@ -635,8 +646,7 @@
   transform: rotate(0deg);
 }
 .sidebar :is(.brand-mark, .avatar, .sidebar-favorite-icon),
-.sidebar button > svg,
-.favorite-context-menu .pixel-context-icon {
+.sidebar button > svg {
   transform-origin: center;
   rotate: 0deg;
   scale: 1;
@@ -649,8 +659,7 @@
 .sidebar .brand:hover .brand-mark,
 .sidebar .profile-button:hover:not(:disabled) .avatar,
 .sidebar .sidebar-favorite:hover:not(:disabled) .sidebar-favorite-icon,
-.sidebar button:hover:not(:disabled) > svg,
-.favorite-context-menu .pixel-context-item:hover:not(:disabled) .pixel-context-icon {
+.sidebar button:hover:not(:disabled) > svg {
   rotate: 8deg;
   scale: 1.1;
 }
@@ -667,13 +676,7 @@
 }
 /* The effective class includes both the manual preference and the media query. */
 .sidebar.rail-collapsed
-  :is(
-    .profile-copy,
-    .task-copy,
-    .task-count,
-    .brand-copy,
-    .nav-copy
-  ) {
+  :is(.profile-copy, .task-copy, .task-count, .brand-copy, .nav-copy) {
   visibility: hidden;
   transition-delay: 240ms;
 }
@@ -715,16 +718,6 @@
   }
   50% {
     background-color: color-mix(in srgb, var(--danger), #fff 16%);
-  }
-}
-@keyframes rail-sheen {
-  0%,
-  48% {
-    background-position: -140% 0;
-  }
-  88%,
-  100% {
-    background-position: 240% 0;
   }
 }
 @keyframes rail-progress {

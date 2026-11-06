@@ -1,8 +1,13 @@
 mod commands;
 mod curseforge_download;
+#[cfg(windows)]
+mod drag_drop;
 mod launch_window;
+mod local_data;
 mod window_frame;
 mod window_motion;
+#[cfg(windows)]
+mod window_shadow;
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -93,6 +98,7 @@ fn with_bundled_webview2(mut context: tauri::Context<tauri::Wry>) -> tauri::Cont
 }
 
 pub fn run() {
+    if local_data::run_helper() { return; }
     let context = tauri::generate_context!();
     #[cfg(windows)]
     let context = with_bundled_webview2(context);
@@ -100,10 +106,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let directory = sfmcl_t_core::brand::data_directory(
-                &app.path().app_data_dir()?,
+            let default_directory = app.path().app_data_dir()?;
+            let directory = sfmcl_t_core::local_data::resolve_directory(
+                &default_directory,
                 sfmcl_t_core::brand::environment("DATA_DIR"),
-            );
+            )?;
+            app.manage(local_data::DataManager::new(&default_directory, &directory)?);
             let webview_directory = directory.join("webview");
             let runtime = commands::Runtime::new(directory)?;
             let settings = runtime.settings.get();
@@ -148,7 +156,15 @@ pub fn run() {
             if !hardware {
                 window = window.additional_browser_args("--disable-gpu");
             }
+            // Wry's Windows file drop target swallows browser text/card drags.
+            // Our OLE target supports both and retains Tauri's file event format.
+            #[cfg(windows)]
+            {
+                window = window.disable_drag_drop_handler();
+            }
             let main_window = window.build()?;
+            #[cfg(windows)]
+            drag_drop::install(&main_window)?;
             window_frame::set_visible(&main_window, false)?;
             launch_window::setup(app)?;
             Ok(())
@@ -163,6 +179,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             if window.label() != "main" {
                 return;
+            }
+            #[cfg(windows)]
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                drag_drop::uninstall();
             }
             if matches!(
                 event,

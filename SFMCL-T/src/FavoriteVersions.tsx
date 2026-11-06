@@ -255,6 +255,7 @@ export function FavoriteVersions({ collapsed }: { collapsed: boolean }) {
             return (
               <li
                 key={version.path}
+                data-window-drag="false"
                 onContextMenu={(event) => {
                   event.preventDefault();
                   event.stopPropagation();

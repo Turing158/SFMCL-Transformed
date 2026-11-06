@@ -85,7 +85,13 @@ function LaunchButton({
   );
 }
 
-export function LaunchDock({ playerCaption }: { playerCaption: string }) {
+export function LaunchDock({
+  active,
+  playerCaption,
+}: {
+  active: boolean;
+  playerCaption: string;
+}) {
   const app = useApp();
   const settings = app.data.settings;
   const task = getLaunchTask(app.tasks, settings.activeVersion);
@@ -126,13 +132,17 @@ export function LaunchDock({ playerCaption }: { playerCaption: string }) {
   }, []);
 
   useLayoutEffect(() => {
+    if (!active) {
+      closePicker(false);
+      return;
+    }
     if (focusWhenReady.current && !pickerOpen && !app.busy && !selecting) {
       focusWhenReady.current = false;
       actions.current
         ?.querySelector<HTMLButtonElement>(".launch-switch")
         ?.focus({ preventScroll: true });
     }
-  }, [pickerOpen, app.busy, selecting]);
+  }, [active, pickerOpen, app.busy, selecting, closePicker]);
 
   useLayoutEffect(() => {
     const footer = dock.current;
@@ -351,27 +361,31 @@ export function LaunchDock({ playerCaption }: { playerCaption: string }) {
       ref={dock}
       className="launch-dock"
       aria-label="游戏启动区"
+      aria-hidden={!active}
+      inert={!active}
       data-state={mode}
       data-error={failure || undefined}
       data-warning={warning || undefined}
     >
-      {locked && mode !== "running" && (
-        <div
-          className={`launch-progress ${pending && !task.active ? "indeterminate" : ""}`}
-          role="progressbar"
-          aria-label="游戏启动步骤进度"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={pending && !task.active ? undefined : task.progress}
-          aria-valuetext={message}
-          style={
-            { "--launch-progress": (task.progress || 0) / 100 } as CSSProperties
-          }
-        >
-          <span />
-        </div>
-      )}
       <div className="launch-dock-main">
+        {locked && mode !== "running" && (
+          <div
+            className={`launch-progress ${pending && !task.active ? "indeterminate" : ""}`}
+            role="progressbar"
+            aria-label="游戏启动步骤进度"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pending && !task.active ? undefined : task.progress}
+            aria-valuetext={message}
+            style={
+              {
+                "--launch-progress": (task.progress || 0) / 100,
+              } as CSSProperties
+            }
+          >
+            <span />
+          </div>
+        )}
         <div className="launch-version">
           <ResourceImage
             path={versionIcon(version)}
@@ -455,35 +469,37 @@ export function LaunchDock({ playerCaption }: { playerCaption: string }) {
           </LaunchButton>
         </div>
       </div>
-      <div className="launch-status">
-        <div className="launch-status-detail">
-          <FooterStatusIcon iconKey={statusKind}>
-            <StatusIcon size={12} className={spinning ? "spin" : undefined} />
-          </FooterStatusIcon>
-          <FooterText
-            slot="message"
-            text={message}
-            id={statusId}
-            className="launch-status-message"
-            role="status"
-            data-tooltip={message}
-          />
-          {task.stepLabel && (
+      {active && (
+        <div className="launch-status">
+          <div className="launch-status-detail">
+            <FooterStatusIcon iconKey={statusKind}>
+              <StatusIcon size={12} className={spinning ? "spin" : undefined} />
+            </FooterStatusIcon>
             <FooterText
-              slot="step"
-              text={task.stepLabel}
-              className="launch-status-caption"
+              slot="message"
+              text={message}
+              id={statusId}
+              className="launch-status-message"
+              role="status"
+              data-tooltip={message}
             />
+            {task.stepLabel && (
+              <FooterText
+                slot="step"
+                text={task.stepLabel}
+                className="launch-status-caption"
+              />
+            )}
+          </div>
+          {player && (
+            <span className="launch-status-player" data-tooltip={playerCaption}>
+              <UserRound size={12} aria-hidden="true" />
+              <FooterText slot="player" text={playerCaption} />
+            </span>
           )}
         </div>
-        {player && (
-          <span className="launch-status-player" data-tooltip={playerCaption}>
-            <UserRound size={12} aria-hidden="true" />
-            <FooterText slot="player" text={playerCaption} />
-          </span>
-        )}
-      </div>
-      {pickerOpen && (
+      )}
+      {active && pickerOpen && (
         <VersionPicker
           id={pickerId}
           actions={actions}

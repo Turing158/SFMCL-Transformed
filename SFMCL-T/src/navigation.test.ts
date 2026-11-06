@@ -32,8 +32,9 @@ describe("retained page navigation", () => {
     let state = navigateTo(initialNavigation, login);
     state = navigateTo(state, install);
     for (let i = 0; i < 4; i++) {
+      const parent = state.route;
       state = switchPage(state, "players");
-      expect(state.route).toBe(login);
+      expect(state.route).toEqual({ ...login, returnTo: parent });
       expect(switchPage(state, "players")).toBe(state);
       state = switchPage(state, "resources");
       expect(state.route).toBe(install);
@@ -46,7 +47,10 @@ describe("retained page navigation", () => {
     let state = navigateTo(initialNavigation, login);
     state = navigateTo(state, { page: "players" });
     state = switchPage(state, "home");
-    expect(switchPage(state, "players").route).toEqual({ page: "players" });
+    expect(switchPage(state, "players").route).toEqual({
+      page: "players",
+      returnTo: { page: "home" },
+    });
   });
 
   it("uses the current download visit's parent while retaining other pages", () => {
@@ -54,8 +58,9 @@ describe("retained page navigation", () => {
     state = switchPage(state, "downloads");
     expect(pagePath(state.route).at(-2)).toBe(install);
     state = switchPage(state, "players");
+    const players = state.route;
     state = switchPage(state, "downloads");
-    expect(pagePath(state.route)).toEqual([{ page: "players" }, state.route]);
+    expect(pagePath(state.route).at(-2)).toBe(players);
     expect(switchPage(state, "resources").route).toBe(install);
   });
 
@@ -63,7 +68,10 @@ describe("retained page navigation", () => {
     const state = switchPage(navigateTo(initialNavigation, login), "home");
     const completed = navigateTo(state, { page: "players" }, "players");
     expect(completed.route).toBe(state.route);
-    expect(switchPage(completed, "players").route).toEqual({ page: "players" });
+    expect(switchPage(completed, "players").route).toEqual({
+      page: "players",
+      returnTo: { page: "home" },
+    });
     expect(navigateTo(state, { page: "downloads" }, "players")).toBe(state);
     expect(switchPage(state, "downloads", "players")).toBe(state);
   });
@@ -74,6 +82,112 @@ describe("retained page navigation", () => {
     expect(switchPage(state, "downloads", "players").route.page).toBe(
       "downloads",
     );
+  });
+});
+
+describe("player subpage navigation", () => {
+  const parents: NavigationEntry[] = [
+    { page: "home" },
+    { page: "versions" },
+    { page: "resources", tab: "shader" },
+    { page: "settings" },
+    { page: "downloads", returnTo: { page: "settings" } },
+    {
+      page: "versions",
+      detail: {
+        kind: "settings",
+        version: {
+          id: "1.20.1-Fabric",
+          version: "1.20.1",
+          kind: "release",
+          loader: "Fabric",
+          path: "C:/Minecraft/versions/1.20.1-Fabric",
+          javaMajor: 17,
+          icon: "",
+        },
+      },
+    },
+  ];
+
+  it.each(parents)(
+    "returns to the exact page that opened players: %j",
+    (parent) => {
+      const players = resolveNavigation(parent, { page: "players" });
+      expect(pagePath(players)).toEqual([...pagePath(parent), players]);
+      expect(pagePath(players).at(-2)).toBe(parent);
+      expect(resolveNavigation(players, parent)).toEqual(parent);
+      expect(navigationPage(players)).toBe("players");
+    },
+  );
+
+  it("keeps the visit's parent through login, completion and downloads", () => {
+    const parent = parents.at(-1)!;
+    let state = switchPage(navigateTo(initialNavigation, parent), "players");
+    const players = state.route;
+    for (const login of [
+      "offline",
+      "microsoft",
+      "yggdrasil",
+      "yggdrasil-oauth",
+    ] as const) {
+      state = navigateTo(state, { page: "players", login });
+      expect(pagePath(state.route)).toEqual([
+        ...pagePath(parent),
+        players,
+        state.route,
+      ]);
+      const loginRoute = state.route;
+      state = switchPage(state, "downloads");
+      expect(pagePath(state.route).at(-2)).toBe(loginRoute);
+      state = navigateTo(state, pagePath(state.route).at(-2)!);
+      expect(state.route).toBe(loginRoute);
+      state = navigateTo(state, { page: "players" });
+      expect(state.route).toEqual(players);
+    }
+    state = navigateTo(state, pagePath(state.route).at(-2)!);
+    expect(state.route).toBe(parent);
+  });
+
+  it("keeps the original parent on repeated player navigation", () => {
+    let state = switchPage(
+      navigateTo(initialNavigation, parents[2]),
+      "players",
+    );
+    const players = state.route;
+    for (let i = 0; i < 5; i++) {
+      expect(switchPage(state, "players")).toBe(state);
+      state = navigateTo(state, { page: "players" });
+      expect(state.route).toEqual(players);
+    }
+  });
+
+  it("preserves the hidden login visit's parent when authentication completes", () => {
+    let state = navigateTo(navigateTo(initialNavigation, parents[2]), {
+      page: "players",
+      login: "microsoft",
+    });
+    state = switchPage(state, "settings");
+    const completed = navigateTo(state, { page: "players" }, "players");
+    expect(completed.route).toBe(state.route);
+    expect(completed.pages.players).toEqual({
+      page: "players",
+      returnTo: parents[2],
+    });
+    expect(switchPage(completed, "players").route).toEqual({
+      page: "players",
+      returnTo: state.route,
+    });
+  });
+
+  it("defaults to home when players or login opens without history", () => {
+    const players: NavigationEntry = { page: "players" };
+    const login: NavigationEntry = { page: "players", login: "offline" };
+    expect(pagePath(players)).toEqual([{ page: "home" }, players]);
+    expect(pagePath(login)).toEqual([
+      { page: "home" },
+      { page: "players", returnTo: { page: "home" } },
+      login,
+    ]);
   });
 });
 
@@ -310,11 +424,11 @@ describe("local resource detail navigation", () => {
 describe("download navigation", () => {
   const parents: PrimaryNavigationEntry[] = [
     { page: "home" },
-    { page: "players" },
+    { page: "players", returnTo: { page: "home" } },
     { page: "versions" },
     { page: "resources", tab: "mod" },
     { page: "settings" },
-    { page: "players", login: "microsoft" },
+    { page: "players", login: "microsoft", returnTo: { page: "home" } },
     {
       page: "resources",
       tab: "minecraft",

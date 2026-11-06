@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
@@ -80,7 +81,9 @@ const checkTransition = async (state) => {
   );
   expect(samples.map((sample) => sample.state)).toEqual([state, state, state]);
   expect(samples.map((sample) => sample.id)).toEqual(
-    ["stage", "identity", "content"].map((part) => `sfmcl-t-player-login-${part}`),
+    ["stage", "identity", "content"].map(
+      (part) => `sfmcl-t-player-login-${part}`,
+    ),
   );
   for (const { start, middle, end } of samples) {
     expect(start.opacity).toBe(0);
@@ -103,7 +106,7 @@ try {
   });
   const nav = page.getByRole("navigation", { name: "主导航" });
   await page.locator(".sidebar .profile-button").click();
-  await ui.locator('[data-player-login="microsoft"]').click();
+  await openPlayerLogin(page, "microsoft");
   await checkTransition("waiting");
   const beforeTick = await count();
   const beforeTime = await ui.locator("time").textContent();
@@ -134,7 +137,7 @@ try {
   await expect(ui).not.toHaveAttribute("data-login");
 
   // Fast steps cancel interrupted animation handles, and navigation cleans up.
-  await ui.locator('[data-player-login="microsoft"]').click();
+  await openPlayerLogin(page, "microsoft");
   await checkTransition("waiting");
   await setStep(1);
   await expect(ui).toHaveAttribute("data-login-state", "xbox");
@@ -165,7 +168,7 @@ try {
   await page.evaluate(() => {
     window.__pixelTest.loginExpiresIn = 1;
   });
-  await ui.locator('[data-player-login="microsoft"]').click();
+  await openPlayerLogin(page, "microsoft");
   await checkTransition("waiting");
   await checkTransition("expired");
   await page.evaluate(() => {
@@ -210,7 +213,7 @@ try {
   ).toBe(true);
   await checkTransition("minecraft");
 
-  await ui.locator('[data-player-login="offline"]').click();
+  await openPlayerLogin(page, "offline");
   await expect(ui).toHaveAttribute("data-login", "offline");
   await expect(ui.locator(".camp-flame")).toHaveCSS(
     "animation-name",

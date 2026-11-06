@@ -10,7 +10,7 @@ StarFall Minecraft Launcher-Transformed · 基于 Rust、Tauri 2 和 React 的 M
 
 <p>
   <img src="https://img.shields.io/badge/平台-Windows%20x64%20%2F%20x86-0078D4?style=flat-square" alt="Windows x64 / x86" />
-  <img src="https://img.shields.io/badge/版本-0.1.0-4C8BF5?style=flat-square" alt="版本 0.1.0" />
+  <img src="https://img.shields.io/badge/版本-0.1.1-4C8BF5?style=flat-square" alt="版本 0.1.1" />
   <img src="https://img.shields.io/badge/核心-Rust-DEA584?style=flat-square" alt="Rust 核心" />
   <img src="https://img.shields.io/badge/界面-Tauri%202%20%2B%20React-24C8D8?style=flat-square" alt="Tauri 2 + React" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-2EA043?style=flat-square" alt="MIT License" /></a>
@@ -32,7 +32,7 @@ SFMCL-T 是 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-
 
 | | 能力 | 说明 |
 | :---: | --- | --- |
-| 👤 | **管理角色** | 创建离线角色，或通过 Microsoft 设备授权添加正版账号；支持皮肤上传与重置、已有官方披风切换、游戏名修改、角色切换与皮肤预览。 |
+| 👤 | **管理角色** | 支持离线角色、Microsoft 设备授权和第三方 Yggdrasil 登录；支持角色切换与皮肤预览，微软账号可上传/重置皮肤、切换官方披风和修改游戏名。 |
 | 🎮 | **安装与启动游戏** | 管理多个游戏目录，搜索、选择和收藏版本，从首页底部启动区启动或结束游戏。 |
 | 🧩 | **安装加载器** | 支持 Forge、NeoForge、Fabric、Quilt、OptiFine 和 LiteLoader；可选择兼容的 Forge + OptiFine 组合，或为 Fabric 附带 Fabric API。 |
 | 📦 | **导入整合包** | 从 Modrinth / CurseForge 安装整合包，或导入本地压缩包与完整客户端目录；支持拖入窗口安装。 |
@@ -57,7 +57,15 @@ SFMCL-T 是 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-
 
 **2. 添加角色与游戏版本**
 
-在「角色管理」创建离线角色，或选择 Microsoft 登录并在浏览器中完成设备授权。随后在「版本管理」添加游戏所在的外层文件夹，安装 Minecraft 与需要的加载器。
+在「角色管理」点击「登录」，从展开的列表中选择离线登录、Microsoft 登录、第三方账号登录或第三方授权登录。进入登录页面后，可通过顶部返回按钮回到角色管理。随后在「版本管理」添加游戏所在的外层文件夹，安装 Minecraft 与需要的加载器。
+
+第三方账号可在「角色管理 → 登录 → 第三方账号登录」填写验证服务器地址、站点账号和密码，例如 `https://littleskin.cn/api/yggdrasil`。支持兼容 authlib-injector 的 Yggdrasil API，以及通过 `X-Authlib-Injector-API-Location` 自动发现 API 的站点网址；Blessing Skin 站点须安装相应 Yggdrasil 插件。远程服务使用 HTTPS，本机测试服务可使用 HTTP。
+
+LittleSkin 也可在「角色管理 → 登录 → 第三方授权登录」通过 OAuth 设备代码流登录。启动器显示授权码并打开浏览器，授权后自动读取角色列表，单角色自动添加，多角色由用户选择。支持取消、拒绝、过期重试和轮询降速；切换登录方式或离开页面会取消未完成的授权。OAuth 访问令牌、刷新令牌与 Minecraft 令牌均由 Rust 后端处理并使用 DPAPI 加密保存，前端不接收这些凭据。刷新角色或启动游戏时会续期 OAuth 授权并获取 Minecraft 令牌。
+
+也可以把皮肤站的「Yggdrasil 外置登录」卡片链接拖到启动器任意位置。拖入时显示与整合包导入一致的全窗口占位，松开后进入独立的「外置登录」子页面，显示导入站点和对应登录内容。支持 `authlib-injector:yggdrasil-server:` 拖拽协议；LittleSkin 自动进入浏览器授权，其他站点继续填写账号密码。卡片仅包含服务器配置，仍需完成账号验证。Windows 使用原生 OLE 接收网页卡片，同时保留整合包文件/目录拖入。
+
+单角色账号自动添加，多角色账号需选择一个角色；密码不会保存，令牌使用 Windows DPAPI 加密。不同验证站点的角色独立保存。第三方角色启动前会刷新登录，并自动下载、校验和缓存 authlib-injector 1.2.8；首次启动需要联网下载组件。皮肤、披风和名称请通过「打开验证站点」修改，再点击角色旁的刷新登录按钮同步。此类账号适用于单人游戏及采用对应验证服务的服务器，不能代替 Microsoft 正版认证。
 
 选中正版角色后，可在启动器内上传 PNG 皮肤并选择经典或纤细模型、恢复默认皮肤、切换账号已有的官方披风，或修改 Java 版游戏名。改名前会检查资格和名称是否可用；通常每 30 天可修改一次，正版 UUID 保持不变。操作成功后会同步角色资料和预览，登录凭据过期时会自动尝试刷新。
 
@@ -159,7 +167,7 @@ CurseForge 访问需要后端渠道凭据。发布程序不附带开发者的本
 
 ## 数据存储
 
-在「设置 → 启动器设置 → 本地数据」点击「打开配置目录」，即可定位当前应用数据。全新安装的默认目录为：
+在「设置 → 启动器设置 → 本地数据」点击路径旁的文件夹图标，即可打开当前应用数据目录。全新安装的默认目录为：
 
 ```text
 %AppData%/com.sfmcl-t.minecraft-launcher/
@@ -191,7 +199,15 @@ CurseForge 访问需要后端渠道凭据。发布程序不附带开发者的本
 
 开启游戏目录隔离后，模组、存档等使用对应的 `versions/<版本名>/` 目录。备份时应一并保留应用配置与游戏目录；账号凭据由当前 Windows 用户保护，跨用户复制可能无法读取。
 
-可通过 `SFMCL_T_DATA_DIR` 指定独立配置目录。若新配置目录尚不存在、旧版 `com.tmcl.minecraft-launcher` 目录已经存在，启动器会沿用旧目录。原有 `.tmcl/`、`tmcl-downloads/` 和下载断点格式继续兼容。
+本地数据设置支持以下操作：
+
+- **更改路径**：选择空文件夹后，启动器关闭并迁移全部本地数据。文件校验通过后启用新路径、调整数据中的内部文件路径并清理旧目录；新路径会被记住，重新启动后继续使用。
+- **备份数据**：保存带文件清单及 SHA-256 校验的 ZIP 备份，包括设置、角色、皮肤、凭据、下载数据和 WebView 数据。为确保文件完整，备份期间会自动关闭启动器，完成后重新打开。
+- **还原数据**：选择本启动器生成的 ZIP 备份，校验后还原到当前本地数据目录。替换前会保留当前数据副本，完成后可在设置中打开该副本；还原中断时会在下次启动恢复原数据。
+
+游戏、下载、安装或登录任务仍在运行时，需要先结束任务再迁移、备份或还原。账号凭据继续由当前 Windows 用户保护，跨用户备份无法解密时会拒绝还原并保留现有数据。
+
+可通过 `SFMCL_T_DATA_DIR` 指定独立配置目录；在设置中迁移后，会优先使用该实例记住的新路径。若新配置目录尚不存在、旧版 `com.tmcl.minecraft-launcher` 目录已经存在，启动器会沿用旧目录。原有 `.tmcl/`、`tmcl-downloads/` 和下载断点格式继续兼容。
 
 ## 给开发者
 
@@ -244,11 +260,17 @@ cd SFMCL-Transformed
 
 脚本兼容 Windows PowerShell 5.1，可从任意工作目录调用。`npm run desktop` 使用同一入口；`npm run dev` 提供浏览器预览，文件操作、安装和游戏启动需要 Tauri 桌面环境。
 
+默认开发端口为 `1420`。通过 `dev.cmd` / `dev.ps1` 启动时，若端口已被占用或被 Windows 保留，脚本会在其后的 99 个端口内寻找可用端口，显示实际端口，并同步 Vite 和 Tauri 的访问地址；`-Port` 指定优先尝试的端口。
+
 开发实例默认使用根目录的 `.runtime/dev-data/`。已有的 `SFMCL_T_DATA_DIR` 会保留，也可用 `-DataDir` 覆盖；相对路径以仓库根目录为基准。
 
 ### 渠道凭据
 
 Microsoft Client ID 的默认值可通过 `SFMCL_T_MICROSOFT_CLIENT_ID` 设置。
+
+LittleSkin OAuth 的 Client ID 由 Rust 后端自动读取 `%LOCALAPPDATA%/SFMCL-T/service-credentials/littleskin.dat`，使用 Windows DPAPI 加密保存，供当前用户的开发版和安装版共用。该文件与其他渠道凭据位于同一专用目录，不进入源码、普通设置或前端数据；Git 已忽略凭据目录、文件及临时副本。用户无需填写 Client ID，也不需要 Client Secret。应用必须先按 [LittleSkin 设备代码流文档](https://manual.littlesk.in/advanced/oauth2/device-authorization-grant) 注册并获批白名单，回调地址为 `https://open.littleskin.cn/oauth/callback`，申请范围为 `Yggdrasil.PlayerProfiles.Read Yggdrasil.MinecraftToken.Create offline_access`。本实现由启动器选择角色，不申请与读取权限冲突的 `Yggdrasil.PlayerProfiles.Select`。测试模式只允许应用创建者授权，公开使用前需申请解除测试模式。
+
+协议按 [OAuth for Yggdrasil](https://manual.littlesk.in/feature/oauth-for-yggdrasil) 和官方 OpenAPI 实现；角色集合使用 OpenAPI 中的 `sessionserver/session/minecraft/profiles`（复数）路径。`npm run test:yggdrasil` 覆盖密码和 OAuth 界面流程；Rust 测试使用本机模拟服务覆盖授权、轮询、取消、角色绑定、令牌轮换与加密持久化。真实 LittleSkin 授权需要有效的白名单 Client ID 和用户在浏览器中的操作。
 
 CurseForge API Key 由 Rust 后端读取。开发环境可通过 `SFMCL_T_CURSEFORGE_API_KEY` 提供，或从本机的旧版 StarFallMCL 项目导入：
 
@@ -281,7 +303,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File SFMCL-T/scripts/import-curse
 | `installer` | `SFMCL-T_v<版本>_<架构>_installer.exe` | NSIS 安装包；检测系统 WebView2，缺少时可下载安装。 |
 | `single` | `SFMCL-T_v<版本>_<架构>.exe` | 前端嵌入 EXE，使用系统 WebView2；默认通过 UPX 压缩。 |
 
-版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v0.1.0_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
+版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v0.1.1_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
 
 也可调用 `build.ps1 -Mode <模式> -Architecture <架构>`，或在 `SFMCL-T/` 内运行 `npm run package`、`npm run package:x86`、`npm run package:x64`。`npm run package:installer -- -Architecture x86` 和 `npm run package:single -- -Architecture x86` 可分别生成 x86 安装版和单文件版。
 

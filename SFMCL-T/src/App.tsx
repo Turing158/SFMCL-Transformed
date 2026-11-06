@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   ArrowDownToLine,
   Box,
@@ -26,6 +26,7 @@ import { FooterText } from "./FooterText";
 import { FooterStatusIcon } from "./FooterStatusIcon";
 import { NotificationDeck } from "./NotificationDeck";
 import { ModpackDropTarget } from "./ModpackDropTarget";
+import { YggdrasilDropTarget } from "./YggdrasilDropTarget";
 import { navigationPage, pageNames, pageViews } from "./navigation";
 import { useNavigationTransition } from "./useNavigationTransition";
 import { usePlayerCaption } from "./usePlayerCaption";
@@ -34,6 +35,10 @@ import { BrandWordmark } from "./BrandWordmark";
 import { PageHeader } from "./PageHeader";
 import { PageActivity } from "./PageActivity";
 import { SidebarProgress, useSidebarProgress } from "./SidebarProgress";
+import { HomeLandscape } from "./HomeLandscape";
+import { useHomeScrollPadding } from "./useHomeScrollPadding";
+import { handleWindowDrag } from "./windowDrag";
+import "./home.css";
 const navigation = [
   { id: "home", name: pageNames.home, icon: House },
   { id: "versions", name: pageNames.versions, icon: Box },
@@ -100,6 +105,7 @@ export default function App() {
   return (
     <div
       className={`app ${collapsed ? "collapsed" : ""} ${app.page === "home" ? "has-launch-dock" : ""}`}
+      onMouseDown={(event) => handleWindowDrag(event, app.reportError)}
       onDragStartCapture={(event) => {
         if (
           event.target instanceof Element &&
@@ -110,15 +116,15 @@ export default function App() {
       }}
       style={
         background
-          ? {
-              backgroundImage: `linear-gradient(var(--background-overlay),var(--background-overlay)),url("${background}")`,
-            }
+          ? ({
+              "--app-background-image": `linear-gradient(var(--background-overlay),var(--background-overlay)),url("${background}")`,
+            } as CSSProperties)
           : undefined
       }
     >
       <aside className={`sidebar ${railCollapsed ? "rail-collapsed" : ""}`}>
         <div className="brand">
-          <div className="brand-logo">
+          <div className="brand-logo" data-window-drag="false">
             <img
               className="brand-mark"
               src={appIcon}
@@ -144,14 +150,9 @@ export default function App() {
               <ChevronLeft className="collapse-chev" size={22} />
             </button>
           </div>
-          <button
-            className="brand-copy brand-home"
-            onClick={() => app.setPage("home")}
-            aria-label="SFMCL 首页"
-            tabIndex={railCollapsed ? -1 : 0}
-          >
+          <span className="brand-copy brand-label">
             <BrandWordmark />
-          </button>
+          </span>
         </div>
         <nav id="sidebar-navigation" aria-label="主导航">
           {navigation.map((n) => (
@@ -225,9 +226,11 @@ export default function App() {
               <strong>{player?.name || "添加你的角色"}</strong>
               <small>
                 {player
-                  ? player.online
-                    ? "Microsoft 账号"
-                    : "离线角色"
+                  ? player.yggdrasil
+                    ? "第三方账号"
+                    : player.online
+                      ? "Microsoft 账号"
+                      : "离线角色"
                   : "准备好开启冒险"}
               </small>
             </span>
@@ -262,9 +265,11 @@ export default function App() {
           });
         })}
         <WorkspaceFooter kind={app.page === "home" ? "launch" : "status"}>
-          {app.page === "home" ? (
-            <LaunchDock playerCaption={playerCaption} />
-          ) : (
+          <LaunchDock
+            active={app.page === "home"}
+            playerCaption={playerCaption}
+          />
+          {app.page !== "home" && (
             <footer className="workspace-footer">
               <span className="workspace-footer-status">
                 <FooterStatusIcon iconKey="dot">
@@ -291,6 +296,7 @@ export default function App() {
         onDismiss={app.dismissNotification}
       />
       <ModpackDropTarget />
+      <YggdrasilDropTarget />
     </div>
   );
 }
@@ -299,16 +305,24 @@ function Home() {
   const s = app.data.settings;
   const showContent = !s.homeCleanMode;
   const notices = useNotices(showContent);
+  const content = useHomeScrollPadding(showContent);
   const player = app.data.players.find((p) => p.uuid === s.activePlayer);
   return (
-    <>
+    <div
+      ref={content}
+      className={`home-content ${showContent ? "" : "home-content-clean"}`}
+    >
       <PageHeader
         icon={<Play />}
         eyebrow="LET'S PLAY"
         title={player ? `你好，${player.name}` : "准备好，开启新的冒险"}
+        description={!showContent ? "新的世界，等你出发。" : undefined}
         action={showContent && <NoticeActions notices={notices} />}
       />
       {showContent && <Notices {...notices} layout={s.homeNoticeLayout} />}
-    </>
+      {!showContent &&
+        !app.data.backgroundPath &&
+        ["none", "default"].includes(s.backgroundType) && <HomeLandscape />}
+    </div>
   );
 }

@@ -1,17 +1,239 @@
 /* Login controls and child pages; split buttons share the players.css frame. */
+.players-heading:has(.players-login-actions) {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
 .players-login-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
 }
-.players-login-actions .players-microsoft-icon {
-  width: 15px;
-  height: 15px;
+.players-login-chevron {
+  transition: transform 180ms ease;
 }
-.players-login-actions .button[aria-pressed="true"] {
-  --surface-edge: var(--accent);
+.players-login-actions [aria-expanded="true"] .players-login-chevron {
+  transform: rotate(180deg);
+}
+.players-yggdrasil-content {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.players-imported-server {
   --surface-fill: var(--soft);
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+.players-imported-server h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.5;
+}
+.players-imported-server .helper {
+  margin: 0;
+}
+.players-authorization-unavailable {
+  --surface-fill: var(--soft);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 24px;
+}
+.players-authorization-unavailable .players-login-intro {
+  margin: 0;
+}
+.players-authorization-unavailable .button {
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.players-yggdrasil-content .players-authorization-note {
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+  color: var(--ink);
+}
+.players-yggdrasil-stage strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.players-littleskin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.players-littleskin-form .device-code {
+  margin: 0;
+  padding: 12px;
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
+.players-yggdrasil-form,
+.players-yggdrasil-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.players-yggdrasil-form {
+  gap: 8px;
+}
+.players-yggdrasil-credentials,
+.players-yggdrasil-field {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+.players-yggdrasil-field > .pixel-input {
+  width: 100%;
+}
+.players-yggdrasil-form input.pixel-input {
+  min-height: 32px;
+  height: 32px;
+  padding: 4px 10px;
+}
+.players-yggdrasil-form label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.players-yggdrasil-content .helper {
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.players-server-select {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.players-server-select input.pixel-input {
+  width: 100%;
+  padding-right: 36px;
+}
+.players-server-toggle {
+  position: absolute;
+  inset: 2px 2px 2px auto;
+  width: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.players-server-toggle:hover:not(:disabled) {
+  color: var(--accent);
+}
+.players-server-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+.players-server-toggle > .pixel-icon {
+  width: 14px;
+  height: 14px;
+  transition:
+    transform 180ms ease,
+    color 180ms ease;
+}
+.players-server-toggle[aria-expanded="true"] > .pixel-icon {
+  color: var(--accent);
+  transform: rotate(180deg);
+}
+.players-server-popup .pixel-select-list {
+  padding-block: 1px;
+}
+.players-server-popup .pixel-select-option {
+  min-height: 36px;
+  margin-block: 1px;
+  padding: 3px 8px;
+  line-height: 16px;
+}
+.players-server-popup .pixel-option-label small {
+  color: var(--muted);
+  margin-top: 0;
+  line-height: 12px;
+}
+.players-yggdrasil-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  height: 100%;
+  color: var(--accent);
+}
+.players-yggdrasil-stage strong {
+  letter-spacing: 4px;
+}
+.players-yggdrasil-stage span {
+  color: var(--muted);
+  font-size: 12px;
+}
+/* A short preview needs a compact composition instead of cropping the globe. */
+@container player-stage (max-height: 180px) {
+  .players-yggdrasil-stage {
+    display: grid;
+    grid-template-columns: auto minmax(0, max-content);
+    grid-template-rows: auto auto;
+    align-content: center;
+    justify-content: center;
+    column-gap: 16px;
+    row-gap: 4px;
+    padding: 12px 16px;
+  }
+  .players-yggdrasil-stage > svg {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: min(56px, calc(100cqh - 24px));
+    height: min(56px, calc(100cqh - 24px));
+  }
+  .players-yggdrasil-stage > strong {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    font-size: 14px;
+    line-height: 1.4;
+    letter-spacing: 2px;
+    text-align: left;
+  }
+  .players-yggdrasil-stage > span {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+}
+@container player-stage (max-height: 80px) {
+  .players-yggdrasil-stage {
+    grid-template-rows: auto;
+    padding: 8px 12px;
+    column-gap: 12px;
+  }
+  .players-yggdrasil-stage > svg {
+    grid-row: 1;
+    width: min(40px, calc(100cqh - 16px));
+    height: min(40px, calc(100cqh - 16px));
+  }
+  .players-yggdrasil-stage > strong {
+    align-self: center;
+    font-size: 12px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .players-yggdrasil-stage > span {
+    display: none;
+  }
+}
+.players-yggdrasil-manage {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
 }
 .players-login-content {
   display: flex;
@@ -168,11 +390,12 @@
     color 180ms ease,
     text-shadow 180ms ease;
 }
-.players-microsoft-form .device-code:is(:hover, :focus-visible) {
+:is(.players-microsoft-form, .players-littleskin-form)
+  .device-code:is(:hover, :focus-visible) {
   --surface-edge: var(--accent);
   --surface-fill: var(--soft);
 }
-.players-microsoft-form
+:is(.players-microsoft-form, .players-littleskin-form)
   .device-code:is(:hover, :focus-visible)
   .players-device-code-text {
   transform: translateY(-1px) scale(1.025);
@@ -634,6 +857,10 @@
   .players-page[data-view="gallery"][data-login] .players-login-intro {
     margin: 0 0 clamp(6px, 3cqh, 16px);
   }
+  .players-page[data-view="gallery"] .players-yggdrasil-credentials {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+  }
   .players-page[data-view="gallery"] .players-offline-form {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -673,16 +900,21 @@
 }
 
 @container players (max-width: 580px) {
-  .players-heading:has(.players-login-actions) {
-    flex-wrap: wrap;
-  }
-  .players-login-actions {
-    margin-left: auto;
+  .players-page:is([data-login="yggdrasil"], [data-login="yggdrasil-oauth"])
+    .player-preview {
+    display: none;
   }
   .players-page[data-view][data-login] .players-workspace {
     grid-template-rows:
       minmax(48px, min(24cqh, 140px, calc(100% - 300px)))
       minmax(0, 1fr);
+  }
+  .players-page[data-view]:is(
+      [data-login="yggdrasil"],
+      [data-login="yggdrasil-oauth"]
+    )
+    .players-workspace {
+    grid-template-rows: minmax(0, 1fr);
   }
   .players-login-content {
     max-width: none;
@@ -699,14 +931,8 @@
   }
 }
 @container players (max-width: 350px) {
-  .players-login-actions {
-    width: 100%;
-    gap: 6px;
-  }
   .players-login-actions .button {
-    flex: 1;
-    padding-inline: 7px;
-    font-size: 11px;
+    padding-inline: 9px;
   }
 }
 @container players (max-width: 580px) and (max-height: 500px) {
@@ -740,7 +966,7 @@
     line-height: 1.4;
   }
 }
-@container player-login (max-width: 580px) and (max-height: 360px) {
+@container player-login (max-width: 580px) and (max-height: 400px) {
   .players-collection-heading {
     display: none;
   }
@@ -814,6 +1040,9 @@
     overflow: hidden;
     clip-path: inset(50%);
   }
+  .players-login-content:has(.players-offline-form .inline-error)
+    > .players-login-intro,
+  .players-microsoft-form .players-login-intro,
   .players-microsoft-form:has(.players-browser-error) .players-login-steps {
     display: none;
   }

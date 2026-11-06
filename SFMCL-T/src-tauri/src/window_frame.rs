@@ -210,8 +210,11 @@ mod atomic_frame {
                     // subclass compensates the outer rectangle in the same
                     // SetWindowPos that changes the nonclient frame. WebView2
                     // never sees a temporary size or responsive breakpoint.
-                    main_window.set_shadow(enabled)?;
+                    // The owned layered window supplies the external shadow
+                    // even when DWM omits shadows for transparent windows.
+                    main_window.set_shadow(false)?;
                     super::rendering(&main_window)?;
+                    crate::window_shadow::update(&main_window, enabled)?;
                     Ok(())
                 })();
                 if saved.is_some() {
@@ -254,6 +257,9 @@ pub fn set_visible(window: &tauri::WebviewWindow, enabled: bool) -> tauri::Resul
         }
         if state.enabled == Some(enabled) {
             drop(state);
+            #[cfg(windows)]
+            return atomic_frame::update(window, enabled, None);
+            #[cfg(not(windows))]
             return rendering(window);
         }
         state.changing = true;
@@ -290,6 +296,9 @@ pub fn observe(window: &tauri::WebviewWindow) -> tauri::Result<()> {
         let mut state = state.0.lock().unwrap_or_else(|e| e.into_inner());
         state.viewport = None;
         state.restore = None;
+        drop(state);
+        #[cfg(windows)]
+        crate::window_shadow::schedule(window, false)?;
         return Ok(());
     }
     let saved = {
@@ -307,5 +316,10 @@ pub fn observe(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     }
     let current = viewport(window)?;
     state.0.lock().unwrap_or_else(|e| e.into_inner()).viewport = Some(current);
+    #[cfg(windows)]
+    {
+        let enabled = state.0.lock().unwrap_or_else(|e| e.into_inner()).enabled == Some(true);
+        crate::window_shadow::schedule(window, enabled)?;
+    }
     Ok(())
 }

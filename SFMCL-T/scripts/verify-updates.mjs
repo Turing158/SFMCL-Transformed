@@ -51,7 +51,7 @@ const shot = async (name) => {
 };
 const available = {
   status: "available",
-  currentVersion: "0.1.0",
+  currentVersion: "0.1.1",
   latestVersion: "0.2.0",
   htmlUrl: "https://github.com/Turing158/SFMCL-Transformed/releases/tag/v0.2.0",
 };
@@ -111,8 +111,8 @@ try {
   await expect(button).toBeDisabled();
   await finish({
     status: "latest",
-    currentVersion: "0.1.0",
-    latestVersion: "0.1.0",
+    currentVersion: "0.1.1",
+    latestVersion: "0.1.1",
   });
   await expect(button).toHaveText("已是最新版本");
   await expect(button).toBeDisabled();
@@ -125,7 +125,7 @@ try {
 
   await state.getByRole("button", { name: "重新检测", exact: true }).click();
   await expect(state).toHaveAttribute("data-update-state", "checking");
-  await finish({ status: "unpublished", currentVersion: "0.1.0" });
+  await finish({ status: "unpublished", currentVersion: "0.1.1" });
   await expect(button).toHaveText("暂无发布");
   await expect(button).toBeDisabled();
   await shot("unpublished-dark");

@@ -9,7 +9,7 @@
 :root {
   font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   color: var(--ink);
-  background: var(--bg);
+  background: transparent;
   font-synthesis: none;
   --bg: #f6f8f5;
   --panel: #fff;
@@ -42,6 +42,7 @@
   --button-compact-height: 28px;
   --button-small-height: 24px;
   --topbar-height: 40px;
+  --window-corner-radius: 12px;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -169,7 +170,7 @@ textarea,
 body {
   margin: 0;
   color: var(--ink);
-  background: var(--bg);
+  background: transparent;
 }
 button,
 input,
@@ -293,9 +294,11 @@ pre {
   background: transparent;
 }
 .app {
+  position: relative;
+  cursor: default;
   --rail-open: 1;
   --rail-expanded-width: 216px;
-  --rail-collapsed-width: 66px;
+  --rail-collapsed-width: 60px;
   height: 100dvh;
   display: grid;
   grid-template-columns:
@@ -307,10 +310,26 @@ pre {
     minmax(0, 1fr);
   transition: --rail-open 240ms cubic-bezier(0.32, 0.72, 0, 1);
   background: var(--bg);
+  /* Match the backdrop beneath antialiased corners to the window chrome. */
+  background-image:
+    linear-gradient(
+      to bottom,
+      var(--sidebar) var(--window-corner-radius),
+      transparent var(--window-corner-radius)
+        calc(100% - var(--window-corner-radius)),
+      var(--sidebar) calc(100% - var(--window-corner-radius))
+    ),
+    var(--app-background-image, none);
   background-size: cover;
   background-position: center;
+  border-radius: var(--window-corner-radius);
+  overflow: clip;
+}
+:root[data-window-maximized="true"] {
+  --window-corner-radius: 0px;
 }
 .workspace {
+  --workspace-gutter: 36px;
   --workspace-corner-radius: 16px;
   --workspace-inset-color: color-mix(in srgb, var(--sidebar), #000 60%);
   position: relative;
@@ -352,14 +371,14 @@ pre {
   height: var(--topbar-height);
   min-height: var(--topbar-height);
   border-bottom: 1px solid transparent;
-  padding-left: 22px;
-  font-size: 11px;
+  padding-left: 0;
+  font-size: 12px;
   color: var(--chrome-ink);
   background: var(--sidebar);
   user-select: none;
 }
 .topbar[data-tauri-drag-region] {
-  cursor: grab;
+  cursor: default;
   touch-action: none;
 }
 .topbar-breadcrumb {
@@ -496,7 +515,8 @@ pre {
   margin-right: 5px;
 }
 .page {
-  padding: 31px 36px 28px;
+  --page-bottom-padding: 28px;
+  padding: 31px var(--workspace-gutter) 28px;
   overflow: auto;
   flex: 1;
   min-height: 0;
@@ -506,17 +526,36 @@ pre {
   inherits: true;
   initial-value: 35px;
 }
+@property --footer-region-height {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 35px;
+}
+@property --launch-card-offset {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+@property --launch-card-alpha {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
 .workspace-footer-region {
   position: relative;
   will-change: transform;
   z-index: 30;
   flex: 0 0 auto;
   min-width: 0;
-  background: var(--panel);
-}
-.workspace-footer-region[data-kind="launch"] {
-  box-shadow: 0 -5px 20px
-    color-mix(in srgb, var(--shadow-color), transparent 75%);
+  /* Only the status strip occupies layout; the floating card overlays the page. */
+  margin-top: calc(var(--footer-status-height) - var(--footer-region-height));
+  pointer-events: none;
+  /* Only the bottom strip supplies chrome; the card gaps show the page canvas. */
+  background: linear-gradient(
+    to top,
+    var(--sidebar) var(--footer-status-height),
+    transparent var(--footer-status-height)
+  );
 }
 .workspace-footer-region::before {
   content: "";
@@ -524,18 +563,16 @@ pre {
   left: 0;
   right: -16px;
   bottom: var(--footer-status-height);
-  height: calc(
-    100dvh - var(--topbar-height) - var(--footer-status-height)
-  );
+  height: calc(100dvh - var(--topbar-height) - var(--footer-status-height));
   border-radius: var(--workspace-corner-radius) 0 0
     var(--workspace-corner-radius);
   /* The footer anchors this overlay to the moving status strip. Extend the
      right edge out of view so only the top, left and bottom cast an inset shade. */
   box-shadow:
-    inset 3px 3px 8px
-      color-mix(in srgb, var(--workspace-inset-color), transparent 92%),
-    inset 0 -3px 8px
-      color-mix(in srgb, var(--workspace-inset-color), transparent 94%);
+    inset 1px 1px 3px
+      color-mix(in srgb, var(--workspace-inset-color), transparent 95%),
+    inset 0 -1px 3px
+      color-mix(in srgb, var(--workspace-inset-color), transparent 97%);
   z-index: 32;
   pointer-events: none;
 }
@@ -543,6 +580,15 @@ pre {
   position: absolute;
   inset: auto 0 0;
   display: flow-root;
+}
+.workspace-footer-region
+  :is(
+    .launch-dock-main,
+    .launch-version-picker,
+    .launch-status,
+    .workspace-footer
+  ) {
+  pointer-events: auto;
 }
 .workspace-footer-clip {
   position: absolute;
@@ -563,20 +609,22 @@ pre {
 .workspace-footer {
   height: 35px;
   min-height: 35px;
-  padding: 0 35px;
+  padding: 0 var(--workspace-gutter);
   border-top: 1px solid transparent;
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: var(--chrome-muted);
-  font-size: 10px;
+  font-size: 12px;
   background: transparent;
 }
 /* Only the status strip changes its background height; the launch controls
    keep their panel surface while the page reclaims the space above it. */
 :is(.workspace-footer, .launch-status) {
   position: relative;
+  z-index: 31;
   isolation: isolate;
+  line-height: 16px;
 }
 :is(.workspace-footer, .launch-status)::before {
   content: "";
@@ -624,6 +672,7 @@ pre {
 .workspace-footer-player {
   max-width: 50%;
   margin-left: 18px;
+  font-size: 11px;
 }
 .footer-text {
   position: relative;
@@ -689,7 +738,7 @@ pre {
   display: block;
   margin-top: 4px;
   font:
-    700 9px PlayerPixel,
+    700 10px PlayerPixel,
     "Microsoft YaHei",
     monospace;
   letter-spacing: 2px;
@@ -701,7 +750,9 @@ pre {
   --surface-shape-1: var(--corner-card-inset-1);
   --surface-shape-2: var(--corner-card-inset-2);
   --surface-fill: var(--soft);
-  --surface-depth: 2px;
+  --surface-edge: color-mix(in srgb, var(--accent), var(--panel) 82%);
+  --surface-depth: 0px;
+  color: var(--accent);
   display: grid;
   place-items: center;
   width: 44px;
@@ -2097,10 +2148,14 @@ button.resource-row:hover {
   height: 21px;
   border: 1px solid var(--about-brand-line);
   background: var(--about-brand-soft);
-  font: 700 17px/1 PlayerPixel, monospace;
+  font:
+    700 17px/1 PlayerPixel,
+    monospace;
 }
 .about-remade-edition {
-  font: 600 10px/1.5 "Segoe UI", sans-serif;
+  font:
+    600 10px/1.5 "Segoe UI",
+    sans-serif;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2183,9 +2238,8 @@ button.resource-row:hover {
   }
 }
 @media (min-width: 1500px) {
-  .page {
-    padding-left: 48px;
-    padding-right: 48px;
+  .workspace {
+    --workspace-gutter: 48px;
   }
 }
 @media (max-width: 1100px) {
@@ -2193,10 +2247,11 @@ button.resource-row:hover {
     --rail-expanded-width: 185px;
   }
   .page {
-    padding: 26px 25px;
+    padding-block: 26px;
+    --page-bottom-padding: 26px;
   }
-  .topbar {
-    padding-left: 18px;
+  .workspace {
+    --workspace-gutter: 25px;
   }
   .launch-card {
     padding: 20px;
@@ -2232,13 +2287,14 @@ button.resource-row:hover {
 }
 @media (max-width: 650px) {
   .app {
-    --rail-collapsed-width: 62px;
+    --rail-collapsed-width: 58px;
   }
   .page {
-    padding: 23px 17px;
+    padding-block: 23px;
+    --page-bottom-padding: 23px;
   }
-  .topbar {
-    padding-left: 12px;
+  .workspace {
+    --workspace-gutter: 17px;
   }
   .topbar-breadcrumb ol,
   .topbar-breadcrumb li {
@@ -2249,9 +2305,6 @@ button.resource-row:hover {
   }
   .window-controls {
     margin-left: 8px;
-  }
-  .workspace-footer {
-    padding: 0 15px;
   }
   .workspace-footer > span:last-child {
     display: none;
@@ -2271,7 +2324,7 @@ button.resource-row:hover {
     font-size: 22px;
   }
   .page-title-edition {
-    font-size: 8px;
+    font-size: 10px;
     letter-spacing: 1px;
   }
   .page-heading .page-description {

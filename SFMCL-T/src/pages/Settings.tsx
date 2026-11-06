@@ -23,6 +23,7 @@ import {
 } from "../gameSettings";
 import { useAutoSavedSettings } from "../useAutoSavedSettings";
 import { UpdateCheckButton, useUpdateCheck } from "../UpdateCheckButton";
+import { LocalDataSettings } from "../LocalDataSettings";
 import { previewModeLabel } from "../playerPreview";
 import type {
   Player3DBackgroundType,
@@ -56,7 +57,11 @@ export function SettingsPage() {
     title: string,
     description?: string,
   ) => (
-    <div className={description ? "setting-row" : "setting-row setting-row-compact"}>
+    <div
+      className={
+        description ? "setting-row" : "setting-row setting-row-compact"
+      }
+    >
       <div>
         <strong>{title}</strong>
         {description && <p>{description}</p>}
@@ -443,23 +448,7 @@ export function SettingsPage() {
                 </label>
               </div>
             </section>
-            <section className="panel settings-section has-surface">
-              <PixelFrame />
-              <h2>本地数据</h2>
-              <p className="path-text">
-                {app.data.dataDir || "在桌面应用中查看配置目录"}
-              </p>
-              <Button
-                onClick={() =>
-                  void app.run(() =>
-                    api("path.open", { path: app.data.dataDir }),
-                  )
-                }
-              >
-                <FolderOpen size={16} />
-                打开配置目录
-              </Button>
-            </section>
+            <LocalDataSettings />
           </div>
         )}
         {tab === "about" && (

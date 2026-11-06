@@ -117,7 +117,8 @@ export function AnimatedNoticeList<T>({
     });
     return () => {
       observer.disconnect();
-      rows.forEach((row) => row.style.removeProperty("--notice-row-span"));
+      // Keep spans until the next measurement. Clearing them temporarily
+      // collapses the grid and clamps a scrolled page before it grows again.
     };
   }, [current.entries, layout]);
 
@@ -254,6 +255,7 @@ export function AnimatedNoticeList<T>({
         <div
           key={entry.key}
           className="notice-list-item"
+          data-window-drag="false"
           data-notice-key={entry.key}
           data-notice-phase={entry.phase}
           data-notice-placeholder={entry.key === draggingKey || undefined}

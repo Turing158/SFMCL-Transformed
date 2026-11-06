@@ -1,0 +1,75 @@
+.page[data-page="home"] {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Short pages need no dock placeholder. Extra clearance is measured only
+     when real content reaches beneath the floating card. */
+  padding-bottom: var(--home-scroll-padding, var(--page-bottom-padding));
+  scroll-padding-bottom: calc(var(--launch-dock-height, 120px) - 28px);
+}
+.home-content {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.home-content-clean {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  min-height: min-content;
+  padding-bottom: clamp(32px, 8vh, 80px);
+}
+.home-content-clean .page-heading {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 0;
+}
+.home-content-clean .page-title h1 {
+  font-size: clamp(26px, 2.8vw, 38px);
+  letter-spacing: -0.5px;
+}
+.home-content-clean .page-title-edition {
+  margin-top: 8px;
+  letter-spacing: 2.5px;
+}
+.home-content-clean .page-description {
+  margin-top: 18px;
+  font-size: 14px;
+}
+.home-landscape {
+  position: absolute;
+  z-index: -1;
+  right: 0;
+  bottom: 0;
+  width: min(640px, 76%);
+  height: auto;
+  color: var(--accent);
+  pointer-events: none;
+}
+.home-landscape-sky {
+  opacity: 0.1;
+}
+.home-landscape-far {
+  opacity: 0.035;
+}
+.home-landscape-near {
+  opacity: 0.055;
+}
+.home-landscape-ground {
+  opacity: 0.065;
+}
+.home-landscape-trees {
+  opacity: 0.12;
+}
+@media (max-width: 650px) {
+  .home-content-clean .page-description {
+    margin-left: 0;
+    font-size: 13px;
+  }
+  .home-landscape {
+    width: 100%;
+  }
+}

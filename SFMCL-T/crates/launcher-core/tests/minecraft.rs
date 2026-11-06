@@ -109,6 +109,7 @@ fn launch_arguments_keep_spaces_and_legacy_backslashes_without_shell() {
             uuid: "uuid",
             access_token: "secret",
             online: true,
+            yggdrasil: false,
         },
         4096,
     )
@@ -121,6 +122,41 @@ fn launch_arguments_keep_spaces_and_legacy_backslashes_without_shell() {
     assert!(!args.contains(&"--demo".into()));
     assert!(arguments::split_args("--bad \"unclosed").is_err());
 }
+#[test]
+fn external_accounts_use_yggdrasil_identity_in_modern_and_legacy_launch_arguments() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fs::create_dir_all(root.join("versions/test")).unwrap();
+    fs::write(root.join("versions/test/test.jar"), b"fixture").unwrap();
+    let settings = Settings::default();
+    for (yggdrasil, expected_type) in [(false, "msa"), (true, "mojang")] {
+        let identity = Identity {
+            name: "Builder",
+            uuid: "11111111111111111111111111111111",
+            access_token: "secret-token",
+            online: true,
+            yggdrasil,
+        };
+        for version in [
+            json!({"mainClass":"net.minecraft.Main", "arguments":{"game":["--userType","${user_type}","--uuid","${auth_uuid}","--accessToken","${auth_access_token}"]}}),
+            json!({"mainClass":"net.minecraft.Main", "minecraftArguments":"--userType ${user_type} --uuid ${auth_uuid} --accessToken ${auth_access_token} --session ${auth_session}"}),
+        ] {
+            let args =
+                arguments::build(root, "test", &version, &settings, &identity, 1024).unwrap();
+            let value = |key: &str| args[args.iter().position(|a| a == key).unwrap() + 1].as_str();
+            assert_eq!(value("--userType"), expected_type);
+            assert_eq!(value("--uuid"), identity.uuid);
+            assert_eq!(value("--accessToken"), identity.access_token);
+            if version.get("minecraftArguments").is_some() {
+                assert_eq!(
+                    value("--session"),
+                    format!("token:{}:{}", identity.access_token, identity.uuid)
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn detects_legacy_and_modern_java_versions() {
     assert_eq!(

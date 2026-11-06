@@ -8,6 +8,17 @@ use std::{
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Tokens {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub littleskin: Option<LittleSkinTokens>,
+    #[serde(default)]
+    pub client_token: String,
+    pub access: String,
+    pub refresh: String,
+    pub expires_at: u64,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LittleSkinTokens {
+    pub client_id: String,
     pub access: String,
     pub refresh: String,
     pub expires_at: u64,
@@ -19,10 +30,21 @@ struct Secrets {
 }
 pub struct Vault {
     path: PathBuf,
+    service_directory: PathBuf,
     secrets: Mutex<Secrets>,
 }
 impl Vault {
     pub fn open(dir: &Path) -> Result<Self> {
+        let base = directories::BaseDirs::new().context("无法定位用户凭据目录")?;
+        Self::open_with_service_directory(
+            dir,
+            base.data_local_dir().join("SFMCL-T/service-credentials"),
+        )
+    }
+    pub(crate) fn open_with_service_directory(
+        dir: &Path,
+        service_directory: PathBuf,
+    ) -> Result<Self> {
         let path = dir.join("credentials.dat");
         let secrets = if path.exists() {
             serde_json::from_slice(&unprotect(&std::fs::read(&path)?)?)
@@ -32,6 +54,7 @@ impl Vault {
         };
         Ok(Self {
             path,
+            service_directory,
             secrets: Mutex::new(secrets),
         })
     }
@@ -80,6 +103,13 @@ impl Vault {
                     .join("TMCL/service-credentials/curseforge.dat"),
             )
         })
+    }
+    pub(crate) fn littleskin_client_id(&self) -> Result<String> {
+        let client_id = read_service_key(&self.service_directory.join("littleskin.dat"))?;
+        if client_id.is_empty() {
+            anyhow::bail!("此启动器尚未配置 LittleSkin 浏览器登录，请联系维护者");
+        }
+        Ok(client_id)
     }
     fn save(&self, secrets: &Secrets) -> Result<()> {
         crate::paths::atomic_write(&self.path, &protect(&serde_json::to_vec(secrets)?)?)
@@ -156,7 +186,7 @@ fn crypt(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>> {
     }
 }
 #[cfg(windows)]
-fn protect(bytes: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn protect(bytes: &[u8]) -> Result<Vec<u8>> {
     crypt(bytes, true)
 }
 #[cfg(windows)]
@@ -221,6 +251,8 @@ mod tests {
             .put(
                 "test",
                 Tokens {
+                    littleskin: None,
+                    client_token: String::new(),
                     access: "sensitive-test-token".into(),
                     refresh: "refresh".into(),
                     expires_at: 1,

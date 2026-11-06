@@ -162,6 +162,8 @@ impl Harness {
             .put(
                 ID,
                 Tokens {
+                    littleskin: None,
+                    client_token: String::new(),
                     access: "minecraft-old".into(),
                     refresh: "refresh-old".into(),
                     expires_at: now() + 86400,

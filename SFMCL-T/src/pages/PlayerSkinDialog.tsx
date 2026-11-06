@@ -108,7 +108,7 @@ export function PlayerSkinDialog({
                 <Button disabled={disabled} onClick={chooseFile}>
                   选择皮肤文件
                 </Button>
-                <span className="helper" title={filename}>
+                <span className="helper" data-tooltip={filename}>
                   {filename || "尚未选择文件"}
                 </span>
               </div>

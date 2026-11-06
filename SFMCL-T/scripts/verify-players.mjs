@@ -1,3 +1,4 @@
+import { openPlayerLogin } from "./lib/player-login.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 import { answerConfirmation } from "./lib/confirmation.mjs";
 import { chromium, expect } from "@playwright/test";
@@ -30,7 +31,7 @@ const go = async () => {
   await page.locator(".sidebar .profile-button").click();
   await expect(ui.locator(".players-identity h2")).toHaveText("Steve");
   await expect(
-    ui.getByRole("button", { name: "离线登录", exact: true }),
+    ui.getByRole("button", { name: "登录", exact: true }),
   ).toBeEnabled();
   await page.evaluate(() => document.fonts.ready);
 };
@@ -65,7 +66,7 @@ try {
   await go();
   await expect(ui).toHaveAttribute("data-view", "grove");
   await expect(
-    ui.getByRole("button", { name: "离线登录", exact: true }),
+    ui.getByRole("button", { name: "登录", exact: true }),
   ).toHaveCount(1);
   await expect(ui).not.toContainText("选择的角色将用于下一次启动");
   await shot("grove-desktop");
@@ -152,7 +153,7 @@ try {
   await page.getByLabel("新的名称", { exact: true }).fill("Steve_New");
   await page.getByRole("button", { name: "保存名称", exact: true }).click();
   await expect(ui.locator(".players-identity h2")).toHaveText("Steve_New");
-  await ui.getByRole("button", { name: "离线登录", exact: true }).click();
+  await openPlayerLogin(page, "offline");
   await page.getByLabel("角色名称", { exact: true }).fill("NewPlayer");
   await page.getByRole("button", { name: "创建角色", exact: true }).click();
   await expect(ui.locator(".players-identity h2")).toHaveText("NewPlayer");
@@ -265,10 +266,8 @@ try {
     "Microsoft HTTP/HTTPS skins use native image loading for preview and avatar, refresh cached pixels, and fall back after failure",
   );
 
-  await ui.getByRole("button", { name: "离线登录", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Microsoft 登录", exact: true })
-    .click();
+  await openPlayerLogin(page, "offline");
+  await openPlayerLogin(page, "microsoft");
   await expect(ui).toHaveAttribute("data-login", "microsoft");
   await expect(ui.locator(".device-code")).toBeVisible();
   await page
@@ -294,10 +293,8 @@ try {
   await returnToPlayers();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect.poll(() => count("jobs.cancel")).toBe(1);
-  await ui.getByRole("button", { name: "离线登录", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Microsoft 登录", exact: true })
-    .click();
+  await openPlayerLogin(page, "offline");
+  await openPlayerLogin(page, "microsoft");
   await expect(ui).toHaveAttribute("data-login", "microsoft");
   await expect(ui.locator(".device-code")).toBeVisible();
   await page.evaluate(() => {
@@ -322,10 +319,8 @@ try {
   await page.evaluate(() => {
     window.__pixelTest.delays["players.login"] = 700;
   });
-  await ui.getByRole("button", { name: "离线登录", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Microsoft 登录", exact: true })
-    .click();
+  await openPlayerLogin(page, "offline");
+  await openPlayerLogin(page, "microsoft");
   await returnToPlayers();
   await expect.poll(() => count("jobs.cancel")).toBe(2);
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -587,7 +582,7 @@ try {
     if ((await ui.getAttribute("data-view")) !== view)
       await ui.locator(".players-view-switch").click();
     await expect(
-      ui.getByRole("button", { name: "离线登录", exact: true }),
+      ui.getByRole("button", { name: "登录", exact: true }),
     ).toHaveCount(1);
     await expect(
       ui.getByRole("button", { name: "更换皮肤", exact: true }),
@@ -597,7 +592,7 @@ try {
     ).toBeDisabled();
   }
   await shot("empty");
-  await ui.getByRole("button", { name: "离线登录", exact: true }).click();
+  await openPlayerLogin(page, "offline");
   await page.getByLabel("角色名称", { exact: true }).fill("FirstPlayer");
   await page.getByRole("button", { name: "创建角色", exact: true }).click();
   await expect(ui.locator(".players-identity h2")).toHaveText("FirstPlayer");

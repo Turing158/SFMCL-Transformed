@@ -208,10 +208,27 @@ pub async fn request(
         .map_err(|e| format!("{e:#}"))
 }
 async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) -> Result<Value> {
+    use tauri::Manager;
+    if app.try_state::<crate::local_data::DataManager>().is_some_and(|manager| manager.executing()) {
+        bail!("本地数据操作已开始，启动器即将自动重新打开");
+    }
     match op {
         "bootstrap" => Ok(
-            json!({"settings":r.settings.get(),"players":r.accounts.list(),"dataDir":r.directory,"defaultDownloadCacheDir":r.directory.join("downloads").join("cache"),"backgroundPath":sfmcl_t_core::notices::background(&r.directory,&r.settings.get()),"version":env!("CARGO_PKG_VERSION")}),
+            json!({"settings":r.settings.get(),"players":r.accounts.list(),"dataDir":r.directory,"defaultDownloadCacheDir":r.directory.join("downloads").join("cache"),"backgroundPath":sfmcl_t_core::notices::background(&r.directory,&r.settings.get()),"version":env!("CARGO_PKG_VERSION"),"localDataResult":app.try_state::<crate::local_data::DataManager>().and_then(|manager| manager.result.clone())}),
         ),
+        "local-data.prepare" => {
+            let kind = serde_json::from_value::<sfmcl_t_core::local_data::OperationKind>(p["kind"].clone())?;
+            crate::local_data::prepare(&app, &r, kind, PathBuf::from(text(&p, "path")?)).await
+        }
+        "local-data.execute" => crate::local_data::execute(app, r, text(&p, "id")?).await,
+        "local-data.recovery.open" => {
+            let manager = app.state::<crate::local_data::DataManager>();
+            let path = manager.result.as_ref().and_then(|result| result.recovery_path.as_ref())
+                .context("没有可打开的原数据副本")?;
+            if !path.is_dir() { bail!("原数据副本已被移动或删除"); }
+            app.opener().open_path(path.to_string_lossy(), None::<&str>)?;
+            Ok(json!(true))
+        }
         "notices.list" => Ok(json!(r.official_notices.list()?)),
         "notices.refresh" => Ok(json!(
             r.official_notices
@@ -323,6 +340,9 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         }
         "java.probe" => Ok(json!(java::probe(text(&p, "path")?).await?)),
         "players.list" => Ok(json!(r.accounts.list())),
+        "players.reorder" => Ok(json!(r
+            .accounts
+            .reorder(&decode::<Vec<String>>(p["ids"].clone())?)?)),
         "players.add" => Ok(json!(r.accounts.add_offline(text(&p, "name")?)?)),
         "players.select" => {
             r.accounts.select(text(&p, "id")?)?;
@@ -369,6 +389,28 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         )),
         "players.namechange" => Ok(json!(r.accounts.name_change(text(&p, "id")?).await?)),
         "players.login" => Ok(json!(r.accounts.begin_login().await?)),
+        "players.yggdrasil.oauth.begin" => Ok(json!(r.accounts.begin_littleskin().await?)),
+        "players.yggdrasil.oauth.wait" => Ok(json!(
+            r.accounts.wait_littleskin(text(&p, "sessionId")?).await?
+        )),
+        "players.yggdrasil.login" => Ok(json!(
+            r.accounts
+                .begin_yggdrasil(
+                    text(&p, "server")?,
+                    text(&p, "username")?,
+                    text(&p, "password")?
+                )
+                .await?
+        )),
+        "players.yggdrasil.select" => Ok(json!(
+            r.accounts
+                .complete_yggdrasil(text(&p, "sessionId")?, text(&p, "profileId")?)
+                .await?
+        )),
+        "players.yggdrasil.cancel" => {
+            r.accounts.cancel_yggdrasil(text(&p, "sessionId")?);
+            Ok(json!(true))
+        }
         "players.refresh" => Ok(json!(r.accounts.refresh(text(&p, "id")?).await?)),
         "versions.list" => {
             let settings = r.settings.get();

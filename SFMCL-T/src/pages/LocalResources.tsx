@@ -378,7 +378,7 @@ export function LocalResources({
                         )}
                         <div className="local-shader-copy">
                           <div className="local-shader-name">
-                            <h3 title={item.name}>{item.name}</h3>
+                            <h3 data-tooltip={item.name}>{item.name}</h3>
                             {isLocalResourceDirectory(item) && (
                               <Badge>文件夹</Badge>
                             )}
@@ -571,15 +571,15 @@ function LocalResourceInfo({
       )}
       <div className="catalog-project-copy">
         <div className="catalog-project-title">
-          <h3 title={compact ? item.name : undefined}>{item.name}</h3>
+          <h3 data-tooltip={compact ? item.name : undefined}>{item.name}</h3>
           {isLocalResourceDirectory(item) && <Badge>文件夹</Badge>}
           {item.authors && (
-            <span title={compact ? item.authors : undefined}>
+            <span data-tooltip={compact ? item.authors : undefined}>
               {item.authors}
             </span>
           )}
         </div>
-        <p title={compact ? item.description : undefined}>
+        <p data-tooltip={compact ? item.description : undefined}>
           {item.entryType === "directory"
             ? "普通文件夹"
             : item.description ||
@@ -589,7 +589,7 @@ function LocalResourceInfo({
           <div className="catalog-project-meta local-resource-meta">
             <div className="catalog-tags">
               {item.version && (
-                <Badge title={compact ? item.version : undefined}>
+                <Badge data-tooltip={compact ? item.version : undefined}>
                   {item.version}
                 </Badge>
               )}
