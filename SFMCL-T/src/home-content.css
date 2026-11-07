@@ -48,30 +48,122 @@
   font-size: 12px;
   margin: 16px 0 0;
 }
-.home-player-card {
-  display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
+.home-summary-card {
+  padding: 16px 17px 1px;
 }
-.home-player-portrait {
-  background: var(--soft);
-  min-height: 140px;
+.home-summary-card > .surface-frame::before,
+.home-summary-card > .surface-frame::after {
+  transition: background-color 180ms ease;
+}
+.home-summary-card:has(.home-summary-action):is(:hover, :focus-within) {
+  --surface-edge: var(--accent);
+  --surface-fill: var(--soft);
+}
+.home-summary-card:has(.home-summary-action:focus-visible) {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.home-summary-card .home-widget-heading {
+  padding: 0;
+}
+.home-summary-card .home-widget-heading h2 {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.5px;
+}
+.home-summary-body {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  padding: 14px 0;
+}
+.home-summary-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
+  color: var(--muted);
 }
-.home-player-portrait canvas {
-  width: 64px;
-  height: 128px;
+.home-summary-avatar {
+  background: var(--soft);
+  outline: 1px solid var(--line);
+  outline-offset: 3px;
+}
+.home-summary-icon > :is(canvas, .resource-icon) {
+  display: block;
+  width: 48px;
+  height: 48px;
   image-rendering: pixelated;
 }
-.home-player-card strong {
-  display: block;
-  font-size: 21px;
-  overflow-wrap: anywhere;
+.home-summary-info {
+  flex: 1;
+  min-width: 0;
 }
-.home-player-card .helper {
-  margin: 6px 0 14px;
+.home-summary-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 24px;
+}
+.home-summary-detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+}
+.home-summary-detail > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-summary-status {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border: 1px solid currentColor;
+}
+.home-summary-status[data-online="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.home-summary-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  color: var(--accent);
+  text-align: left;
+  font-size: 11px;
+}
+/* Stretch the native button over the card, keeping its heading and description
+   semantic and the layout editor's separate hide button above the hit area. */
+.home-summary-action::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  clip-path: var(--surface-shape);
+}
+.home-summary-action:focus-visible {
+  outline: none;
+}
+.home-summary-action > svg {
+  flex-shrink: 0;
+}
+.home-widget-list[data-home-editing="true"] .home-summary-action::after {
+  cursor: grab;
 }
 .home-quick-links {
   display: flex;
@@ -80,32 +172,6 @@
 }
 .home-quick-links .button {
   flex: 1 1 100px;
-}
-.home-version-summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-  overflow-wrap: anywhere;
-}
-.home-version-summary > .resource-icon {
-  width: 36px;
-  height: 36px;
-}
-.home-version-summary > div {
-  min-width: 0;
-}
-.home-version-summary strong {
-  display: block;
-  line-height: 1.4;
-}
-.home-version-summary .helper {
-  margin: 3px 0 0;
-  line-height: 1.5;
-}
-.home-version-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 .home-announcement-toggle {
   display: flex;

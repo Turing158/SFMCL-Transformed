@@ -139,38 +139,40 @@ export function MinecraftInstallPage({
       >
         <div className="minecraft-version-heading">
           <MinecraftTypeIcon version={version} />
-          <div>
-            <strong>{version.id}</strong>
-            <small>Mojang · {version.releaseTime.slice(0, 10)}</small>
-          </div>
-        </div>
-        <div className="minecraft-install-basics">
-          <label className="field">
-            版本名称
+          <div className="minecraft-version-heading-copy">
             <Input
+              className="minecraft-install-name"
+              aria-label="版本名称"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="自定义版本名称"
             />
-          </label>
+            <small>Mojang · {version.releaseTime.slice(0, 10)}</small>
+          </div>
+        </div>
+        <div className="minecraft-install-basics">
           {settings.gameDirs.length > 0 ? (
             <label className="field">
               安装目录
               <Select
                 aria-label="安装目录"
-                aria-describedby="minecraft-install-directory"
+                data-tooltip={gameDirectoryPath(root)}
                 value={root}
                 onValueChange={setDirectory}
+                truncateOptions
               >
                 {settings.gameDirs.map((directory) => (
-                  <option key={directory.path} value={directory.path}>
-                    {directory.name || gameDirectoryPath(directory.path)}
+                  <option
+                    key={directory.path}
+                    value={directory.path}
+                    title={gameDirectoryPath(directory.path)}
+                  >
+                    {directory.name
+                      ? `${directory.name} · ${gameDirectoryPath(directory.path)}`
+                      : gameDirectoryPath(directory.path)}
                   </option>
                 ))}
               </Select>
-              <small id="minecraft-install-directory" className="path-text">
-                {gameDirectoryPath(root)}
-              </small>
             </label>
           ) : (
             <div className="info-note has-surface minecraft-directory-empty">

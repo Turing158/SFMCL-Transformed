@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
+  ArrowRight,
   Box,
   Check,
   ChevronDown,
@@ -177,41 +178,13 @@ function FixedWidget({
   preview?: boolean;
 }) {
   const app = useApp();
+  const summaryId = useId();
   const player = app.data.players.find(
     (item) => item.uuid === app.data.settings.activePlayer,
   );
   const version = app.versions.find(
     (item) => item.id === app.data.settings.activeVersion,
   );
-  if (type === "player")
-    return (
-      <WidgetPanel title="当前角色" icon={icons.player}>
-        <div className="home-player-card">
-          <div className="home-player-portrait">
-            <Skin player={player} />
-          </div>
-          <div>
-            <strong>{player?.name || "尚未选择角色"}</strong>
-            <p className="helper">
-              {player
-                ? player.online
-                  ? "在线角色"
-                  : "离线角色"
-                : "前往角色管理添加角色"}
-            </p>
-            {!preview && (
-              <Button
-                className="compact"
-                onClick={() => app.setPage("players")}
-              >
-                <UsersRound size={15} />
-                切换角色
-              </Button>
-            )}
-          </div>
-        </div>
-      </WidgetPanel>
-    );
   if (type === "links")
     return (
       <WidgetPanel title="常用入口" icon={icons.links}>
@@ -236,28 +209,78 @@ function FixedWidget({
         </div>
       </WidgetPanel>
     );
+  const isPlayer = type === "player";
+  const selected = isPlayer ? player : version;
+  const name = isPlayer
+    ? player?.name || "尚未选择角色"
+    : version?.id || "尚未选择游戏版本";
+  const detail = isPlayer
+    ? player
+      ? player.online
+        ? "在线角色"
+        : "离线角色"
+      : "前往角色管理添加角色"
+    : version
+      ? `${version.loader} · Java ${version.javaMajor}`
+      : "前往版本管理选择版本";
   return (
-    <WidgetPanel title="当前游戏版本" icon={icons.version}>
-      <div className="home-version-summary">
-        <ResourceImage path={versionIcon(version)} alt="" />
-        <div>
-          <strong>{version?.id || "尚未选择游戏版本"}</strong>
-          <p className="helper">
-            {version
-              ? `${version.loader} · Java ${version.javaMajor}`
-              : "前往版本管理选择版本"}
+    <article className="panel has-surface home-widget-panel home-summary-card">
+      <PixelFrame />
+      <header className="home-widget-heading">
+        <h2>{isPlayer ? "当前角色" : "当前游戏版本"}</h2>
+      </header>
+      <div className="home-summary-body" id={summaryId}>
+        <div
+          className={`home-summary-icon ${isPlayer && player ? "home-summary-avatar" : ""}`}
+          aria-hidden="true"
+        >
+          {isPlayer ? (
+            player ? (
+              <Skin player={player} face />
+            ) : (
+              <UsersRound size={28} />
+            )
+          ) : version ? (
+            <ResourceImage path={versionIcon(version)} alt="" />
+          ) : (
+            <Box size={28} />
+          )}
+        </div>
+        <div className="home-summary-info">
+          <strong className="home-summary-name">{name}</strong>
+          <p className="home-summary-detail">
+            {isPlayer && player && (
+              <span
+                className="home-summary-status"
+                data-online={player.online}
+                aria-hidden="true"
+              />
+            )}
+            <span>{detail}</span>
           </p>
         </div>
       </div>
       {!preview && (
-        <div className="home-version-actions">
-          <Button className="compact" onClick={() => app.setPage("versions")}>
-            <Box size={15} />
-            管理版本
-          </Button>
-        </div>
+        <button
+          type="button"
+          className="home-summary-action"
+          aria-describedby={summaryId}
+          data-tooltip={selected ? name : undefined}
+          onClick={() => app.setPage(isPlayer ? "players" : "versions")}
+        >
+          <span>
+            {isPlayer
+              ? player
+                ? "切换角色"
+                : "选择角色"
+              : version
+                ? "管理版本"
+                : "选择版本"}
+          </span>
+          <ArrowRight size={15} aria-hidden="true" />
+        </button>
       )}
-    </WidgetPanel>
+    </article>
   );
 }
 
@@ -365,7 +388,8 @@ export function HomeContent({
   const options = useMemo(
     () => ({
       ...noticeReorderOptions,
-      allowedControl: ".notice-toggle, .home-announcement-toggle",
+      allowedControl:
+        ".notice-toggle, .home-announcement-toggle, .home-summary-action",
       holdOnly: !editing,
       overlayClass: editing
         ? "home-widget-drag-overlay"

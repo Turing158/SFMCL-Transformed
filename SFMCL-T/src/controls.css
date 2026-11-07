@@ -698,6 +698,11 @@ input.pixel-range-input:focus-visible::-moz-range-thumb {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.pixel-select-popup-truncate .pixel-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .pixel-option-label small {
   display: block;
   font-size: 10px;

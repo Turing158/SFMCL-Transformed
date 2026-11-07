@@ -167,6 +167,14 @@
   flex: 1;
   margin: 0;
 }
+.minecraft-version-tabs .tab-items {
+  padding-block: 5px;
+  scrollbar-width: none;
+}
+.minecraft-version-tabs .tab-items > button {
+  min-height: var(--button-compact-height);
+  padding-block: 4px;
+}
 .minecraft-source {
   --surface-stroke: 1px;
   --surface-inset-shape: var(--surface-shape-1);
@@ -189,10 +197,18 @@
   width: 52px;
   height: 52px;
 }
-.minecraft-version-heading strong {
-  display: block;
+.minecraft-version-heading-copy {
+  flex: 1;
+  min-width: 0;
+}
+.minecraft-version-heading input.minecraft-install-name {
+  width: 100%;
+  max-width: 420px;
+  min-height: 34px;
+  padding: 4px 10px;
   font-size: 18px;
-  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 22px;
 }
 .minecraft-version-heading small {
   display: block;
@@ -203,8 +219,7 @@
 }
 .minecraft-install-basics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
 }
 .minecraft-install-basics > .field {
   min-width: 0;
@@ -497,10 +512,6 @@
   color: var(--muted);
 }
 @container (max-width: 540px) {
-  .minecraft-install-basics {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
   .install-component-toggle {
     padding: 8px 12px;
     gap: 10px;

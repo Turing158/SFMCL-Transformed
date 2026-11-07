@@ -297,6 +297,7 @@ export function SearchField({
 interface Choice {
   value: string;
   label: string;
+  tooltip?: string;
   disabled: boolean;
   group?: string;
 }
@@ -322,6 +323,7 @@ function collectChoices(
       !isValidElement<{
         children?: ReactNode;
         label?: string;
+        title?: string;
         value?: string | number;
         disabled?: boolean;
         hidden?: boolean;
@@ -344,6 +346,7 @@ function collectChoices(
           child.props.value ?? optionText(child.props.children).trim(),
         ),
         label: text,
+        tooltip: child.props.title,
         disabled: groupDisabled || !!child.props.disabled,
         group,
       },
@@ -363,6 +366,7 @@ interface SelectProps extends Omit<
   name?: string;
   displayValue?: ReactNode;
   animateValue?: boolean;
+  truncateOptions?: boolean;
   onRemoveOption?: (value: string) => void;
   removeOptionLabel?: (value: string) => string;
   optionActionsDisabled?: boolean;
@@ -378,6 +382,7 @@ export function Select({
   name,
   displayValue,
   animateValue = false,
+  truncateOptions = false,
   onRemoveOption,
   removeOptionLabel = (value) => `删除 ${value}`,
   optionActionsDisabled = false,
@@ -624,7 +629,12 @@ export function Select({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-activedescendant={open && active >= 0 ? activeId : undefined}
-        data-tooltip={tooltip ?? title ?? choices[selected]?.label}
+        data-tooltip={
+          tooltip ??
+          title ??
+          choices[selected]?.tooltip ??
+          choices[selected]?.label
+        }
         onClick={() => (open ? close() : show())}
         onKeyDown={handleKey}
         onBlur={(event) => {
@@ -645,7 +655,7 @@ export function Select({
           <div
             ref={popup}
             popover={popoverSupported ? "manual" : undefined}
-            className="pixel-select-popup pixel-surface"
+            className={`pixel-select-popup pixel-surface ${truncateOptions ? "pixel-select-popup-truncate" : ""}`}
             data-state={open ? "open" : "closed"}
             aria-hidden={!open || undefined}
             inert={!open}
@@ -671,6 +681,7 @@ export function Select({
                       }
                       aria-selected={option.value === value}
                       aria-disabled={option.disabled || undefined}
+                      data-tooltip={option.tooltip}
                       className={`pixel-select-option pixel-surface ${active === index && !activeAction ? "is-active" : ""}`}
                       onPointerDown={(event) => event.preventDefault()}
                       onClick={() => choose(index)}
