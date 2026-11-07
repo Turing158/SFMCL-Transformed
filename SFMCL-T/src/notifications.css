@@ -75,8 +75,7 @@
     var(--panel) 38%
   );
   --surface-fill: var(--panel);
-  --surface-base: color-mix(in srgb, var(--notification-tone), var(--bg) 68%);
-  --surface-depth: 3px;
+  --surface-depth: 0px;
   display: block;
   position: relative;
   width: 100%;
@@ -84,6 +83,7 @@
   padding: 0;
   text-align: left;
   color: var(--ink);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--shadow-color), transparent 60%);
   cursor: pointer;
   transition: transform 150ms ease;
 }

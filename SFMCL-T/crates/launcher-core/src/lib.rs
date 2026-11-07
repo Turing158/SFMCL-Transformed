@@ -3,6 +3,7 @@ pub mod brand;
 pub mod config;
 pub mod download_sources;
 pub mod downloads;
+pub mod home_content;
 pub mod jobs;
 pub mod local_data;
 pub mod minecraft;

@@ -6,7 +6,11 @@ import { favoriteContextFixture } from "./fixtures/favorite-context-menu.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 
 const url = process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/";
-const evidence = runtimePath("evidence/favorite-context-menu");
+const versionManagement = process.argv.includes("--versions");
+const suite = versionManagement
+  ? "version-context-menu"
+  : "favorite-context-menu";
+const evidence = runtimePath(`evidence/${suite}`);
 await mkdir(evidence, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
@@ -22,16 +26,38 @@ await page.addInitScript({
 });
 const first = "C:/Pixel-Test/Minecraft",
   second = "D:/Other-Minecraft";
-const favorite = (id, directory = first) =>
+const sidebarFavorite = (id, directory = first) =>
   page
     .locator(`.sidebar-favorite[data-directory="${directory}"]`)
     .filter({ hasText: id });
+const card = (id, directory = first) =>
+  page
+    .locator(`.version-management .version-card[data-directory="${directory}"]`)
+    .filter({ has: page.getByRole("heading", { name: id, exact: true }) });
+const favorite = (id, directory = first) =>
+  versionManagement
+    ? card(id, directory).locator(".version-select")
+    : sidebarFavorite(id, directory);
 const root = page.locator(".pixel-context-menu:not(.pixel-context-submenu)");
 const child = page.locator(".pixel-context-submenu");
 const ready = async () => {
   await page.goto(url);
   await expect(page.locator("html")).not.toHaveAttribute("data-startup");
   await expect(page.locator(".sidebar-favorite")).toHaveCount(3);
+  if (versionManagement) {
+    await page
+      .getByRole("navigation", { name: "主导航" })
+      .getByRole("button", { name: "版本管理", exact: true })
+      .click();
+    await page.getByRole("combobox", { name: "游戏目录", exact: true }).click();
+    await page.getByRole("option", { name: "全部", exact: true }).click();
+    await expect(page.locator(".version-management .version-card")).toHaveCount(
+      3,
+    );
+    await expect(page.locator("#local-version-results")).not.toHaveAttribute(
+      "data-version-directory-transition",
+    );
+  }
 };
 const requests = (operation) =>
   page.evaluate(
@@ -42,8 +68,28 @@ const requests = (operation) =>
     operation,
   );
 const open = async (id = "1.21.4", directory = first) => {
-  await favorite(id, directory).click({ button: "right" });
+  const trigger = favorite(id, directory);
+  if (versionManagement) {
+    // Narrow layouts may need scrolling before a user can right-click the row.
+    // Deliver that scroll before opening a menu that dismisses on scroll.
+    await trigger.scrollIntoViewIfNeeded();
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+  }
+  await trigger.click({ button: "right" });
   await expect(root).toBeVisible();
+};
+const chooseView = async (view) => {
+  const list = page.locator(".version-management .version-list");
+  if ((await list.count()) > 0 !== (view === "list"))
+    await page.locator(".version-view").click();
+  await expect(page.locator("#local-version-results")).not.toHaveAttribute(
+    "data-version-view-transition",
+  );
 };
 const management = page.getByRole("dialog", {
   name: "管理 1.21.4",
@@ -63,6 +109,97 @@ const manageAction = async (name) => {
   await management.getByRole("button", { name, exact: true }).click();
 };
 try {
+  if (versionManagement) {
+    await ready();
+    const appearance = () =>
+      root.evaluate((menu) => {
+        const properties = (element, names) => {
+          const style = getComputedStyle(element);
+          return Object.fromEntries(names.map((name) => [name, style[name]]));
+        };
+        return {
+          menu: properties(menu, [
+            "width",
+            "filter",
+            "animationName",
+            "animationDuration",
+            "animationTimingFunction",
+            "transformOrigin",
+          ]),
+          rows: [...menu.querySelectorAll('[role="menuitem"]')].map((row) => ({
+            label: row.textContent,
+            icon: row.querySelector("svg").outerHTML,
+            style: properties(row, [
+              "minHeight",
+              "padding",
+              "gap",
+              "fontSize",
+              "animationName",
+              "animationDuration",
+              "animationTimingFunction",
+              "animationDelay",
+            ]),
+            iconStyle: properties(row.querySelector(".pixel-context-icon"), [
+              "transitionProperty",
+              "transitionDuration",
+              "transitionTimingFunction",
+            ]),
+          })),
+          separators: menu.querySelectorAll('[role="separator"]').length,
+        };
+      });
+    await sidebarFavorite("1.21.4").click({ button: "right" });
+    await expect(root).toBeVisible();
+    const original = await appearance();
+    await page.keyboard.press("Escape");
+    await expect(root).toHaveCount(0);
+    for (const view of ["list", "grid"]) {
+      await chooseView(view);
+      for (const trigger of [
+        card("1.21.4").locator(".version-select"),
+        card("1.21.4").getByRole("button", {
+          name: "管理 1.21.4",
+          exact: true,
+        }),
+      ]) {
+        await trigger.click({ button: "right" });
+        await expect(root).toBeVisible();
+        expect(await appearance()).toEqual(original);
+        expect(original.menu.animationDuration).toBe("0.22s");
+        expect(original.rows[0].style.animationDuration).toBe("0.18s");
+        const launch = root.getByRole("menuitem", {
+          name: "启动版本",
+          exact: true,
+        });
+        await launch.hover();
+        await expect
+          .poll(() =>
+            launch.locator(".pixel-context-icon").evaluate((icon) => ({
+              rotate: getComputedStyle(icon).rotate,
+              scale: getComputedStyle(icon).scale,
+            })),
+          )
+          .toEqual({ rotate: "8deg", scale: "1.1" });
+        await page.keyboard.press("Escape");
+        await expect(page.locator(".pixel-context-layer")).toHaveClass(
+          /closing/,
+        );
+        expect(
+          await root.evaluate(
+            (menu) => getComputedStyle(menu).animationDuration,
+          ),
+        ).toBe("0.16s");
+        await expect(root).toHaveCount(0);
+        await expect(favorite("1.21.4")).toBeFocused();
+      }
+    }
+    expect(await requests("versions.select")).toHaveLength(0);
+    expect(await requests("launch")).toHaveLength(0);
+    await chooseView("list");
+    checks.push(
+      "Grid, list and action buttons share the exact favorite menu appearance and full entry, row, icon-hover and exit motion",
+    );
+  }
   await ready();
   await open();
   expect(await root.getByRole("menuitem").allTextContents()).toEqual([
@@ -121,13 +258,26 @@ try {
   await ready();
   await open("1.21.4", second);
   await root.getByRole("menuitem", { name: "取消收藏", exact: true }).click();
-  await expect(favorite("1.21.4", second)).toHaveCount(0);
+  await expect(sidebarFavorite("1.21.4", second)).toHaveCount(0);
   await expect(favorite("1.21.4", first)).toHaveCount(1);
   expect((await requests("versions.favorite"))[0].payload).toEqual({
     id: "1.21.4",
     directory: second,
     favorite: false,
   });
+  if (versionManagement) {
+    await expect(
+      card("1.21.4", second).locator(".version-favorite"),
+    ).toHaveAttribute("aria-pressed", "false");
+    await open("1.21.4", second);
+    await root.getByRole("menuitem", { name: "收藏版本", exact: true }).click();
+    await expect(sidebarFavorite("1.21.4", second)).toHaveCount(1);
+    expect((await requests("versions.favorite")).at(-1).payload).toEqual({
+      id: "1.21.4",
+      directory: second,
+      favorite: true,
+    });
+  }
   checks.push(
     "Resources, settings and unfavorite target their directory without changing selection",
   );
@@ -206,6 +356,11 @@ try {
   await page.keyboard.press("Enter");
   await expect(management).toBeVisible();
   await expect(root).toHaveCount(0);
+  // A tooltip under the stationary pointer can still be leaving as the dialog
+  // enters; Escape dismisses that tooltip first until its motion completes.
+  await expect(page.locator('.sfmcl-t-tooltip[data-open="true"]')).toHaveCount(
+    0,
+  );
   await page.keyboard.press("Escape");
   await expect(management).not.toBeVisible();
   await favorite("1.21.4").focus();
@@ -250,7 +405,7 @@ try {
   );
   expect(errors).toEqual([]);
   console.log(
-    `PASS ${checks.length} favorite context menu behavior groups; no page errors.`,
+    `PASS ${checks.length} ${suite} behavior groups; no page errors.`,
   );
 } catch (error) {
   process.exitCode = 1;

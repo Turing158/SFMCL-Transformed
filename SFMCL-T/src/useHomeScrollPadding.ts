@@ -37,7 +37,7 @@ export function useHomeScrollPadding(showContent: boolean) {
       const end = Math.max(
         ...Array.from(
           home.querySelectorAll<HTMLElement>(
-            ".page-heading, .notice-card, .notices > .helper, .notices > .inline-error, .notice-list-content > .helper",
+            ".page-heading, .home-widget-panel, .notice-card, .notices > .helper, .notices > .inline-error, .notice-list-content > .helper",
           ),
           bottom,
         ),

@@ -3,7 +3,7 @@ import type { HomeNoticeLayout } from "./types";
 import { usePointerReorder } from "./usePointerReorder";
 import type { PointerReorderOptions } from "./usePointerReorder";
 
-const options: PointerReorderOptions = {
+export const noticeReorderOptions: PointerReorderOptions = {
   rowSelector: ".notice-list-item",
   keyAttribute: "data-notice-key",
   contentSelector: ".notice-list-content",
@@ -20,6 +20,7 @@ export function useNoticeReorder(
   keys: string[],
   layout: HomeNoticeLayout,
   onReorder?: (keys: string[]) => void,
+  options = noticeReorderOptions,
 ) {
   return usePointerReorder(root, keys, layout, options, onReorder);
 }

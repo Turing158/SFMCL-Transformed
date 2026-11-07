@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
+import type { PointerReorderOptions } from "./usePointerReorder";
 import type { HomeNoticeLayout } from "./types";
 import { PixelFrame } from "./components";
 import { useNoticeReorder } from "./useNoticeReorder";
@@ -17,6 +18,9 @@ const timing = {
   easing: "cubic-bezier(0.22, 0.8, 0.25, 1)",
   fill: "both",
 } as const;
+type ListAttributes = HTMLAttributes<HTMLDivElement> & {
+  [key: `data-${string}`]: string | number | boolean | undefined;
+};
 
 export function AnimatedNoticeList<T>({
   items,
@@ -24,12 +28,18 @@ export function AnimatedNoticeList<T>({
   className = "",
   layout = "single",
   onReorder,
+  rowProps,
+  listProps,
+  reorderOptions,
 }: {
   items: Item<T>[];
   children: (item: T) => ReactNode;
   className?: string;
   layout?: HomeNoticeLayout;
   onReorder?: (keys: string[]) => void;
+  rowProps?: (item: T) => ListAttributes;
+  listProps?: ListAttributes;
+  reorderOptions?: PointerReorderOptions;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const { order, draggingKey } = useNoticeReorder(
@@ -37,6 +47,7 @@ export function AnimatedNoticeList<T>({
     items.filter((entry) => entry.item !== null).map((entry) => entry.key),
     layout,
     onReorder,
+    reorderOptions,
   );
   const mounted = useRef(false);
   const running = useRef(
@@ -243,6 +254,7 @@ export function AnimatedNoticeList<T>({
 
   return (
     <div
+      {...listProps}
       ref={root}
       className={`notice-animated-list ${className}`}
       data-notice-layout={layout}
@@ -253,8 +265,9 @@ export function AnimatedNoticeList<T>({
     >
       {entries.map((entry) => (
         <div
+          {...rowProps?.(entry.item)}
           key={entry.key}
-          className="notice-list-item"
+          className={`notice-list-item ${rowProps?.(entry.item).className || ""}`.trim()}
           data-window-drag="false"
           data-notice-key={entry.key}
           data-notice-phase={entry.phase}

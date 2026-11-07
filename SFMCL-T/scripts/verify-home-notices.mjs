@@ -36,6 +36,7 @@ await page.addInitScript(() => {
     saves: 0,
     saveFail: false,
     visibilityFail: false,
+    layoutFail: false,
     savePending: false,
     deletes: 0,
     deleteFail: false,
@@ -76,7 +77,7 @@ await page.addInitScript(() => {
   const animate = Element.prototype.animate;
   Element.prototype.animate = function (frames, options) {
     const animation = animate.call(this, frames, options);
-    if (this.matches(".notice-editor .tab-panel")) {
+    if (this.matches(".home-component-library .tab-panel")) {
       window.__homeNotices.tabTransitions.push({
         duration: animation.effect.getTiming().duration,
         frames: animation.effect
@@ -102,6 +103,13 @@ await page.addInitScript(() => {
   window.__TAURI_INTERNALS__.invoke = async (command, args) => {
     if (command === "request" && args.operation === "notices.hidden") {
       return structuredClone(window.__homeNotices.hidden);
+    }
+    if (
+      command === "request" &&
+      args.operation === "home.content.save" &&
+      window.__homeNotices.layoutFail
+    ) {
+      throw new Error("测试布局保存失败");
     }
     if (command === "request" && args.operation === "notices.visibility") {
       const state = window.__homeNotices;
@@ -191,8 +199,10 @@ const ready = async (suffix = "") => {
 };
 const notices = page.getByRole("region", { name: "启动器公告", exact: true });
 const refresh = page.getByRole("button", { name: "刷新公告", exact: true });
-const add = page.getByRole("button", { name: "新增公告", exact: true });
-const hides = notices.locator(".notice-hide");
+const add = page.getByRole("button", { name: "添加组件", exact: true });
+const hides = notices.locator(
+  '.home-widget-row:not([data-notice-phase="exiting"]) .home-widget-hide',
+);
 const deletes = notices.locator(".notice-delete");
 const toggles = notices.locator(".notice-toggle");
 const bodies = notices.locator(".notice-body");
@@ -202,16 +212,23 @@ const hoverNoticeAction = async (button) => {
   await expect(button.locator("..")).toHaveCSS("opacity", "1");
 };
 const clickNoticeAction = async (button) => {
+  if (await button.evaluate((node) => node.matches(".home-widget-hide"))) {
+    await expect(button).toBeEnabled();
+    await button.click({ force: true });
+    return;
+  }
   await hoverNoticeAction(button);
   await button.click();
 };
+const editLayout = () =>
+  page.getByRole("button", { name: "编辑布局", exact: true }).click();
 try {
   await ready();
   await expect(page.getByRole("heading", { name: "你好，Alex" })).toBeVisible();
   await expect(page.locator(".hero, .shortcut-grid, .home-note")).toHaveCount(
     0,
   );
-  await expect(page.locator("main.page > *")).toHaveCount(2);
+  await expect(page.locator("main.page .home-content > *")).toHaveCount(2);
   await expect(dock).toBeVisible();
   const dockBefore = await dock.boundingBox();
   await expect(toggles).toHaveCount(3);
@@ -233,94 +250,26 @@ try {
   );
 
   const firstCard = notices.locator(".notice-card").first();
-  const firstHeading = firstCard.locator(".notice-heading");
-  const firstControl = firstCard.locator(".notice-control");
-  const firstReveal = firstCard.locator(".notice-remove-motion");
   const firstChevron = firstCard.locator(".notice-chevron");
   await page.mouse.move(30, 30);
-  await expect(firstReveal).toHaveCSS("opacity", "0");
   await expect(firstChevron).toHaveCSS("opacity", "1");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await firstCard.evaluate((card) => {
-    const motion = card.querySelector(".notice-remove-motion");
-    const heading = card.querySelector(".notice-heading");
-    const timing = { shownAt: null, hideAt: null };
-    window.__homeNotices.removePreviewTiming = timing;
-    const shown = (event) => {
-      if (event.target !== motion || event.propertyName !== "transform") return;
-      timing.shownAt = performance.now();
-      motion.removeEventListener("transitionend", shown);
-    };
-    motion.addEventListener("transitionend", shown);
-    const changes = new MutationObserver(() => {
-      if (heading.dataset.removeVisible !== "false" || timing.shownAt === null)
-        return;
-      timing.hideAt = performance.now();
-      changes.disconnect();
-    });
-    changes.observe(heading, {
-      attributes: true,
-      attributeFilter: ["data-remove-visible"],
-    });
-  });
   await firstCard.hover({ position: { x: 120, y: 12 } });
-  await expect(firstReveal).toHaveCSS("opacity", "1");
-  await expect(firstChevron).toHaveCSS("opacity", "0");
-  const actionPosition = await firstCard.evaluate((card) => {
-    const remove = card.querySelector(".notice-remove").getBoundingClientRect();
-    const chevron = card
-      .querySelector(".notice-chevron")
-      .getBoundingClientRect();
-    return {
-      removeX: remove.x + remove.width / 2,
-      removeY: remove.y + remove.height / 2,
-      chevronX: chevron.x + chevron.width / 2,
-      chevronY: chevron.y + chevron.height / 2,
-      duration: getComputedStyle(card.querySelector(".notice-remove-motion"))
-        .transitionDuration,
-    };
-  });
-  expect(actionPosition.removeX).toBeCloseTo(actionPosition.chevronX, 1);
-  expect(actionPosition.removeY).toBeCloseTo(actionPosition.chevronY, 1);
-  expect(actionPosition.duration).toBe("0.18s, 0.22s");
-  await expect(firstHeading).toHaveAttribute("data-remove-visible", "false");
-  const previewTiming = await page.evaluate(
-    () => window.__homeNotices.removePreviewTiming,
+  await expect(firstCard.locator(".notice-control, .notice-hide")).toHaveCount(
+    0,
   );
-  expect(previewTiming.shownAt).not.toBeNull();
-  expect(previewTiming.hideAt - previewTiming.shownAt).toBeGreaterThanOrEqual(
-    450,
-  );
-  expect(previewTiming.hideAt - previewTiming.shownAt).toBeLessThan(650);
-  await expect(firstReveal).toHaveCSS("opacity", "0");
+  await expect(hides).toHaveCount(0);
   await expect(firstChevron).toHaveCSS("opacity", "1");
-  await page.mouse.move(30, 30);
-  await firstCard.hover({ position: { x: 120, y: 12 } });
-  await expect(firstHeading).toHaveAttribute("data-remove-visible", "true");
-  await page.mouse.move(30, 30);
-  await expect(firstReveal).toHaveCSS("opacity", "0");
-  await firstControl.hover();
-  await expect(firstReveal).toHaveCSS("opacity", "1");
-  await page.waitForTimeout(1100);
-  await expect(firstReveal).toHaveCSS("opacity", "1");
   await page.screenshot({ path: `${evidence}/hover-notice-action.png` });
-  await firstCard.hover({ position: { x: 120, y: 12 } });
-  await expect(firstReveal).toHaveCSS("opacity", "0");
-  await expect(firstChevron).toHaveCSS("opacity", "1");
   await page.mouse.move(30, 30);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   checks.push(
-    "Hide/delete shares the chevron position and stays hidden by default; each row entry immediately previews it and begins fading 500ms after the entrance ends, control hover holds it beyond the preview timeout, and leaving restores the chevron with full transitions even when reduced motion is requested.",
+    "Ordinary news panels have no hover hide button; their fold chevrons remain visible, and hiding is available through layout editing.",
   );
 
   await toggles.nth(0).focus();
   await page.keyboard.press("Tab");
-  await expect(hides.nth(0)).toBeFocused();
-  await expect(firstReveal).toHaveCSS("opacity", "1");
-  await page.keyboard.press("Tab");
   await expect(toggles.nth(1)).toBeFocused();
-  await expect(firstReveal).toHaveCSS("opacity", "0");
-  await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Enter");
   await expect(toggles.nth(0)).toHaveAttribute("aria-expanded", "true");
@@ -342,8 +291,6 @@ try {
   await page.keyboard.press("Space");
   await expect(bodies.nth(0)).toBeHidden();
   expect(await bodies.nth(0).evaluate((node) => node.inert)).toBe(true);
-  await page.keyboard.press("Tab");
-  await expect(hides.nth(0)).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(toggles.nth(1)).toBeFocused();
   await toggles.nth(1).click();
@@ -512,6 +459,7 @@ try {
   await page.evaluate(() => {
     window.__homeNotices.refreshError = "";
   });
+  await editLayout();
   await expect(hides).toHaveCount(5);
   for (const title of [
     "Official Minecraft news 1",
@@ -519,40 +467,58 @@ try {
     "Java版26.4-snapshot-6",
   ]) {
     await clickNoticeAction(
-      notices.getByRole("button", { name: `隐藏公告：${title}`, exact: true }),
+      notices.getByRole("button", { name: `隐藏：${title}`, exact: true }),
     );
   }
   await expect(toggles).toHaveCount(2);
   await refresh.click();
   await expect(toggles).toHaveCount(2);
   await add.click();
-  const editor = page.getByRole("dialog", { name: "新增公告", exact: true });
-  await expect(editor.getByRole("tab").first()).toContainText("预设");
+  const editor = page.getByRole("dialog", { name: "添加组件", exact: true });
+  await expect(editor.getByRole("tab").first()).toContainText("预设组件");
   await expect(editor.getByRole("tab").first()).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await expect(editor.getByRole("tabpanel")).toHaveAccessibleName(/^预设/);
-  await expect(editor.locator(".notice-form, .helper")).toHaveCount(0);
-  await expect(editor.getByRole("tab", { name: "已隐藏" })).toHaveCount(0);
-  await editor.getByRole("tab", { name: "预设" }).click();
-  await expect(editor.locator(".notice-preset-row")).toHaveCount(3);
+  await expect(editor.getByRole("tabpanel")).toHaveAccessibleName(/^预设组件/);
+  expect(
+    await editor
+      .locator('[data-home-template="notice"] strong')
+      .allTextContents(),
+  ).toEqual([
+    "官方新闻 1",
+    "官方新闻 2",
+    "官方新闻 3",
+    "Java 版更新",
+    "中文 Minecraft Wiki",
+  ]);
+  await page.screenshot({
+    path: `${evidence}/news-preset-names.png`,
+    animations: "disabled",
+  });
+
+  await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
+    3,
+  );
   await editor
     .getByRole("button", {
-      name: "添加预设公告：Minecraft 26.4 Snapshot 6",
+      name: "恢复资讯：Java 版更新",
       exact: true,
     })
     .click();
   await expect(toggles).toHaveCount(3);
-  await expect(editor.locator(".notice-preset-row")).toHaveCount(2);
+  await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
+    2,
+  );
   await editor.getByRole("button", { name: "关闭对话框" }).click();
   await expect(editor).toHaveCount(0);
   checks.push(
-    "Official news, Java updates and Chinese Wiki notices each support hiding; only hidden presets appear in the Presets tab, and adding them back removes them from that tab.",
+    "The five official preset tiles use fixed source names instead of article titles; every tile retains its original article reference, individual restoration and duplicate-add protection. Home panels keep the article titles.",
   );
 
   await ready();
   await expect(toggles).toHaveCount(3);
+  await editLayout();
   await expect(hides).toHaveCount(3);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.evaluate(() => {
@@ -567,11 +533,10 @@ try {
     "data-notice-list-moving",
     "true",
   );
-  await hoverNoticeAction(
-    notices
-      .locator('.notice-list-item[data-notice-phase="stable"] .notice-hide')
-      .first(),
-  );
+  await notices
+    .locator('.notice-list-item[data-notice-phase="stable"] .home-widget-hide')
+    .first()
+    .hover({ force: true });
   await expect(page.getByRole("tooltip")).toHaveCount(0);
   expect(
     await departing.evaluate(
@@ -580,7 +545,7 @@ try {
   ).toBe(true);
   await expect(
     notices.getByRole("button", {
-      name: "隐藏公告：欢迎来到 SFMCL-T",
+      name: "隐藏：欢迎来到 SFMCL-T",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -629,39 +594,29 @@ try {
   });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await expect(toggles).toHaveCount(2);
-  await expect(toggles.first()).toBeFocused();
   await refresh.click();
   await expect(refresh).toBeEnabled();
   await expect(toggles).toHaveCount(2);
   await ready();
   await expect(toggles).toHaveCount(2);
   await add.click();
-  await editor.getByRole("tab", { name: "预设" }).click();
-  await expect(editor.locator(".notice-preset-row")).toHaveCount(1);
+
+  await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
+    1,
+  );
   await page.evaluate(() => {
     window.__homeNotices.freezeListMotion = true;
   });
   await editor
     .getByRole("button", {
-      name: "添加预设公告：欢迎来到 SFMCL-T",
+      name: "恢复资讯：欢迎来到 SFMCL-T",
       exact: true,
     })
     .click();
   await expect(
-    editor.locator('.notice-list-item[data-notice-phase="exiting"]'),
-  ).toHaveCount(1);
-  await expect(
     notices.locator('.notice-list-item[data-notice-phase="entering"]'),
   ).toHaveCount(1);
   const transfer = await page.evaluate(() => window.__homeNotices.listMotions);
-  expect(
-    transfer.some(
-      (motion) =>
-        motion.list === "presets" &&
-        motion.id === "sfmcl-t-notice-list-exit" &&
-        motion.duration === 320,
-    ),
-  ).toBe(true);
   expect(
     transfer.some(
       (motion) =>
@@ -670,7 +625,6 @@ try {
         motion.duration === 320,
     ),
   ).toBe(true);
-  await expect(editor.getByRole("tab", { name: "预设" })).toBeFocused();
   await page.evaluate(() => {
     window.__homeNotices.freezeListMotion = false;
     document
@@ -679,16 +633,12 @@ try {
       .forEach((animation) => animation.finish());
   });
   await expect(toggles).toHaveCount(3);
-  await expect(editor.getByRole("status")).toHaveText("当前预设均已显示");
-  await expect(
-    editor.locator(".notice-preset-empty .empty-icon svg"),
-  ).toBeVisible();
-  await expect(editor.locator(".notice-preset-empty h3")).toHaveText(
-    "当前预设均已显示",
-  );
-  await expect(editor.locator(".notice-preset-empty p, .helper")).toHaveCount(
+  await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
     0,
   );
+  await expect(
+    editor.getByRole("button", { name: /^已添加资讯：/ }),
+  ).toHaveCount(3);
   await editor.evaluate((node) =>
     Promise.allSettled(
       node
@@ -696,139 +646,48 @@ try {
         .map((animation) => animation.finished),
     ),
   );
-  await page.screenshot({ path: `${evidence}/preset-empty.png` });
-  await editor.getByRole("tab", { name: "新增公告", exact: true }).click();
-  const forward = await page.evaluate(() =>
-    window.__homeNotices.tabTransitions.at(-1),
-  );
-  expect(forward.duration).toBe(240);
-  expect(forward.frames[0]).toEqual({
-    opacity: "0.15",
-    transform: "translateX(16px)",
+  await page.screenshot({
+    path: `${evidence}/news-presets-all-added.png`,
+    animations: "disabled",
   });
-  await expect(editor.locator(".helper")).toHaveCount(0);
-  await expect(
-    editor.getByRole("textbox", { name: "公告内容", exact: true }),
-  ).not.toHaveAttribute("aria-describedby");
-  await editor.getByRole("button", { name: "添加公告", exact: true }).click();
-  await expect(editor.getByRole("alert")).toHaveText("请填写公告标题和内容。");
-  expect(await page.evaluate(() => window.__homeNotices.saves)).toBe(0);
-  await editor.getByLabel("公告标题", { exact: true }).fill(" 自定义测试公告 ");
-  await editor
-    .getByRole("textbox", { name: "公告内容", exact: true })
-    .fill("**本地公告内容**\n\n[自定义链接](https://example.com/custom)");
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await editor.getByRole("tab", { name: "预设" }).click();
-  const reverse = await page.evaluate(() =>
-    window.__homeNotices.tabTransitions.at(-1),
-  );
-  expect(reverse.duration).toBe(240);
-  expect(reverse.frames[0]).toEqual({
-    opacity: "0.15",
-    transform: "translateX(-16px)",
-  });
-  await editor.getByRole("tab", { name: "新增公告", exact: true }).click();
-  await editor.getByRole("tab", { name: "预设" }).click();
-  await editor.getByRole("tab", { name: "新增公告", exact: true }).click();
-  await editor
-    .getByRole("tabpanel")
-    .evaluate((node) =>
-      Promise.allSettled(
-        node.getAnimations().map((animation) => animation.finished),
-      ),
+  await editor.getByRole("button", { name: "关闭对话框" }).click();
+  // Legacy custom notices still use their existing panels and deletion behavior.
+  // Newly authored content is covered by verify-home-content.mjs.
+  await page.evaluate(() => {
+    const item = {
+      id: "local:custom:2",
+      preset: false,
+      title: "自定义测试公告",
+      content: "**本地公告内容**",
+      category: "自定义公告",
+      icon: "",
+    };
+    window.__homeNotices.custom.push(item);
+    window.__homeNotices.items.push(item);
+    localStorage.setItem(
+      "notice-test-custom",
+      JSON.stringify(window.__homeNotices.custom),
     );
-  await expect(editor.getByRole("tabpanel")).toHaveCSS("opacity", "1");
-  await expect(editor.getByRole("tabpanel")).toHaveCSS("transform", "none");
-  await expect(editor.getByLabel("公告标题", { exact: true })).toHaveValue(
-    " 自定义测试公告 ",
-  );
-  await expect(
-    editor.getByRole("textbox", { name: "公告内容", exact: true }),
-  ).toHaveValue("**本地公告内容**\n\n[自定义链接](https://example.com/custom)");
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  checks.push(
-    "Presets is the first and default tab; tab content animates in both directions at full duration, rapid switching settles and preserves drafts; descriptions are removed and the empty preset uses an icon placeholder.",
-  );
-  await page.evaluate(() => {
-    window.__homeNotices.saveFail = true;
-  });
-  await editor.getByRole("button", { name: "添加公告", exact: true }).click();
-  await expect(editor.getByRole("alert")).toContainText("测试新增公告保存失败");
-  await expect(editor.getByLabel("公告标题", { exact: true })).toHaveValue(
-    " 自定义测试公告 ",
-  );
-  await expect(toggles).toHaveCount(3);
-  await page.setViewportSize({ width: 540, height: 640 });
-  expect(
-    await editor.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
-  ).toBe(true);
-  await page.screenshot({ path: `${evidence}/add-notice-narrow.png` });
-  await page.setViewportSize({ width: 1120, height: 640 });
-
-  // Deliver an older refresh after creating a notice to check stale-response protection.
-  await page.evaluate(() => {
-    const state = window.__homeNotices;
-    state.saveFail = false;
-    state.savePending = true;
-    state.pending = true;
-    document.querySelector(".notice-refresh").click();
-  });
-  await expect
-    .poll(() => page.evaluate(() => typeof window.__homeNotices.finish))
-    .toBe("function");
-  await editor.getByRole("button", { name: "添加公告", exact: true }).click();
-  await expect(
-    editor.getByRole("button", { name: "正在保存…", exact: true }),
-  ).toBeDisabled();
-  await expect(
-    editor.getByRole("button", { name: "关闭对话框" }),
-  ).toBeDisabled();
-  await page.evaluate(() =>
-    document.querySelector(".notice-form").requestSubmit(),
-  );
-  expect(await page.evaluate(() => window.__homeNotices.saves)).toBe(2);
-  await page.evaluate(() => {
     window.__homeNotices.freezeListMotion = true;
-    window.__homeNotices.finishSave();
   });
-  await expect(editor).toHaveCount(0);
+  await refresh.click();
   await expect(toggles).toHaveCount(4);
   await expect(
     notices.locator('.notice-list-item[data-notice-phase="entering"]'),
   ).toHaveCount(1);
-  expect(
-    await page.evaluate(() =>
-      window.__homeNotices.listMotions.some(
-        (motion) =>
-          motion.key === "notice:local:custom:2" &&
-          motion.id === "sfmcl-t-notice-list-enter" &&
-          motion.duration === 320,
-      ),
-    ),
-  ).toBe(true);
   await page.evaluate(() => {
     window.__homeNotices.freezeListMotion = false;
     document
       .getAnimations()
-      .filter((animation) => animation.id.startsWith("sfmcl-t-notice-list-"))
-      .forEach((animation) => animation.finish());
+      .filter((a) => a.id.startsWith("sfmcl-t-notice-list-"))
+      .forEach((a) => a.finish());
   });
-  await page.evaluate(() => {
-    const state = window.__homeNotices;
-    state.pending = false;
-    state.finish({
-      items: structuredClone(state.items.slice(0, 3)),
-      error: "",
-    });
-  });
-  await expect(refresh).toBeEnabled();
-  await expect(toggles).toHaveCount(4);
   await toggles.last().click();
   await expect(bodies.last().locator("strong")).toHaveText("本地公告内容");
   await ready();
   await expect(toggles).toHaveCount(4);
   await expect(deletes).toHaveCount(1);
-  await expect(hides).toHaveCount(3);
+  await expect(hides).toHaveCount(0);
   await expect(
     notices.getByRole("button", {
       name: "隐藏公告：自定义测试公告",
@@ -845,9 +704,16 @@ try {
   await expect(refresh).toBeEnabled();
   await expect(toggles).toHaveCount(4);
   await add.click();
-  await editor.getByRole("tab", { name: "预设" }).click();
-  await expect(editor.locator(".notice-preset-row")).toHaveCount(0);
-  await expect(editor.getByRole("status")).toHaveText("当前预设均已显示");
+
+  await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
+    0,
+  );
+  await expect(
+    editor.getByRole("button", {
+      name: "已添加资讯：自定义测试公告",
+      exact: true,
+    }),
+  ).toBeDisabled();
   await editor.getByRole("button", { name: "关闭对话框" }).click();
   await expect(editor).toHaveCount(0);
   await page.evaluate(() => {
@@ -899,23 +765,23 @@ try {
   await expect(toggles).toHaveCount(3);
   await expect(deletes).toHaveCount(0);
   await page.evaluate(() => {
-    window.__homeNotices.visibilityFail = true;
+    window.__homeNotices.layoutFail = true;
   });
+  await editLayout();
   await clickNoticeAction(hides.first());
-  await expect(notices.getByRole("alert")).toContainText(
-    "测试隐藏状态保存失败",
-  );
+  await expect(page.getByRole("alert")).toContainText("测试布局保存失败");
   await expect(toggles).toHaveCount(3);
   await page.evaluate(() => {
-    window.__homeNotices.visibilityFail = false;
+    window.__homeNotices.layoutFail = false;
   });
   for (let index = 0; index < 3; index++)
     await clickNoticeAction(hides.first());
   await expect(notices.getByRole("status")).toHaveText("暂无公告");
-  await expect(add).toBeFocused();
   await add.click();
-  await editor.getByRole("tab", { name: "预设" }).click();
-  await expect(editor.locator(".notice-preset-row")).toHaveCount(3);
+
+  await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
+    3,
+  );
   await expect(editor.getByText("自定义测试公告", { exact: true })).toHaveCount(
     0,
   );
@@ -929,7 +795,7 @@ try {
   await page.screenshot({ path: `${evidence}/preset-notices.png` });
   await editor
     .getByRole("button", {
-      name: "添加预设公告：欢迎来到 SFMCL-T",
+      name: "恢复资讯：欢迎来到 SFMCL-T",
       exact: true,
     })
     .click();
@@ -938,10 +804,11 @@ try {
   await ready();
   await expect(toggles).toHaveCount(1);
   await expect(toggles.first()).toContainText("欢迎来到 SFMCL-T");
-  // Re-add a preset before its home exit completes; both lists must retain one copy.
+  // Restore a news article before its home exit completes; the home list keeps one copy.
   await page.evaluate(() => {
     window.__homeNotices.freezeListMotion = true;
   });
+  await editLayout();
   await clickNoticeAction(hides.first());
   await expect(
     notices.locator('.notice-list-item[data-notice-phase="exiting"]'),
@@ -956,9 +823,10 @@ try {
     document.querySelector(".notice-add").click();
   });
   await expect(editor).toBeVisible();
+
   await editor
     .getByRole("button", {
-      name: "添加预设公告：欢迎来到 SFMCL-T",
+      name: "恢复资讯：欢迎来到 SFMCL-T",
       exact: true,
     })
     .evaluate((button) => button.click());
@@ -991,16 +859,18 @@ try {
       .forEach((animation) => animation.finish());
   });
   await expect(toggles).toHaveCount(1);
-  await expect(editor.locator(".notice-preset-row")).toHaveCount(2);
+  await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
+    2,
+  );
   await expect(
     page.locator('.notice-list-item:not([data-notice-phase="stable"])'),
   ).toHaveCount(0);
   await editor.getByRole("button", { name: "关闭对话框" }).click();
   checks.push(
-    "Home and preset lists animate entry, exit, placeholder changes and continuous reflow at full duration; exiting rows become inert immediately, failed saves do not animate removal, custom notices animate creation/deletion, and interrupted moves reverse without duplicates or leftover space.",
+    "The home list animates entry, exit, placeholder changes and continuous reflow at full duration; exiting rows become inert immediately, failed saves do not animate removal, custom notices animate creation/deletion, and interrupted restores reverse without duplicates or leftover space.",
   );
   checks.push(
-    "Adding validates required fields, retains drafts on save failure, prevents duplicate submissions and renders Markdown; custom notices only support deletion, stay deleted after reload and older network replies, and never appear as presets even with legacy hidden IDs; preset visibility remains persistent and reversible.",
+    "Existing custom notices retain their original panels and deletion, stay deleted after reload and older network replies, and never appear as presets even with legacy hidden IDs; original preset visibility remains persistent and reversible through the component library.",
   );
   expect(errors).toEqual([]);
   await writeFile(

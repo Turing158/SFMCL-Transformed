@@ -1,14 +1,16 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-Remove expired temporary output while preserving development and packaging files.
+Remove temporary output, optionally pruning compiler and test caches.
 .EXAMPLE
 .\clean-target.ps1 -WhatIf
 .EXAMPLE
 .\clean-target.ps1
+.EXAMPLE
+.\clean-target.ps1 -PruneBuildCache -WhatIf
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low')]
-param()
+param([switch]$PruneBuildCache)
 
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = Join-Path $PSScriptRoot 'SFMCL-T'
@@ -30,6 +32,27 @@ if (-not $targetRoot.Equals($expectedTarget, [StringComparison]::OrdinalIgnoreCa
 $targetPrefix = $targetRoot.TrimEnd('\') + '\'
 $temporaryCutoff = (Get-Date).AddDays(-1)
 
+# Enumerate one level at a time so links are rejected before descent.
+function Get-UnlinkedTree {
+    param([System.IO.FileSystemInfo]$Entry)
+    $pending = New-Object 'System.Collections.Generic.Stack[System.IO.FileSystemInfo]'
+    $pending.Push($Entry)
+    while ($pending.Count -gt 0) {
+        $current = $pending.Pop()
+        $resolved = [IO.Path]::GetFullPath($current.FullName)
+        if (-not $resolved.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to inspect a path outside target: $resolved"
+        }
+        if ($current.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw "Refusing to inspect a symbolic link or junction: $resolved"
+        }
+        $current
+        if ($current -is [IO.DirectoryInfo]) {
+            foreach ($child in $current.GetFileSystemInfos()) { $pending.Push($child) }
+        }
+    }
+}
+
 # Cargo profiles live directly under target or under a compilation target triple.
 $profiles = @(
     foreach ($entry in Get-ChildItem -LiteralPath $targetRoot -Directory -Force) {
@@ -45,9 +68,17 @@ $profiles = @(
     }
 )
 $cleanup = New-Object 'System.Collections.Generic.List[System.IO.FileSystemInfo]'
+$cleanupPaths = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $locks = New-Object 'System.Collections.Generic.List[System.IO.FileStream]'
 $removed = 0
+function Add-CleanupPath {
+    param([string]$Path)
+    if ((Test-Path -LiteralPath $Path) -and $cleanupPaths.Add([IO.Path]::GetFullPath($Path))) {
+        $cleanup.Add((Get-Item -LiteralPath $Path -Force))
+    }
+}
 try {
+    # Acquire every build lock before collecting or deleting any output.
     foreach ($profile in $profiles) {
         if ($profile.Attributes -band [IO.FileAttributes]::ReparsePoint) {
             throw "Refusing to inspect a linked profile: $($profile.FullName)"
@@ -65,12 +96,66 @@ try {
                 throw "Cannot lock Cargo output. Finish builds/tests before cleaning: $lockPath"
             }
         }
-        # Keep all reusable build output: fingerprints, dependencies, build-script
-        # output, incremental state, libraries, symbols, resources and bundles.
+    }
+    foreach ($profile in $profiles) {
+        # Default mode preserves reusable build output. Explicit pruning retains
+        # dependency libraries, build-script output, desktop binaries and bundles.
         # Only expired loose temporary files are eligible inside a profile.
         foreach ($entry in Get-ChildItem -LiteralPath $profile.FullName -File -Force) {
             if ($entry.Extension -in @('.tmp', '.temp') -and $entry.LastWriteTime -lt $temporaryCutoff) {
-                $cleanup.Add($entry)
+                Add-CleanupPath -Path $entry.FullName
+            }
+        }
+        if (-not $PruneBuildCache) { continue }
+        $incrementalRoot = Join-Path $profile.FullName 'incremental'
+        if (Test-Path -LiteralPath $incrementalRoot) {
+            $incrementalDirectory = Get-Item -LiteralPath $incrementalRoot -Force
+            if ($incrementalDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw "Refusing to inspect linked incremental output: $incrementalRoot"
+            }
+            foreach ($entry in $incrementalDirectory.GetFileSystemInfos()) {
+                Add-CleanupPath -Path $entry.FullName
+            }
+        }
+        $fingerprintRoot = Join-Path $profile.FullName '.fingerprint'
+        if (-not (Test-Path -LiteralPath $fingerprintRoot)) { continue }
+        $fingerprintDirectory = Get-Item -LiteralPath $fingerprintRoot -Force
+        if ($fingerprintDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw "Refusing to inspect linked fingerprints: $fingerprintRoot"
+        }
+        foreach ($name in @('deps', 'examples')) {
+            $artifactDirectory = Join-Path $profile.FullName $name
+            if ((Test-Path -LiteralPath $artifactDirectory) -and
+                ((Get-Item -LiteralPath $artifactDirectory -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "Refusing to inspect linked artifacts: $artifactDirectory"
+            }
+        }
+        # Cargo fingerprints identify test/example units. Never infer disposable
+        # output from an extension alone: ordinary library units stay untouched.
+        foreach ($unit in $fingerprintDirectory.GetDirectories()) {
+            if ($unit.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw "Refusing to inspect a linked fingerprint: $($unit.FullName)"
+            }
+            if ($unit.Name -notmatch '-([0-9a-f]{16})$') { continue }
+            $hash = $Matches[1]
+            foreach ($marker in $unit.GetFiles('*.json')) {
+                if ($marker.Name -notmatch '^(test-(?:lib|bin|integration-test|example)|example)-(.+)\.json$') { continue }
+                $kind = $Matches[1]
+                $binaryName = $Matches[2].Replace('-', '_')
+                $artifactRoot = Join-Path $profile.FullName 'deps'
+                if ($kind -in @('example', 'test-example')) {
+                    $artifactRoot = Join-Path $profile.FullName 'examples'
+                }
+                foreach ($extension in @('.exe', '.pdb', '.d')) {
+                    Add-CleanupPath -Path (Join-Path $artifactRoot ($binaryName + '-' + $hash + $extension))
+                    if ($kind -eq 'example') {
+                        Add-CleanupPath -Path (Join-Path $artifactRoot ($binaryName + $extension))
+                    }
+                }
+                if ($kind -eq 'example') {
+                    Add-CleanupPath -Path (Join-Path $artifactRoot ('lib' + $binaryName + '-' + $hash + '.rmeta'))
+                }
+                Add-CleanupPath -Path $unit.FullName
             }
         }
     }
@@ -88,17 +173,16 @@ try {
             }
             if ($entry.LastWriteTime -ge $temporaryCutoff) { continue }
             if ($entry.PSIsContainer) {
-                $contents = @(Get-ChildItem -LiteralPath $entry.FullName -Recurse -Force)
-                $linked = $contents | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint } | Select-Object -First 1
-                if ($linked) { throw "Refusing to inspect temporary content containing a link: $($linked.FullName)" }
+                $contents = @(Get-UnlinkedTree -Entry $entry)
                 $recent = $contents | Where-Object { $_.LastWriteTime -ge $temporaryCutoff } | Select-Object -First 1
                 if ($recent) { continue }
             }
-            $cleanup.Add($entry)
+            Add-CleanupPath -Path $entry.FullName
         }
     }
 
     # Validate the entire deletion set before removing anything.
+    $plannedBytes = [long]0
     foreach ($entry in $cleanup) {
         $resolved = (Resolve-Path -LiteralPath $entry.FullName).ProviderPath
         if (-not $resolved.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) {
@@ -107,20 +191,32 @@ try {
         if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) {
             throw "Refusing to remove a symbolic link or junction: $resolved"
         }
-        if ($entry.PSIsContainer) {
-            $linked = Get-ChildItem -LiteralPath $resolved -Recurse -Force |
-                Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint } |
-                Select-Object -First 1
-            if ($linked) { throw "Refusing to remove a directory containing a link: $($linked.FullName)" }
+        foreach ($content in Get-UnlinkedTree -Entry $entry) {
+            if ($content -is [IO.FileInfo]) { $plannedBytes += $content.Length }
+        }
+    }
+    # A desktop app may keep running after Cargo finishes building. Preserve it,
+    # and refuse pruning if a selected test/example program is still executing.
+    if ($PruneBuildCache -and $cleanup.Count -gt 0) {
+        foreach ($process in Get-CimInstance Win32_Process) {
+            if (-not $process.ExecutablePath -or
+                -not $process.ExecutablePath.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
+            foreach ($entry in $cleanup) {
+                if ($process.ExecutablePath.Equals($entry.FullName, [StringComparison]::OrdinalIgnoreCase) -or
+                    ($entry.PSIsContainer -and $process.ExecutablePath.StartsWith($entry.FullName.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase))) {
+                    throw "Finish the selected test/example before cleaning: $($process.Name) (PID $($process.ProcessId))"
+                }
+            }
         }
     }
     foreach ($entry in $cleanup) {
-        if ($PSCmdlet.ShouldProcess($entry.FullName, 'Remove expired temporary output')) {
+        if ($PSCmdlet.ShouldProcess($entry.FullName, 'Remove disposable temporary/compiler/test output')) {
             Remove-Item -LiteralPath $entry.FullName -Recurse -Force -ErrorAction Stop
+            if (Test-Path -LiteralPath $entry.FullName) { throw "Cleanup entry still exists: $($entry.FullName)" }
             $removed++
         }
     }
-    Write-Host "Target cleanup: $removed of $($cleanup.Count) expired temporary entries removed. Development/packaging files and reusable build caches retained."
+    Write-Host ("Target cleanup: {0} of {1} entries removed; selected file data: {2:N2} GiB. Desktop binaries, dependency libraries, build output and bundles retained." -f $removed, $cleanup.Count, ($plannedBytes / 1GB))
 } finally {
     foreach ($lock in $locks) { $lock.Dispose() }
 }

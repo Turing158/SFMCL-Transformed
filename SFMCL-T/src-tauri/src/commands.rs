@@ -39,6 +39,7 @@ pub struct Runtime {
     pub community: Arc<Community>,
     pub modpacks: Arc<Modpacks>,
     pub official_notices: sfmcl_t_core::notices::OfficialNotices,
+    pub home_content: sfmcl_t_core::home_content::HomeContentStore,
     pub directory: PathBuf,
 }
 fn version_entries(settings: &Settings, payload: &Value) -> Result<Vec<Value>> {
@@ -120,6 +121,7 @@ impl Runtime {
             community,
             modpacks: Arc::new(Modpacks::default()),
             official_notices,
+            home_content: Default::default(),
             directory,
         })
     }
@@ -209,7 +211,10 @@ pub async fn request(
 }
 async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) -> Result<Value> {
     use tauri::Manager;
-    if app.try_state::<crate::local_data::DataManager>().is_some_and(|manager| manager.executing()) {
+    if app
+        .try_state::<crate::local_data::DataManager>()
+        .is_some_and(|manager| manager.executing())
+    {
         bail!("本地数据操作已开始，启动器即将自动重新打开");
     }
     match op {
@@ -217,18 +222,30 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             json!({"settings":r.settings.get(),"players":r.accounts.list(),"dataDir":r.directory,"defaultDownloadCacheDir":r.directory.join("downloads").join("cache"),"backgroundPath":sfmcl_t_core::notices::background(&r.directory,&r.settings.get()),"version":env!("CARGO_PKG_VERSION"),"localDataResult":app.try_state::<crate::local_data::DataManager>().and_then(|manager| manager.result.clone())}),
         ),
         "local-data.prepare" => {
-            let kind = serde_json::from_value::<sfmcl_t_core::local_data::OperationKind>(p["kind"].clone())?;
+            let kind = serde_json::from_value::<sfmcl_t_core::local_data::OperationKind>(
+                p["kind"].clone(),
+            )?;
             crate::local_data::prepare(&app, &r, kind, PathBuf::from(text(&p, "path")?)).await
         }
         "local-data.execute" => crate::local_data::execute(app, r, text(&p, "id")?).await,
         "local-data.recovery.open" => {
             let manager = app.state::<crate::local_data::DataManager>();
-            let path = manager.result.as_ref().and_then(|result| result.recovery_path.as_ref())
+            let path = manager
+                .result
+                .as_ref()
+                .and_then(|result| result.recovery_path.as_ref())
                 .context("没有可打开的原数据副本")?;
-            if !path.is_dir() { bail!("原数据副本已被移动或删除"); }
-            app.opener().open_path(path.to_string_lossy(), None::<&str>)?;
+            if !path.is_dir() {
+                bail!("原数据副本已被移动或删除");
+            }
+            app.opener()
+                .open_path(path.to_string_lossy(), None::<&str>)?;
             Ok(json!(true))
         }
+        "home.content.get" => Ok(json!(r.home_content.load(&r.directory)?)),
+        "home.content.save" => Ok(json!(r
+            .home_content
+            .save(&r.directory, serde_json::from_value(p.clone())?)?)),
         "notices.list" => Ok(json!(r.official_notices.list()?)),
         "notices.refresh" => Ok(json!(
             r.official_notices

@@ -29,6 +29,8 @@
       "webviewInstallMode": { "type": "skip" },
       "nsis": {
         "languages": ["SimpChinese"],
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
         "installerHooks": "installer/webview2-hooks.nsh"
       }
     }

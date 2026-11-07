@@ -17,7 +17,8 @@ import { Versions } from "./pages/Versions";
 import { Resources } from "./pages/Resources";
 import { Downloads } from "./pages/Downloads";
 import { SettingsPage } from "./pages/Settings";
-import { NoticeActions, Notices, useNotices } from "./Notices";
+import { useNotices } from "./Notices";
+import { HomeContent } from "./HomeContent";
 import { Titlebar } from "./Titlebar";
 import { LaunchDock } from "./LaunchDock";
 import { FavoriteVersions } from "./FavoriteVersions";
@@ -312,14 +313,15 @@ function Home() {
       ref={content}
       className={`home-content ${showContent ? "" : "home-content-clean"}`}
     >
-      <PageHeader
-        icon={<Play />}
-        eyebrow="LET'S PLAY"
-        title={player ? `你好，${player.name}` : "准备好，开启新的冒险"}
-        description={!showContent ? "新的世界，等你出发。" : undefined}
-        action={showContent && <NoticeActions notices={notices} />}
-      />
-      {showContent && <Notices {...notices} layout={s.homeNoticeLayout} />}
+      {!showContent && (
+        <PageHeader
+          icon={<Play />}
+          eyebrow="LET'S PLAY"
+          title={player ? `你好，${player.name}` : "准备好，开启新的冒险"}
+          description={!showContent ? "新的世界，等你出发。" : undefined}
+        />
+      )}
+      {showContent && <HomeContent notices={notices} />}
       {!showContent &&
         !app.data.backgroundPath &&
         ["none", "default"].includes(s.backgroundType) && <HomeLandscape />}

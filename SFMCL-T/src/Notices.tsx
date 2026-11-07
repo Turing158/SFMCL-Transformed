@@ -10,7 +10,6 @@ import ReactMarkdown from "react-markdown";
 import {
   ChevronDown,
   CircleAlert,
-  EyeOff,
   LayoutTemplate,
   Plus,
   RefreshCw,
@@ -32,7 +31,7 @@ import { useTabContentTransition } from "./useTabContentTransition";
 import { AnimatedNoticeList } from "./AnimatedNoticeList";
 import type { HomeNoticeLayout } from "./types";
 import "./notices.css";
-interface Notice {
+export interface Notice {
   title: string;
   content: string;
   icon: string;
@@ -47,7 +46,7 @@ interface NoticeRefresh {
   items: Notice[];
   error: string;
 }
-function noticeKey(item: Notice, index: number) {
+export function noticeKey(item: Notice, index: number) {
   return `notice:${item.id || JSON.stringify([item.source, item.title, index])}`;
 }
 function neighboringControl(button: HTMLButtonElement, selector: string) {
@@ -91,16 +90,12 @@ function NoticeImage({ path, alt }: { path: string; alt: string }) {
   const src = useImage(resolved);
   return src ? <img src={src} alt={alt} loading="lazy" /> : <span>{alt}</span>;
 }
-function NoticePanel({
+export function NoticePanel({
   item,
-  onHide,
-  hiding,
   onDelete,
   deleting,
 }: {
   item: Notice;
-  onHide: (item: Notice) => Promise<boolean>;
-  hiding: boolean;
   onDelete: (item: Notice) => Promise<boolean>;
   deleting: boolean;
 }) {
@@ -108,6 +103,7 @@ function NoticePanel({
   const id = useId();
   const [open, setOpen] = useState(false);
   const [visited, setVisited] = useState(false);
+  const canDelete = !item.preset && !!item.id;
   const [removePreview, setRemovePreview] = useState(false);
   const [removeHovered, setRemoveHovered] = useState(false);
   const [removeFocused, setRemoveFocused] = useState(false);
@@ -148,7 +144,7 @@ function NoticePanel({
       className="panel notice-card has-surface"
       data-open={open}
       onPointerEnter={(event) => {
-        if (event.pointerType === "touch") return;
+        if (!canDelete || event.pointerType === "touch") return;
         clearTimeout(previewTimer.current);
         setRemovePreview(true);
       }}
@@ -160,7 +156,9 @@ function NoticePanel({
       <PixelFrame />
       <header
         className="notice-heading"
-        data-remove-visible={removePreview || removeHovered || removeFocused}
+        data-remove-visible={
+          canDelete && (removePreview || removeHovered || removeFocused)
+        }
       >
         <h3>
           <button
@@ -204,52 +202,50 @@ function NoticePanel({
             />
           </button>
         </h3>
-        <div
-          className="notice-control"
-          onPointerEnter={(event) => {
-            if (event.pointerType !== "touch") setRemoveHovered(true);
-          }}
-          onPointerLeave={() => {
-            stopPreview();
-            setRemoveHovered(false);
-          }}
-        >
-          <div ref={removeMotion} className="notice-remove-motion">
-            <button
-              type="button"
-              className={`icon-button notice-remove ${item.preset ? "notice-hide" : "notice-delete"} has-surface`}
-              aria-label={`${item.preset ? "隐藏" : "删除"}公告：${item.title || "未命名公告"}`}
-              data-tooltip={item.preset ? "隐藏公告" : "删除公告"}
-              disabled={(item.preset ? hiding : deleting) || !item.id}
-              onFocus={(event) =>
-                setRemoveFocused(event.currentTarget.matches(":focus-visible"))
-              }
-              onBlur={() => setRemoveFocused(false)}
-              onClick={(event) => {
-                const next = neighboringControl(
-                  event.currentTarget,
-                  ".notice-toggle",
-                );
-                void (item.preset ? onHide(item) : onDelete(item)).then(
-                  (removed) => {
+        {canDelete && (
+          <div
+            className="notice-control"
+            onPointerEnter={(event) => {
+              if (event.pointerType !== "touch") setRemoveHovered(true);
+            }}
+            onPointerLeave={() => {
+              stopPreview();
+              setRemoveHovered(false);
+            }}
+          >
+            <div ref={removeMotion} className="notice-remove-motion">
+              <button
+                type="button"
+                className="icon-button notice-remove notice-delete has-surface"
+                aria-label={`删除公告：${item.title || "未命名公告"}`}
+                data-tooltip="删除公告"
+                disabled={deleting}
+                onFocus={(event) =>
+                  setRemoveFocused(
+                    event.currentTarget.matches(":focus-visible"),
+                  )
+                }
+                onBlur={() => setRemoveFocused(false)}
+                onClick={(event) => {
+                  const next = neighboringControl(
+                    event.currentTarget,
+                    ".notice-toggle",
+                  );
+                  void onDelete(item).then((removed) => {
                     if (removed)
                       (
                         next ||
                         document.querySelector<HTMLButtonElement>(".notice-add")
                       )?.focus();
-                  },
-                );
-              }}
-            >
-              <PixelFrame />
-              {item.preset ? (
-                <EyeOff size={16} aria-hidden="true" />
-              ) : (
+                  });
+                }}
+              >
+                <PixelFrame />
                 <Trash2 size={16} aria-hidden="true" />
-              )}
-            </button>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </header>
       <div
         className="notice-body"
@@ -299,6 +295,7 @@ function NoticePanel({
 export function useNotices(enabled: boolean) {
   const app = useApp();
   const [items, setItems] = useState<Notice[]>([]);
+  const [catalogReady, setCatalogReady] = useState(false);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(desktop && enabled);
@@ -346,7 +343,10 @@ export function useNotices(enabled: boolean) {
     const preferences = preferenceVersion.current;
     const readItems = api<Notice[]>("notices.list")
       .then((value) => {
-        if (active && version === catalogVersion.current) setItems(value);
+        if (active && version === catalogVersion.current) {
+          setItems(value);
+          setCatalogReady(true);
+        }
       })
       .catch((e) => {
         if (active) setError(String(e));
@@ -422,6 +422,8 @@ export function useNotices(enabled: boolean) {
     [items, hiddenIds],
   );
   return {
+    catalogItems: items,
+    catalogReady: catalogReady && preferencesReady,
     items: visibleItems,
     presetItems,
     error: [error, preferenceError, actionError].filter(Boolean).join(" "),
@@ -507,8 +509,6 @@ export function Notices({
   items,
   error,
   loading,
-  onHide,
-  hiding,
   onDelete,
   deleting,
   layout = "masonry",
@@ -516,8 +516,6 @@ export function Notices({
   items: Notice[];
   error: string;
   loading: boolean;
-  onHide: (item: Notice) => Promise<boolean>;
-  hiding: boolean;
   onDelete: (item: Notice) => Promise<boolean>;
   deleting: boolean;
   layout?: HomeNoticeLayout;
@@ -591,13 +589,7 @@ export function Notices({
       >
         {(item) =>
           item ? (
-            <NoticePanel
-              item={item}
-              onHide={onHide}
-              hiding={hiding}
-              onDelete={onDelete}
-              deleting={deleting}
-            />
+            <NoticePanel item={item} onDelete={onDelete} deleting={deleting} />
           ) : (
             <p className="helper" role="status">
               暂无公告

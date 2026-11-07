@@ -193,14 +193,16 @@ try {
   expect(order.map((title) => title.match(/布局公告 \d/)[0])).toEqual(
     Array.from({ length: 6 }, (_, i) => `布局公告 ${i + 1}`),
   );
+  await page.getByRole("button", { name: "编辑布局", exact: true }).click();
   const hide = notices.getByRole("button", {
-    name: "隐藏公告：布局公告 2",
+    name: "隐藏：布局公告 2",
     exact: true,
   });
   await hide.focus();
   await page.keyboard.press("Enter");
   await expect(toggles).toHaveCount(5);
   await expect(list.locator('[data-notice-phase="exiting"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "完成编辑", exact: true }).click();
   await noOverflow();
   await noOverlaps();
   checks.push(
@@ -252,7 +254,7 @@ try {
   await nav("开始游戏");
   await expect(notices).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "新增公告", exact: true }),
+    page.getByRole("button", { name: "添加组件", exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "刷新公告", exact: true }),

@@ -60,6 +60,9 @@ function onScrollbar(element: HTMLElement, x: number, y: number) {
 }
 
 export function canDragWindowFrom(target: Element, x: number, y: number) {
+  // Keep window dragging within the header regions, away from page content.
+  if (!target.closest(".topbar, .brand")) return false;
+
   for (
     let element: Element | null = target;
     element;

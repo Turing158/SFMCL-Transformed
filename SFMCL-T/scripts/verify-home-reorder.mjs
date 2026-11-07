@@ -160,7 +160,10 @@ try {
 
   for (const layout of ["single", "parallel", "masonry"]) {
     await ready(page, layout);
-    await page.evaluate((key) => localStorage.removeItem(key), preference);
+    await page.evaluate((key) => {
+      localStorage.removeItem(key);
+      localStorage.removeItem("pixel-home-content");
+    }, preference);
     await page.reload();
     await expect(list(page).locator(".notice-toggle")).toHaveCount(8);
     const before = await order(page);

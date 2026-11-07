@@ -28,7 +28,10 @@ import { api, confirmAction, pick } from "../api";
 import { Badge, Button, Empty, ResourceImage, PixelFrame } from "../components";
 import type { Version } from "../types";
 import { versionIcon } from "../versionIcon";
-import { VersionManageDialog } from "../VersionManageDialog";
+import {
+  VersionContextMenu,
+  useVersionContextMenu,
+} from "../VersionContextMenu";
 import { versionPayload } from "../versionActions";
 import { matchesVersionFilter } from "../installOptions";
 import { useVersionViewTransition } from "../useVersionViewTransition";
@@ -69,7 +72,6 @@ export function Versions() {
       /* Keep switching available when webview storage is unavailable. */
     }
   }, [view]);
-  const [detail, setDetail] = useState<Version | null>(null);
   const [importPack, setImportPack] = useState(false);
   const current = app.route;
   const currentVersion = current.detail
@@ -132,6 +134,18 @@ export function Versions() {
     JSON.stringify([
       showAll,
       s.activeDir,
+      items.map((version) => version.path),
+    ]),
+  );
+  const versionMenu = useVersionContextMenu(
+    JSON.stringify([
+      showAll,
+      s.activeDir,
+      view,
+      query,
+      typeFilter,
+      loaderFilter,
+      favoritesOnly,
       items.map((version) => version.path),
     ]),
   );
@@ -430,6 +444,33 @@ export function Versions() {
                   className={`has-surface panel version-card ${selected(v) ? "selected" : ""}`}
                   key={v.path}
                   data-directory={v.directory}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const element =
+                      event.currentTarget.querySelector<HTMLButtonElement>(
+                        ".version-select",
+                      )!;
+                    const rect = element.getBoundingClientRect();
+                    versionMenu.openMenu(
+                      v,
+                      element,
+                      event.clientX || rect.right,
+                      event.clientY || rect.top,
+                    );
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      (event.shiftKey && event.key === "F10") ||
+                      event.key === "ContextMenu"
+                    ) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const element = event.target as HTMLElement;
+                      const rect = element.getBoundingClientRect();
+                      versionMenu.openMenu(v, element, rect.right, rect.top);
+                    }
+                  }}
                 >
                   <PixelFrame />
                   <button
@@ -439,6 +480,8 @@ export function Versions() {
                     data-tooltip={v.id}
                     aria-label={`选择 ${v.id}`}
                     aria-pressed={selected(v)}
+                    aria-haspopup="menu"
+                    aria-expanded={versionMenu.menu?.version.path === v.path}
                     disabled={app.busy || !!v.error}
                     onClick={() => void app.selectVersion(v)}
                   />
@@ -528,7 +571,7 @@ export function Versions() {
                       aria-label={`管理 ${v.id}`}
                       aria-haspopup="dialog"
                       onClick={() => {
-                        setDetail(v);
+                        versionMenu.setManaged(v);
                       }}
                     >
                       <PixelFrame />
@@ -542,13 +585,7 @@ export function Versions() {
           )}
         </VersionDirectoryResults>
       </section>
-      {detail && (
-        <VersionManageDialog
-          key={detail.path}
-          version={detail}
-          onClose={() => setDetail(null)}
-        />
-      )}
+      <VersionContextMenu state={versionMenu} />
       {importPack && (
         <ModpackInstallDialog
           onClose={() => {

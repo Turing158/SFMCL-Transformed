@@ -366,6 +366,15 @@ export function pixelAppFixture({
           });
           return data.players.at(-1);
         case "notices.list":
+          return [];
+        case "home.content.get":
+          return JSON.parse(
+            localStorage.getItem("pixel-home-content") ||
+              '{"schemaVersion":1,"widgets":[{"id":"builtin:notices","type":"notices","visible":true}]}',
+          );
+        case "home.content.save":
+          localStorage.setItem("pixel-home-content", JSON.stringify(payload));
+          return structuredClone(payload);
         case "notices.hidden":
         case "notices.visibility":
         case "notices.create":

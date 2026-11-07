@@ -114,8 +114,7 @@ body[data-notice-dragging="true"] * {
   gap: 8px;
   flex-shrink: 0;
 }
-.notice-add:is(:hover, :focus-visible),
-.notice-hide:is(:hover, :focus-visible):not(:disabled) {
+.notice-add:is(:hover, :focus-visible) {
   --surface-fill: var(--soft);
   --surface-edge: var(--accent);
   color: var(--accent);

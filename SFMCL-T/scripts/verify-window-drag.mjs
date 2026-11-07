@@ -50,8 +50,10 @@ const drag = async (locator) => {
 };
 const noDrag = async (action) => {
   const before = await count();
+  const beforeMaximize = await count("toggle_maximize");
   await action();
   expect(await count()).toBe(before);
+  expect(await count("toggle_maximize")).toBe(beforeMaximize);
 };
 const check = (name) => {
   checks.push(name);
@@ -89,7 +91,7 @@ try {
         .getByRole("button", { name, exact: true })
         .click(),
     );
-    await drag(page.locator(".page h1:visible").first());
+    await noDrag(() => page.locator(".page h1:visible").first().dblclick());
     await drag(page.locator(".topbar-breadcrumb strong[aria-current='page']"));
     const before = await count();
     const workspace = page.locator(".workspace");
@@ -100,11 +102,11 @@ try {
       clientX: bounds.x + 4,
       clientY: bounds.y + 100,
     });
-    expect(await count()).toBe(before + 1);
+    expect(await count()).toBe(before);
   }
-  await drag(page.locator(".workspace-footer-status"));
+  await noDrag(() => page.locator(".workspace-footer-status").dblclick());
   check(
-    "Ordinary page titles, current breadcrumb text, workspace whitespace and footer text drag the window on every main page.",
+    "Page titles, workspace whitespace and footer text do not drag or maximize the window; current breadcrumb text still drags on every main page.",
   );
 
   await noDrag(() => page.locator(".sidebar .profile-button").click());
@@ -180,7 +182,7 @@ try {
   );
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await drag(dialog.locator("h2"));
+  await noDrag(() => dialog.locator("h2").dblclick());
   await expect(dialog).toBeVisible();
   await noDrag(async () => {
     const input = dialog.getByRole("textbox").first();
@@ -206,7 +208,7 @@ try {
       .click(),
   );
   check(
-    "Dialog headings drag the window while fields, close buttons, login choices and breadcrumb navigation retain normal operation.",
+    "Dialog headings do not drag or maximize the window; fields, close buttons, login choices and breadcrumb navigation retain normal operation.",
   );
 
   // Exercise a real native scrollbar target without activating its contents.

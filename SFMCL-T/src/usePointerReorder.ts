@@ -13,6 +13,7 @@ export interface PointerReorderOptions {
   animationPrefix: string;
   holdOnly?: boolean;
   ready?: (row: HTMLElement) => boolean;
+  acceptTarget?: (target: Element, row: HTMLElement) => boolean;
   overlayParent?: (list: HTMLElement) => HTMLElement;
 }
 
@@ -335,6 +336,7 @@ export function usePointerReorder(
         !row ||
         row.parentElement !== list ||
         (options.ready && !options.ready(row)) ||
+        (options.acceptTarget && !options.acceptTarget(event.target, row)) ||
         !latest.current.keys.includes(keyOf(row))
       )
         return;
