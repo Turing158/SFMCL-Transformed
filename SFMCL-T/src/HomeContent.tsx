@@ -65,7 +65,12 @@ const icons: Record<HomeWidgetType, ReactNode> = {
 const links = [
   ["Minecraft 官网", "https://www.minecraft.net/"],
   ["中文 Wiki", "https://zh.minecraft.wiki/"],
+  ["MC 百科", "https://www.mcmod.cn/"],
   ["Modrinth", "https://modrinth.com/"],
+  ["CurseForge", "https://www.curseforge.com/minecraft"],
+  ["NameMC", "https://namemc.com/"],
+  ["LittleSkin", "https://littleskin.cn/"],
+  ["红石中继站", "https://forum.mczwlt.net/"],
 ] as const;
 
 function ContentImage({ path, alt }: { path: string; alt: string }) {
@@ -228,6 +233,26 @@ function FixedWidget({
       <PixelFrame />
       <header className="home-widget-heading">
         <h2>{isPlayer ? "当前角色" : "当前游戏版本"}</h2>
+        {!preview && (
+          <button
+            type="button"
+            className="home-summary-action"
+            aria-describedby={summaryId}
+            data-tooltip={selected ? name : undefined}
+            onClick={() => app.setPage(isPlayer ? "players" : "versions")}
+          >
+            <span>
+              {isPlayer
+                ? player
+                  ? "切换角色"
+                  : "选择角色"
+                : version
+                  ? "管理版本"
+                  : "选择版本"}
+            </span>
+            <ArrowRight size={15} aria-hidden="true" />
+          </button>
+        )}
       </header>
       <div className="home-summary-body" id={summaryId}>
         <div
@@ -260,26 +285,6 @@ function FixedWidget({
           </p>
         </div>
       </div>
-      {!preview && (
-        <button
-          type="button"
-          className="home-summary-action"
-          aria-describedby={summaryId}
-          data-tooltip={selected ? name : undefined}
-          onClick={() => app.setPage(isPlayer ? "players" : "versions")}
-        >
-          <span>
-            {isPlayer
-              ? player
-                ? "切换角色"
-                : "选择角色"
-              : version
-                ? "管理版本"
-                : "选择版本"}
-          </span>
-          <ArrowRight size={15} aria-hidden="true" />
-        </button>
-      )}
     </article>
   );
 }
@@ -460,24 +465,34 @@ export function HomeContent({
         action={
           <div className="notice-actions home-content-actions">
             <Button
-              className="compact"
+              className="compact home-content-action"
               disabled={!content.ready}
+              aria-label={editing ? "完成编辑" : "编辑布局"}
               aria-pressed={editing}
               onClick={() => setEditing((value) => !value)}
             >
-              {editing ? <Check size={16} /> : <SlidersHorizontal size={16} />}
-              {editing ? "完成编辑" : "编辑布局"}
+              {editing ? (
+                <Check size={16} aria-hidden="true" />
+              ) : (
+                <SlidersHorizontal size={16} aria-hidden="true" />
+              )}
+              <span className="home-content-action-label" aria-hidden="true">
+                <span>{editing ? "完成编辑" : "编辑布局"}</span>
+              </span>
             </Button>
             <Button
-              className="compact notice-add"
+              className="compact notice-add home-content-action"
               disabled={!content.ready || content.saving}
+              aria-label="添加组件"
               onClick={() => {
                 setEditing(false);
                 setAdding(true);
               }}
             >
-              <Plus size={16} />
-              添加组件
+              <Plus size={16} aria-hidden="true" />
+              <span className="home-content-action-label" aria-hidden="true">
+                <span>添加组件</span>
+              </span>
             </Button>
             <NoticeRefreshButton
               loading={notices.loading}
