@@ -42,10 +42,17 @@ impl Drop for Surface {
     }
 }
 
-fn distance(x: f64, y: f64, width: f64, height: f64, radius: f64) -> f64 {
-    let dx = (x - width / 2.0).abs() - (width / 2.0 - radius);
-    let dy = (y - height / 2.0).abs() - (height / 2.0 - radius);
-    dx.max(0.0).hypot(dy.max(0.0)) + dx.max(dy).min(0.0) - radius
+fn distance(x: f64, y: f64, width: f64, height: f64, step: f64) -> f64 {
+    // The union of three inset rectangles matches window-corners.css exactly.
+    // Use its outside distance so the shadow follows the two 3px corner steps.
+    let rectangle = |inset_x: f64, inset_y: f64| {
+        let dx = (x - width / 2.0).abs() - (width / 2.0 - inset_x);
+        let dy = (y - height / 2.0).abs() - (height / 2.0 - inset_y);
+        dx.max(0.0).hypot(dy.max(0.0)) + dx.max(dy).min(0.0)
+    };
+    rectangle(2.0 * step, 0.0)
+        .min(rectangle(step, step))
+        .min(rectangle(0.0, 2.0 * step))
 }
 
 impl Surface {
@@ -92,27 +99,27 @@ impl Surface {
         let scale = dpi as f64 / 96.0;
         let content_width = (width - padding * 2) as f64;
         let content_height = (height - padding * 2) as f64;
-        let radius = 12.0 * scale;
+        let step = 3.0 * scale;
         for y in 0..height {
             for x in 0..width {
                 let px = (x - padding) as f64 + 0.5;
                 let py = (y - padding) as f64 + 0.5;
-                if px >= radius
-                    && px <= content_width - radius
-                    && py >= radius
-                    && py <= content_height - radius
+                if px >= 2.0 * step
+                    && px <= content_width - 2.0 * step
+                    && py >= 2.0 * step
+                    && py <= content_height - 2.0 * step
                 {
                     continue;
                 }
-                let edge = distance(px, py, content_width, content_height, radius);
+                let edge = distance(px, py, content_width, content_height, step);
                 // Every painted UI pixel stays clear. Only the outside of the
-                // rounded silhouette receives the ambient and contact shadows.
+                // stepped silhouette receives the ambient and contact shadows.
                 let coverage = (edge + 0.5).clamp(0.0, 1.0);
                 if coverage == 0.0 {
                     continue;
                 }
                 let offset =
-                    distance(px, py - 5.0 * scale, content_width, content_height, radius).max(0.0);
+                    distance(px, py - 5.0 * scale, content_width, content_height, step).max(0.0);
                 let ambient = 0.20 * (-offset.powi(2) / (2.0 * (10.0 * scale).powi(2))).exp();
                 let contact = 0.08 * (-edge.max(0.0).powi(2) / (2.0 * (2.5 * scale).powi(2))).exp();
                 pixels[((y * width + x) as usize) * 4 + 3] =

@@ -566,6 +566,33 @@ try {
   checks.push(
     "A genuinely stalled visible startup still times out into the compact error panel.",
   );
+  // Default home mode measures the launch dock; its shadow wrapper must not
+  // hide the status strip from the scroll-padding calculation.
+  for (const layout of ["single", "parallel", "masonry"]) {
+    const normal = await fresh();
+    await normal.addInitScript((layout) => {
+      window.__pixelTest.data.settings.homeCleanMode = false;
+      window.__pixelTest.data.settings.homeNoticeLayout = layout;
+    }, layout);
+    await normal.goto(url);
+    await ready(normal);
+    await expect(normal.locator(".home-content")).not.toHaveClass(
+      /home-content-clean/,
+    );
+    await expect(
+      normal.locator(".launch-dock-shadow > .launch-dock-main"),
+    ).toBeVisible();
+    const navigation = normal.getByRole("navigation", { name: "主导航" });
+    await navigation.getByRole("button", { name: "设置", exact: true }).click();
+    await navigation
+      .getByRole("button", { name: "开始游戏", exact: true })
+      .click();
+    await expect(normal.locator(".home-content")).toBeVisible();
+    await expect(normal.locator("#startup-screen")).toHaveCount(0);
+  }
+  checks.push(
+    "Normal home starts and survives navigation in single, parallel and masonry layouts with the launch card's shadow wrapper, without a null status-strip measurement.",
+  );
   expect(errors).toEqual([]);
   await writeFile(
     `${evidence}/checks.json`,

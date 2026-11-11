@@ -10,7 +10,17 @@ export function useHomeScrollPadding(showContent: boolean) {
     const page = home?.closest<HTMLElement>("main");
     const card =
       page?.parentElement?.querySelector<HTMLElement>(".launch-dock-main");
-    if (!home || !page || !card || !active || !showContent) {
+    const dock = card?.closest<HTMLElement>(".launch-dock");
+    const status = dock?.querySelector<HTMLElement>(".launch-status");
+    if (
+      !home ||
+      !page ||
+      !card ||
+      !dock ||
+      !status ||
+      !active ||
+      !showContent
+    ) {
       page?.style.removeProperty("--home-scroll-padding");
       return;
     }
@@ -31,8 +41,6 @@ export function useHomeScrollPadding(showContent: boolean) {
     const measure = () => {
       const style = getComputedStyle(page);
       const base = parseFloat(style.getPropertyValue("--page-bottom-padding"));
-      const dock = card.parentElement!;
-      const status = dock.querySelector<HTMLElement>(".launch-status")!;
       const cover = dock.offsetHeight - status.offsetHeight;
       const end = Math.max(
         ...Array.from(
@@ -58,7 +66,7 @@ export function useHomeScrollPadding(showContent: boolean) {
     observer.observe(home);
     // Padding updates must not trigger another viewport measurement.
     observer.observe(page, { box: "border-box" });
-    observer.observe(card.parentElement!, { box: "border-box" });
+    observer.observe(dock, { box: "border-box" });
     return () => {
       observer.disconnect();
       page.style.removeProperty("--home-scroll-padding");

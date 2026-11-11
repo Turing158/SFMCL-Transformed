@@ -30,6 +30,23 @@ export function isActiveLaunch(job: Job, downloads: Download[]) {
   );
 }
 
+export function getHostLaunches(tasks: Tasks): Job[] {
+  return tasks.jobs.filter(
+    (job) => job.launch && isActiveLaunch(job, tasks.downloads),
+  );
+}
+
+export function getHostLaunch(games: Job[], selectedId: string): Job | undefined {
+  const selected = games.find((job) => job.id === selectedId);
+  if (selected) return selected;
+  const running = games.filter((job) => job.launch?.running);
+  return running.length === 1
+    ? running[0]
+    : games.length === 1
+      ? games[0]
+      : undefined;
+}
+
 export function getLaunchTask(
   tasks: Tasks,
   selectedVersion: string,

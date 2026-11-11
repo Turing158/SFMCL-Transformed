@@ -10,6 +10,7 @@ export const pageNames: Record<Page, string> = {
   home: "开始游戏",
   players: "角色管理",
   versions: "版本管理",
+  multiplayer: "联机",
   resources: "资源中心",
   downloads: "下载中心",
   settings: "设置",
@@ -187,9 +188,9 @@ export function entryLabel(entry: NavigationEntry) {
       : entry.login === "yggdrasil"
         ? entry.yggdrasilImport
           ? "外置登录"
-          : "第三方账号登录"
+          : "第三方登录"
         : entry.login === "yggdrasil-oauth"
-          ? "第三方授权登录"
+          ? "LittleSkin登录"
           : "Microsoft 登录";
   if (!entry.detail) return pageNames[entry.page];
   if (entry.detail.kind === "resources" && entry.detail.resource)

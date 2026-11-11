@@ -507,6 +507,21 @@ impl DownloadManager {
         });
         batch.persist()
     }
+    /// Release an ended workflow's partial files while retaining its task history.
+    pub async fn discard_temporary_files(&self, id: &str) -> Result<()> {
+        let Some(batch) = self.batches.lock().await.get(id).cloned() else {
+            return Ok(());
+        };
+        let _op = batch.operation.lock().await;
+        if !batch.snapshot().status.terminal() {
+            bail!("请先结束下载再清理临时文件");
+        }
+        if let Some(task) = batch.task.lock().await.take() {
+            task.await?;
+        }
+        let snapshot = batch.snapshot();
+        tokio::task::spawn_blocking(move || clear_temporary_files(&snapshot)).await?
+    }
     pub async fn clear(&self, id: &str) -> Result<()> {
         let _admission = self.admission.lock().await;
         let batch = self.batch(id).await?;

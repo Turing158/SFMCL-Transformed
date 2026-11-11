@@ -79,6 +79,8 @@ const sample = (time) =>
         cardStyle.borderBottomLeftRadius,
         cardStyle.borderBottomRightRadius,
       ],
+      cornerStep: cardStyle.getPropertyValue("--launch-corner-step").trim(),
+      clip: cardStyle.clipPath,
       statusHeight,
       statusTop: statusBounds.bottom - statusHeight,
       statusBottom: statusBounds.bottom,
@@ -116,7 +118,9 @@ const checkTransition = async (name, direction) => {
     expect(frame.cardHeight).toBeCloseTo(start.cardHeight, 3);
     expect(frame.leftGap).toBeCloseTo(frame.rightGap, 3);
     expect(frame.leftGap).toBeGreaterThanOrEqual(10);
-    expect(frame.radii).toEqual(["12px", "12px", "0px", "0px"]);
+    expect(frame.radii).toEqual(["0px", "0px", "0px", "0px"]);
+    expect(frame.cornerStep).toBe("3px");
+    expect(frame.clip).toMatch(/^polygon\(/);
   }
   expect(direction === 1 ? end.cardBottom : end.cardTop).toBeCloseTo(
     end.statusTop +
@@ -210,7 +214,7 @@ try {
     JSON.stringify({ checks, errors }, null, 2),
   );
   console.log(
-    "PASS Inset launch card slides up/down with square bottom corners; card and page motion remain continuous through reversals and resizing, the bottom status strip stays anchored, and keyboard version selection remains usable.",
+    "PASS Inset launch card slides up/down with 3px pixel-stepped top corners and square bottom corners; card and page motion remain continuous through reversals and resizing, the bottom status strip stays anchored, and keyboard version selection remains usable.",
   );
 } finally {
   await browser.close();

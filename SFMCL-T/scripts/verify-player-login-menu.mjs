@@ -24,7 +24,7 @@ const trigger = ui.getByRole("button", { name: "登录", exact: true });
 const menu = page.getByRole("menu", { name: "登录方式", exact: true });
 const favoriteMenu = page.getByRole("menu", { name: / 的版本操作$/ });
 const comparisons = [];
-const oauthEnabled = process.env.VITE_SFMCL_T_THIRD_PARTY_OAUTH === "true";
+const oauthEnabled = process.env.VITE_SFMCL_T_THIRD_PARTY_OAUTH !== "false";
 const menuLabels = Object.entries(loginMethods)
   .filter(([kind]) => kind !== "yggdrasil-oauth" || oauthEnabled)
   .map(([, label]) => label);
@@ -417,7 +417,7 @@ try {
     await expect(ui).toHaveAttribute("data-login", "yggdrasil-oauth");
     const unavailable = ui.locator(".players-authorization-unavailable");
     await expect(unavailable.getByRole("heading")).toHaveText(
-      "第三方授权登录暂未开放",
+      "LittleSkin登录暂未开放",
     );
     for (const theme of ["light", "dark"]) {
       await page.evaluate(
@@ -427,7 +427,7 @@ try {
       for (const width of [1440, 1024, 768, 375]) {
         await page.setViewportSize({ width, height: 720 });
         const alternative = unavailable.getByRole("button", {
-          name: "使用第三方账号登录",
+          name: "使用第三方登录",
           exact: true,
         });
         await alternative.scrollIntoViewIfNeeded();
@@ -450,7 +450,7 @@ try {
       ),
     ).toEqual([]);
     await unavailable
-      .getByRole("button", { name: "使用第三方账号登录", exact: true })
+      .getByRole("button", { name: "使用第三方登录", exact: true })
       .click();
     await expect(ui).toHaveAttribute("data-login", "yggdrasil");
     await expect(ui.getByLabel("站点账号", { exact: true })).toBeVisible();

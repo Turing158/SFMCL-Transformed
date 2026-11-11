@@ -6,7 +6,6 @@ import { Input } from "../controls";
 import { useApp } from "../store";
 import { usePageActive } from "../PageActivity";
 import { YggdrasilServerSelect } from "./YggdrasilServerSelect";
-import { PlayerLittleSkinLogin } from "./PlayerLittleSkinLogin";
 import { PlayerAuthorizationUnavailable } from "./PlayerAuthorizationUnavailable";
 import { thirdPartyOAuthEnabled } from "../playerLoginAvailability";
 import { isLittleSkinServer, yggdrasilServerLabel } from "../yggdrasilDrop";
@@ -14,19 +13,13 @@ import type { YggdrasilLogin as Login } from "../types";
 
 export function PlayerYggdrasilLogin({
   importedServer,
-  method: requestedMethod = "password",
+  method = "password",
 }: {
   importedServer?: string;
   method?: "password" | "browser";
 }) {
   const app = useApp();
   const pageActive = usePageActive();
-  const method =
-    importedServer &&
-    isLittleSkinServer(importedServer) &&
-    thirdPartyOAuthEnabled
-      ? "browser"
-      : requestedMethod;
   const [server, setServer] = useState(importedServer ?? "");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -132,36 +125,7 @@ export function PlayerYggdrasilLogin({
             </Button>
           </div>
         ) : method === "browser" ? (
-          thirdPartyOAuthEnabled ? (
-            <PlayerLittleSkinLogin
-              autoStart={!!importedServer}
-              onAuthorized={async (value) => {
-                const attempt = generation.current;
-                if (!visible.current) {
-                  discard(value.sessionId);
-                  return;
-                }
-                session.current = value.sessionId;
-                setLogin(value);
-                if (value.profiles.length === 1) {
-                  running.current = true;
-                  setSaving(true);
-                  try {
-                    await complete(value, value.profiles[0].id, attempt);
-                  } catch (e) {
-                    if (generation.current === attempt) setError(String(e));
-                  } finally {
-                    if (generation.current === attempt) {
-                      running.current = false;
-                      setSaving(false);
-                    }
-                  }
-                }
-              }}
-            />
-          ) : (
-            <PlayerAuthorizationUnavailable />
-          )
+          <PlayerAuthorizationUnavailable />
         ) : (
           <form
             className="players-yggdrasil-form"

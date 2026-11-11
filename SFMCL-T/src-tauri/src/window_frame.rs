@@ -39,7 +39,7 @@ fn preserve_viewport(window: &tauri::WebviewWindow, saved: Viewport) -> tauri::R
 fn rendering(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     use windows_sys::Win32::Graphics::Dwm::{
         DwmSetWindowAttribute, DWMNCRP_ENABLED, DWMWA_BORDER_COLOR, DWMWA_NCRENDERING_POLICY,
-        DWMWA_TRANSITIONS_FORCEDISABLED, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+        DWMWA_TRANSITIONS_FORCEDISABLED, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
     };
     let hwnd = window.hwnd()?.0 as _;
     // Tao retains WS_CAPTION for native window behavior even without decorations.
@@ -63,7 +63,7 @@ fn rendering(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     }
     let disabled = 1_i32;
     let no_border = 0xfffffffe_u32;
-    let corners = DWMWCP_ROUND;
+    let corners = DWMWCP_DONOTROUND;
     unsafe {
         // Use the app's animation instead of a second Windows restore animation.
         DwmSetWindowAttribute(
@@ -79,9 +79,8 @@ fn rendering(window: &tauri::WebviewWindow) -> tauri::Result<()> {
             &no_border as *const _ as _,
             4,
         );
-        // Tao couples corners to the shadow flag. Retain native rounding when
-        // the shadow is hidden so the CSS animation can hand its corners back
-        // without a square frame between the frontend and native updates.
+        // CSS owns the pixel-stepped silhouette, including during animation.
+        // Native rounding would trim its square steps into smooth arcs.
         DwmSetWindowAttribute(
             hwnd,
             DWMWA_WINDOW_CORNER_PREFERENCE as u32,

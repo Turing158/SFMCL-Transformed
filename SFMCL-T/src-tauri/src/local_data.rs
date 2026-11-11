@@ -78,6 +78,9 @@ impl DataManager {
 }
 
 async fn ensure_idle(runtime: &Runtime) -> Result<()> {
+    if runtime.multiplayer.active() {
+        bail!("请先结束联机，再操作本地数据");
+    }
     let active_downloads = runtime.downloads.snapshots().await.iter().any(|download| {
         matches!(
             download.status,
@@ -155,6 +158,7 @@ pub async fn execute(
         bail!("本地数据操作已开始");
     }
     let result = async {
+        runtime.multiplayer.begin_maintenance()?;
         ensure_idle(&runtime).await?;
         data::validate_destination(&runtime.directory, &operation.path, operation.kind)?;
         // The frontend flushed edits; persist even a fresh profile's default settings.
@@ -207,6 +211,7 @@ pub async fn execute(
     }
     .await;
     if result.is_err() {
+        runtime.multiplayer.end_maintenance();
         manager.executing.store(false, Ordering::Release);
     }
     result

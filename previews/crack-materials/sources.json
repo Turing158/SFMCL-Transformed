@@ -1,0 +1,133 @@
+{
+  "index": "https://honghemc.cn/textures_list.json?v=263",
+  "reference": "https://honghemc.cn/app/index.html?ver=26.3",
+  "sourcePage": "https://honghemc.cn/app/textures.html",
+  "files": [
+    {
+      "file": "destroy_stage_0.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_0.png",
+      "bytes": 5750,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_1.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_1.png",
+      "bytes": 5782,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_2.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_2.png",
+      "bytes": 5813,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_3.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_3.png",
+      "bytes": 5855,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_4.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_4.png",
+      "bytes": 5910,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_5.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_5.png",
+      "bytes": 5976,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_6.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_6.png",
+      "bytes": 6002,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_7.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_7.png",
+      "bytes": 6108,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_8.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_8.png",
+      "bytes": 6205,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_stage_9.png",
+      "url": "https://honghemc.cn/textures/destroy_stage_9.png",
+      "bytes": 6209,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_0.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_0.png",
+      "bytes": 5771,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_1.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_1.png",
+      "bytes": 5778,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_2.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_2.png",
+      "bytes": 5816,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_3.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_3.png",
+      "bytes": 5849,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_4.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_4.png",
+      "bytes": 5888,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_5.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_5.png",
+      "bytes": 5958,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_6.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_6.png",
+      "bytes": 6004,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_7.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_7.png",
+      "bytes": 6088,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_8.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_8.png",
+      "bytes": 6159,
+      "type": "image/png"
+    },
+    {
+      "file": "destroy_oit_stage_9.png",
+      "url": "https://honghemc.cn/textures/destroy_oit_stage_9.png",
+      "bytes": 6173,
+      "type": "image/png"
+    },
+    {
+      "file": "stone.png",
+      "url": "https://honghemc.cn/textures/stone.png",
+      "bytes": 3559,
+      "type": "image/png"
+    }
+  ]
+}

@@ -209,12 +209,19 @@
 .version-card:has(.version-select:disabled) .version-kind {
   cursor: default;
 }
+.version-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-width: 0;
+}
 .version-actions {
   display: flex;
   align-items: center;
   gap: 7px;
-  grid-column: 2;
-  grid-row: 3;
   position: static;
 }
 .version-actions .icon-button {
@@ -226,11 +233,6 @@
   position: relative;
   z-index: 2;
 }
-.version-actions .version-favorite {
-  position: absolute;
-  top: 25px;
-  left: 80px;
-}
 .version-favorite[aria-pressed="true"] {
   color: var(--accent);
 }
@@ -238,8 +240,6 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  grid-column: 1;
-  grid-row: 3;
   font-size: 10px;
   color: var(--accent);
   white-space: nowrap;
@@ -308,6 +308,9 @@
 .version-list .version-kind {
   position: static;
 }
+.version-list .version-controls {
+  display: contents;
+}
 .version-list .version-selection {
   grid-column: 3;
   grid-row: 1;
@@ -315,11 +318,6 @@
 .version-list .version-actions {
   grid-column: 4;
   grid-row: 1;
-}
-.versions-local .version-list .version-favorite {
-  position: relative;
-  top: auto;
-  left: auto;
 }
 
 /* Keep the folder and path stable while the frame fades into view. */

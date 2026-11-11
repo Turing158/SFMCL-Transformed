@@ -6,7 +6,7 @@ import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { playersFixture } from "./fixtures/players.mjs";
 
 const evidence = runtimePath("yggdrasil-login");
-const oauthEnabled = process.env.VITE_SFMCL_T_THIRD_PARTY_OAUTH === "true";
+const oauthEnabled = process.env.VITE_SFMCL_T_THIRD_PARTY_OAUTH !== "false";
 await mkdir(evidence, { recursive: true });
 const browser = await chromium.launch({
   ...(process.platform === "win32" ? { channel: "msedge" } : {}),
@@ -173,13 +173,13 @@ try {
   await expect(ui).toHaveAttribute("data-login", "yggdrasil");
   await expect(form.getByRole("tab")).toHaveCount(0);
   await expect(
-    ui.getByRole("heading", { name: "第三方账号登录", level: 1 }),
+    ui.getByRole("heading", { name: "第三方登录", level: 1 }),
   ).toBeVisible();
   await expect(ui.locator(".players-login-actions")).toHaveCount(0);
   await expect(form.locator(".players-littleskin-form")).toHaveCount(0);
   await expect(
     page.getByRole("navigation", { name: "页面路径" }).locator("strong"),
-  ).toHaveText("第三方账号登录");
+  ).toHaveText("第三方登录");
   await expect(form.locator(".players-login-intro")).toHaveCount(0);
   await expect(
     form.getByText("填写站点提供的 API 地址，或支持自动发现的站点网址。", {
@@ -495,19 +495,22 @@ try {
   await enter();
   if (oauthEnabled) {
     await enterAuthorization();
-    const startOAuth = () =>
-      form
-        .getByRole("button", { name: /(?:使用|重新授权) LittleSkin/ })
-        .click();
+    const startOAuth = async () => {
+      const button = form.getByRole("button", {
+        name: /(?:使用|重新授权) LittleSkin/,
+      });
+      // Entering the route starts OAuth automatically; cancelled/failed attempts are manual.
+      if (await button.isVisible()) await button.click();
+    };
     await expect(ui).toHaveAttribute("data-login", "yggdrasil-oauth");
     await expect(
-      ui.getByRole("heading", { name: "第三方授权登录", level: 1 }),
+      ui.getByRole("heading", { name: "LittleSkin登录", level: 1 }),
     ).toBeVisible();
     await expect(
       page.getByRole("navigation", { name: "页面路径" }).locator("strong"),
-    ).toHaveText("第三方授权登录");
+    ).toHaveText("LittleSkin登录");
     await expect(ui.locator("#players-collection-title")).toHaveText(
-      "第三方授权登录",
+      "LittleSkin登录",
     );
     await expect(ui.locator(".players-login-actions")).toHaveCount(0);
     await expect(form.getByRole("tab")).toHaveCount(0);
@@ -524,8 +527,8 @@ try {
     ).not.toHaveProperty("littleskinClientId");
     await page.locator(".sidebar .profile-button").click();
     await enter();
-    await enterAuthorization();
     await page.evaluate(() => (window.__pixelTest.failBrowser = true));
+    await enterAuthorization();
     await startOAuth();
     await expect(
       form.getByRole("button", { name: "复制授权码 ABCD-EFGH" }),
@@ -616,12 +619,12 @@ try {
     await expect(server).toBeVisible();
     await expect(form.getByLabel("站点账号", { exact: true })).toHaveValue("");
     expect(await count("players.yggdrasil.select")).toBe(beforeStale);
-    await enterAuthorization();
     await page.evaluate(
       () => (window.__pixelTest.delays["players.yggdrasil.oauth.begin"] = 500),
     );
     const waitsBefore = await count("players.yggdrasil.oauth.wait");
     const beginsBefore = await count("players.yggdrasil.oauth.begin");
+    await enterAuthorization();
     await startOAuth();
     await expect
       .poll(() => count("players.yggdrasil.oauth.begin"))
@@ -882,7 +885,7 @@ try {
   await page.getByRole("button", { name: "返回上一级", exact: true }).click();
   await expect(ui).not.toHaveAttribute("data-login");
   await enter();
-  await expect(breadcrumb).toHaveText("第三方账号登录");
+  await expect(breadcrumb).toHaveText("第三方登录");
   await expect(form.getByRole("tab")).toHaveCount(0);
   await expect(server).toHaveValue("");
   const beforeNativeOAuth = await count("players.yggdrasil.oauth.begin");

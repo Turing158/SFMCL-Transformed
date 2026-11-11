@@ -1,0 +1,266 @@
+.downloads-page > .page-heading {
+  min-height: 68px;
+}
+.download-mining {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.download-mine-copy {
+  width: 92px;
+  text-align: right;
+}
+.download-mine-copy strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+}
+.download-mine-copy strong::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-right: 5px;
+  background: var(--muted);
+  vertical-align: middle;
+}
+.download-mining:is([data-state="running"], [data-state="done"])
+  strong::before {
+  background: var(--accent);
+}
+.download-mining[data-state="failed"] strong::before {
+  background: var(--danger);
+}
+.download-mine-copy small {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  line-height: 1.8;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.download-mine-viewport {
+  width: 178px;
+  height: 64px;
+  flex-shrink: 0;
+}
+.download-mine-scene {
+  position: relative;
+  width: 178px;
+  height: 64px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.download-mine-scene img {
+  position: absolute;
+  display: block;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+.download-mine-ground {
+  position: absolute;
+  left: 17px;
+  right: 11px;
+  bottom: 7px;
+  height: 2px;
+  background: var(--line);
+}
+.download-mine-ground::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform: scaleX(var(--mine-progress));
+  transform-origin: left;
+  opacity: 0.75;
+  transition: opacity 220ms ease;
+}
+.download-mine-scene[data-unknown="true"] .download-mine-ground::before {
+  opacity: 0;
+}
+.download-mine-scene[data-visual="idle"] .download-mine-ground::before {
+  opacity: 0;
+}
+.download-mine-grass {
+  position: absolute;
+  left: 23px;
+  bottom: 9px;
+  width: 3px;
+  height: 6px;
+  background: color-mix(in srgb, var(--accent) 35%, var(--bg));
+  box-shadow:
+    4px 2px 0 -1px var(--accent),
+    -4px 2px 0 -1px var(--line);
+}
+.download-mine-queue,
+.download-mine-rest-queue {
+  position: absolute;
+  left: 96px;
+  bottom: 10px;
+  width: 36px;
+  height: 36px;
+  transition: opacity 220ms ease;
+}
+.download-mine-rest-queue {
+  opacity: 0;
+  z-index: 4;
+}
+.download-mine-rest-queue img {
+  inset: 0;
+  width: 36px;
+  height: 36px;
+}
+.download-mine-scene[data-visual="idle"] .download-mine-queue {
+  opacity: 0;
+}
+.download-mine-scene[data-visual="idle"] .download-mine-rest-queue {
+  opacity: 1;
+}
+.download-mine-block {
+  position: absolute;
+  inset: 0;
+  width: 36px;
+  height: 36px;
+}
+.download-mine-block > img,
+.download-mine-chip img {
+  inset: 0;
+  width: 36px;
+  height: 36px;
+}
+.download-mine-cracks {
+  opacity: 0;
+}
+.download-mine-chip .download-mine-cracks {
+  opacity: 1;
+}
+.download-mine-chip {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+.download-mine-chip:nth-of-type(1) {
+  clip-path: inset(0 50% 50% 0);
+}
+.download-mine-chip:nth-of-type(2) {
+  clip-path: inset(0 0 50% 50%);
+}
+.download-mine-chip:nth-of-type(3) {
+  clip-path: inset(50% 50% 0 0);
+}
+.download-mine-chip:nth-of-type(4) {
+  clip-path: inset(50% 0 0 50%);
+}
+.download-mine-block[data-breaking="true"] > img {
+  visibility: hidden;
+}
+.download-mine-block[data-breaking="true"] > .download-mine-chip {
+  display: block;
+}
+.download-mine-pick {
+  position: absolute;
+  left: 61px;
+  top: 10px;
+  width: 38px;
+  height: 38px;
+  z-index: 5;
+  transform: rotate(-16deg);
+  transform-origin: 20% 90%;
+}
+.download-mine-idle-effects {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.download-mine-shadow {
+  position: absolute;
+  left: 67px;
+  top: 51.5px;
+  width: 24px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+}
+.download-mine-spark {
+  position: absolute;
+  left: 78.5px;
+  top: 27.5px;
+  width: 3px;
+  height: 3px;
+  color: color-mix(in srgb, #4cbbab 65%, var(--accent));
+  opacity: 0;
+}
+.download-mine-spark::before,
+.download-mine-spark::after {
+  content: "";
+  position: absolute;
+  background: currentColor;
+}
+.download-mine-spark::before {
+  left: 1px;
+  width: 1px;
+  height: 3px;
+}
+.download-mine-spark::after {
+  top: 1px;
+  width: 3px;
+  height: 1px;
+}
+.download-mine-pick img {
+  inset: 0;
+  width: 38px;
+  height: 38px;
+  /* The bitmap handle runs from bottom left to top right through its center. */
+  transform-origin: 50% 50%;
+  backface-visibility: visible;
+}
+.download-mine-diamond {
+  width: 28px;
+  height: 28px;
+  left: 100px;
+  bottom: 12px;
+  opacity: 0;
+  z-index: 6;
+  transition: opacity 120ms ease;
+}
+.download-mine-diamond.two {
+  width: 19px;
+  height: 19px;
+  left: 115px;
+  bottom: 10px;
+}
+@media (max-width: 1050px) {
+  .download-mine-copy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+@media (max-width: 650px) {
+  .downloads-page > .page-heading {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+  }
+  .download-mine-viewport {
+    width: 100px;
+  }
+  .download-mine-scene {
+    transform: scale(0.56);
+    transform-origin: left center;
+  }
+  .downloads-page > .page-heading .page-title-edition {
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+  .downloads-page > .page-heading .page-title {
+    gap: 8px;
+  }
+}

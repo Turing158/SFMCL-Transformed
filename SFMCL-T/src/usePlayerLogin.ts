@@ -110,11 +110,9 @@ export function usePlayerLogin(active: boolean) {
         if (token !== attempt.current) return;
         try {
           await external(result.verificationUri);
-        } catch (e) {
+        } catch {
           if (token === attempt.current)
-            setBrowserError(
-              `无法打开浏览器，请重试或复制授权链接后手动访问。${String(e)}`,
-            );
+            setBrowserError("无法打开浏览器，请复制授权链接。");
         }
       } catch (e) {
         if (token === attempt.current) {
@@ -189,11 +187,9 @@ export function usePlayerLogin(active: boolean) {
     try {
       await external(login.verificationUri);
       if (token === attempt.current) setBrowserError("");
-    } catch (e) {
+    } catch {
       if (token === attempt.current)
-        setBrowserError(
-          `无法打开浏览器，可复制授权链接后手动访问。${String(e)}`,
-        );
+        setBrowserError("无法打开浏览器，请复制授权链接。");
     }
   };
   const baseSteps: Step[] = job?.steps.length

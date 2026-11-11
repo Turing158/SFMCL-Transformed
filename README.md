@@ -44,6 +44,8 @@ SFMCL-T 是 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-
 
 ## 快速上手
 
+「联机」入口位于「版本管理」下方，房主填写房间名称和游戏端口后创建。「联机方式」默认选择「Cloudflare Tunnel + 本机EasyTier」，自动启动本机 EasyTier 与 Cloudflare 临时隧道，将 WSS 入口写入完整邀请码；选择「共享EasyTier节点」后，选择框收窄到右侧，左侧输入框用于填写指定的 EasyTier TCP / UDP 节点。好友粘贴邀请码即可加入。采用免虚拟网卡代理，组件按需下载、校验；关闭房间时释放本实例网络进程。Cloudflare 临时服务的可用性和联机延迟受网络影响，跨网络双机和实际游戏进世界仍需验收。使用方式与验证范围见 [联机说明](docs/multiplayer.md)。
+
 **1. 启动应用**
 
 使用已构建的 Windows x64 / x86 程序。x64 版适用于 Windows 10 / 11 64 位系统；x86 版适用于 Windows 10 32 位系统，也可在 64 位 Windows 上运行：
@@ -57,11 +59,11 @@ SFMCL-T 是 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-
 
 **2. 添加角色与游戏版本**
 
-在「角色管理」点击「登录」，从展开的列表中选择离线登录、Microsoft 登录、第三方账号登录或第三方授权登录。进入登录页面后，可通过顶部返回按钮回到角色管理。随后在「版本管理」添加游戏所在的外层文件夹，安装 Minecraft 与需要的加载器。
+在「角色管理」点击「登录」，从展开的列表中选择离线登录、Microsoft 登录、LittleSkin登录或第三方登录。进入登录页面后，可通过顶部返回按钮回到角色管理。随后在「版本管理」添加游戏所在的外层文件夹，安装 Minecraft 与需要的加载器。
 
-第三方账号可在「角色管理 → 登录 → 第三方账号登录」填写验证服务器地址、站点账号和密码，例如 `https://littleskin.cn/api/yggdrasil`。支持兼容 authlib-injector 的 Yggdrasil API，以及通过 `X-Authlib-Injector-API-Location` 自动发现 API 的站点网址；Blessing Skin 站点须安装相应 Yggdrasil 插件。远程服务使用 HTTPS，本机测试服务可使用 HTTP。
+第三方账号可在「角色管理 → 登录 → 第三方登录」填写验证服务器地址、站点账号和密码，例如 `https://littleskin.cn/api/yggdrasil`。支持兼容 authlib-injector 的 Yggdrasil API，以及通过 `X-Authlib-Injector-API-Location` 自动发现 API 的站点网址；Blessing Skin 站点须安装相应 Yggdrasil 插件。远程服务使用 HTTPS，本机测试服务可使用 HTTP。
 
-LittleSkin 也可在「角色管理 → 登录 → 第三方授权登录」通过 OAuth 设备代码流登录。启动器显示授权码并打开浏览器，授权后自动读取角色列表，单角色自动添加，多角色由用户选择。支持取消、拒绝、过期重试和轮询降速；切换登录方式或离开页面会取消未完成的授权。OAuth 访问令牌、刷新令牌与 Minecraft 令牌均由 Rust 后端处理并使用 DPAPI 加密保存，前端不接收这些凭据。刷新角色或启动游戏时会续期 OAuth 授权并获取 Minecraft 令牌。
+LittleSkin登录默认开放，可在「角色管理 → 登录 → LittleSkin登录」通过 OAuth 设备代码流登录。启动器显示授权码并打开浏览器，授权后自动读取角色列表，单角色自动添加，多角色由用户选择。支持取消、拒绝、过期重试和轮询降速；切换登录方式或离开页面会取消未完成的授权。OAuth 访问令牌、刷新令牌与 Minecraft 令牌均由 Rust 后端处理并使用 DPAPI 加密保存，前端不接收这些凭据。刷新角色或启动游戏时会续期 OAuth 授权并获取 Minecraft 令牌。
 
 也可以把皮肤站的「Yggdrasil 外置登录」卡片链接拖到启动器任意位置。拖入时显示与整合包导入一致的全窗口占位，松开后进入独立的「外置登录」子页面，显示导入站点和对应登录内容。支持 `authlib-injector:yggdrasil-server:` 拖拽协议；LittleSkin 自动进入浏览器授权，其他站点继续填写账号密码。卡片仅包含服务器配置，仍需完成账号验证。Windows 使用原生 OLE 接收网页卡片，同时保留整合包文件/目录拖入。
 
@@ -270,7 +272,7 @@ Microsoft Client ID 的默认值可通过 `SFMCL_T_MICROSOFT_CLIENT_ID` 设置�
 
 LittleSkin OAuth 的 Client ID 由 Rust 后端自动读取 `%LOCALAPPDATA%/SFMCL-T/service-credentials/littleskin.dat`，使用 Windows DPAPI 加密保存，供当前用户的开发版和安装版共用。该文件与其他渠道凭据位于同一专用目录，不进入源码、普通设置或前端数据；Git 已忽略凭据目录、文件及临时副本。用户无需填写 Client ID，也不需要 Client Secret。应用必须先按 [LittleSkin 设备代码流文档](https://manual.littlesk.in/advanced/oauth2/device-authorization-grant) 注册并获批白名单，回调地址为 `https://open.littleskin.cn/oauth/callback`，申请范围为 `Yggdrasil.PlayerProfiles.Read Yggdrasil.MinecraftToken.Create offline_access`。本实现由启动器选择角色，不申请与读取权限冲突的 `Yggdrasil.PlayerProfiles.Select`。测试模式只允许应用创建者授权，公开使用前需申请解除测试模式。
 
-协议按 [OAuth for Yggdrasil](https://manual.littlesk.in/feature/oauth-for-yggdrasil) 和官方 OpenAPI 实现；角色集合使用 OpenAPI 中的 `sessionserver/session/minecraft/profiles`（复数）路径。`npm run test:yggdrasil` 覆盖密码和 OAuth 界面流程；Rust 测试使用本机模拟服务覆盖授权、轮询、取消、角色绑定、令牌轮换与加密持久化。真实 LittleSkin 授权需要有效的白名单 Client ID 和用户在浏览器中的操作。
+协议按 [OAuth for Yggdrasil](https://manual.littlesk.in/feature/oauth-for-yggdrasil) 并结合线上接口实现；角色集合使用线上部署的 `sessionserver/session/minecraft/profile`（单数）路径，OpenAPI 文档中的复数 `/profiles` 路径目前返回 HTTP 404。接口错误会注明失败步骤和 HTTP 状态，已知 OAuth 错误还会显示错误码；不会输出服务端可能包含凭据的原始错误文本。`npm run test:yggdrasil` 覆盖密码和 OAuth 界面流程；Rust 测试使用本机模拟服务覆盖授权、轮询、取消、角色绑定、令牌轮换与加密持久化，并模拟线上对复数路径的 404 响应。真实 LittleSkin 授权需要有效的白名单 Client ID 和用户在浏览器中的操作。
 
 CurseForge API Key 由 Rust 后端读取。开发环境可通过 `SFMCL_T_CURSEFORGE_API_KEY` 提供，或从本机的旧版 StarFallMCL 项目导入：
 

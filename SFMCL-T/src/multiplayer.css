@@ -1,0 +1,596 @@
+.multiplayer-page {
+  container: multiplayer / inline-size;
+  min-width: 0;
+  --multiplayer-muted: color-mix(in srgb, var(--ink) 78%, var(--panel));
+  --multiplayer-motion-easing: cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.multiplayer-page p {
+  margin: 0;
+  line-height: 1.65;
+}
+.multiplayer-page :is(h2, h3) {
+  margin: 0;
+  line-height: 1.5;
+}
+.multiplayer-page h2 {
+  font-size: 16px;
+}
+.multiplayer-page h3 {
+  font-size: 13px;
+}
+.multiplayer-page :is(p, small) {
+  color: var(--multiplayer-muted);
+}
+.multiplayer-page :is(button, input) {
+  min-height: 44px;
+}
+.multiplayer-page button {
+  cursor: pointer;
+  transition:
+    --surface-depth 220ms var(--multiplayer-motion-easing),
+    transform 220ms var(--multiplayer-motion-easing),
+    scale 220ms var(--multiplayer-motion-easing),
+    filter 220ms ease,
+    color 220ms ease,
+    opacity 220ms ease,
+    outline-color 180ms ease,
+    outline-offset 220ms var(--multiplayer-motion-easing);
+}
+.multiplayer-page
+  :is(button, input, textarea):not([type="hidden"], [role="tab"]) {
+  animation: multiplayer-control-in 320ms var(--multiplayer-motion-easing);
+}
+.multiplayer-page button:is(:hover, :focus-visible):not(:disabled) {
+  transform: translateY(-3px);
+  filter: drop-shadow(
+    0 4px 0 color-mix(in srgb, var(--accent), transparent 82%)
+  );
+}
+.multiplayer-page button:active:not(:disabled) {
+  --surface-depth: 0px;
+  transform: translateY(1px);
+  scale: 0.97;
+  transition-duration: 90ms;
+}
+.multiplayer-page button:disabled {
+  cursor: not-allowed;
+  transform: none;
+  scale: 1;
+  filter: none;
+}
+.multiplayer-page button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.multiplayer-page
+  button:is(:hover, :focus-visible):not(:disabled)
+  > svg:not(.pixel-icon, .spin) {
+  transform: translateY(-1px) rotate(-6deg) scale(1.1);
+}
+.multiplayer-page button > svg:not(.pixel-icon, .spin),
+.multiplayer-page .tab-content > svg {
+  transition: transform 220ms var(--multiplayer-motion-easing);
+}
+.multiplayer-page
+  button:is(:hover, :focus-visible):not(:disabled)
+  > .lucide-arrow-right {
+  transform: translateX(3px);
+}
+.multiplayer-page button:active:not(:disabled) > svg:not(.pixel-icon, .spin) {
+  transform: scale(0.94);
+}
+.multiplayer-page :is(.pixel-input, .pixel-select-trigger) {
+  transition:
+    --pixel-field-border 220ms ease,
+    transform 240ms var(--multiplayer-motion-easing),
+    scale 240ms var(--multiplayer-motion-easing),
+    filter 220ms ease,
+    color 220ms ease,
+    opacity 220ms ease;
+}
+.multiplayer-page
+  :is(.pixel-input, .pixel-select-trigger):hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: drop-shadow(2px 3px 0 var(--pixel-shadow));
+}
+.multiplayer-page
+  :is(.pixel-input, .pixel-select-trigger):is(
+    :focus,
+    [aria-expanded="true"]
+  ):not(:disabled) {
+  transform: translateY(-2px);
+  filter: drop-shadow(2px 3px 0 var(--pixel-shadow))
+    drop-shadow(0 2px 0 var(--accent))
+    drop-shadow(0 0 5px color-mix(in srgb, var(--accent), transparent 75%));
+}
+.multiplayer-page .pixel-input:focus:not(:disabled) {
+  animation:
+    multiplayer-control-in 320ms var(--multiplayer-motion-easing),
+    multiplayer-field-focus 280ms var(--multiplayer-motion-easing);
+}
+.multiplayer-page .pixel-select-trigger:active:not(:disabled) {
+  transform: translateY(1px);
+  scale: 0.98;
+  transition-duration: 90ms;
+}
+.multiplayer-page :is(.pixel-input, .pixel-select-trigger):disabled {
+  transform: none;
+  scale: 1;
+  filter: none;
+}
+.multiplayer-page .pixel-input::placeholder {
+  transition: opacity 180ms ease;
+}
+.multiplayer-page .pixel-input:focus::placeholder {
+  opacity: 0.55;
+}
+/* Keep the tab hitboxes and sliding indicator aligned; animate their contents. */
+.multiplayer-page .tab-items > button,
+.multiplayer-page .tab-items > button:is(:hover, :focus-visible, :active) {
+  transform: none;
+  scale: none;
+  filter: none;
+}
+.multiplayer-page .tab-content {
+  animation: multiplayer-control-in 320ms var(--multiplayer-motion-easing);
+  transition:
+    transform 220ms var(--multiplayer-motion-easing),
+    scale 220ms var(--multiplayer-motion-easing);
+}
+.multiplayer-page
+  .tab-items
+  > button:is(:hover, :focus-visible):not(:disabled)
+  .tab-content {
+  transform: translateY(-2px);
+}
+.multiplayer-page .tab-items > button:active:not(:disabled) .tab-content {
+  transform: translateY(1px);
+  scale: 0.97;
+  transition-duration: 90ms;
+}
+.multiplayer-page .tab-items > button[aria-selected="true"] .tab-content {
+  animation:
+    multiplayer-control-in 320ms var(--multiplayer-motion-easing),
+    multiplayer-field-focus 280ms var(--multiplayer-motion-easing);
+}
+.multiplayer-page .pixel-select-value.is-changing {
+  animation: multiplayer-control-in 240ms var(--multiplayer-motion-easing);
+}
+@keyframes multiplayer-control-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+@keyframes multiplayer-field-focus {
+  0% {
+    scale: 0.985;
+  }
+  55% {
+    scale: 1.015;
+  }
+  100% {
+    scale: 1;
+  }
+}
+.multiplayer-edition {
+  letter-spacing: 1.2px;
+  flex-shrink: 0;
+}
+.multiplayer-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  margin-bottom: 22px;
+  --surface-fill: var(--soft);
+}
+.multiplayer-notice > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.multiplayer-game + .multiplayer-notice {
+  margin: 22px 0 0;
+}
+.multiplayer-notice > div {
+  flex: 1;
+  min-width: 0;
+}
+.multiplayer-notice strong {
+  font-size: 13px;
+}
+.multiplayer-notice small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+.multiplayer-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--danger);
+  margin: 0 0 20px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.multiplayer-session-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.multiplayer-session-heading h2 {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.multiplayer-world {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent);
+  padding: 18px 0;
+}
+.multiplayer-address {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 0;
+  border-block: 1px solid var(--line);
+}
+.multiplayer-address code {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  flex: 1;
+}
+.multiplayer-address small {
+  width: 100%;
+  font-size: 11px;
+}
+.multiplayer-members-heading {
+  padding-top: 24px;
+}
+.multiplayer-members-heading span {
+  margin-left: 8px;
+  color: var(--multiplayer-muted);
+}
+.multiplayer-members {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 20px;
+}
+.multiplayer-members li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+.multiplayer-members li > div {
+  flex: 1;
+  min-width: 0;
+}
+.multiplayer-members :is(strong, small) {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.multiplayer-members small {
+  font-size: 10px;
+  margin-top: 3px;
+}
+.multiplayer-empty {
+  font-size: 12px;
+  padding: 16px 0 24px;
+}
+.multiplayer-version-warning {
+  display: block;
+  margin-top: 14px;
+}
+.multiplayer-preview {
+  font-size: 12px;
+  margin: 0 0 24px;
+}
+.multiplayer-preview > div {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  margin: 10px 0;
+}
+.multiplayer-preview dt {
+  color: var(--multiplayer-muted);
+}
+.multiplayer-preview dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.multiplayer-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(250px, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.multiplayer-room {
+  padding: 24px;
+  min-width: 0;
+}
+.multiplayer-room .tabs {
+  margin-bottom: 24px;
+}
+.multiplayer-room .tab-items {
+  width: 100%;
+}
+.multiplayer-room .tab-items > button {
+  flex: 1;
+  justify-content: center;
+}
+.multiplayer-room .tab-panel {
+  outline-offset: 5px;
+}
+.multiplayer-field {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 22px;
+}
+.multiplayer-host-hint {
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+.multiplayer-field label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  transition:
+    color 220ms ease,
+    transform 220ms var(--multiplayer-motion-easing);
+}
+.multiplayer-field:focus-within label {
+  color: var(--accent);
+  transform: translateX(3px);
+}
+.multiplayer-field :is(input, textarea) {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+}
+.multiplayer-field textarea {
+  resize: vertical;
+  min-height: 134px;
+  max-height: 320px;
+  overflow-wrap: anywhere;
+}
+.multiplayer-connection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0fr) minmax(174px, 1fr);
+  align-items: center;
+  column-gap: 0;
+  transition:
+    grid-template-columns 320ms var(--multiplayer-motion-easing),
+    column-gap 320ms var(--multiplayer-motion-easing);
+}
+.multiplayer-connection-row[data-mode="shared"] {
+  grid-template-columns: minmax(0, 1fr) minmax(174px, 0.6fr);
+  column-gap: 10px;
+}
+.multiplayer-node-input {
+  min-width: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .multiplayer-connection-row {
+    transition: none;
+  }
+}
+.multiplayer-port-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.multiplayer-port-row > input {
+  flex: 1;
+}
+.multiplayer-port-row > button {
+  flex-shrink: 0;
+}
+.multiplayer-port-result {
+  display: flex;
+  align-items: start;
+  gap: 7px;
+  min-height: 22px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--multiplayer-muted);
+}
+.multiplayer-port-result > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent);
+}
+.multiplayer-port-result[data-state="error"] {
+  color: var(--danger);
+}
+.multiplayer-submit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.multiplayer-submit .button {
+  min-width: 142px;
+}
+.multiplayer-guide {
+  padding: 24px;
+}
+.multiplayer-guide-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.multiplayer-guide-heading > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.multiplayer-guide ol {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0;
+  display: grid;
+  gap: 24px;
+}
+.multiplayer-guide li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+}
+.multiplayer-step {
+  color: var(--accent);
+  font:
+    700 20px/1.4 PlayerPixel,
+    monospace;
+}
+.multiplayer-guide li p {
+  margin-top: 5px;
+  font-size: 12px;
+}
+.multiplayer-guide-note {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.multiplayer-guide-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--multiplayer-muted);
+}
+.multiplayer-guide-note p {
+  font-size: 11px;
+}
+.multiplayer-game {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+  padding: 20px 24px;
+}
+.multiplayer-game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.multiplayer-game-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.multiplayer-game-heading > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.multiplayer-game-heading h2 {
+  font-size: 14px;
+}
+.multiplayer-game-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.multiplayer-game-actions > button {
+  white-space: nowrap;
+}
+.multiplayer-game-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.multiplayer-selection {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+.multiplayer-selection > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--multiplayer-muted);
+}
+.multiplayer-selection > div {
+  min-width: 0;
+}
+.multiplayer-selection :is(small, strong) {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.multiplayer-selection small {
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.multiplayer-selection strong {
+  font-size: 13px;
+  line-height: 1.5;
+}
+@container multiplayer (max-width: 720px) {
+  .multiplayer-notice {
+    flex-wrap: wrap;
+  }
+  .multiplayer-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .multiplayer-guide ol {
+    gap: 18px;
+  }
+}
+@container multiplayer (max-width: 520px) {
+  .multiplayer-game-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .multiplayer-game-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+}
+@container multiplayer (max-width: 400px) {
+  .multiplayer-room,
+  .multiplayer-guide,
+  .multiplayer-game {
+    padding: 18px;
+  }
+  .multiplayer-notice {
+    padding: 16px;
+    align-items: start;
+  }
+  .multiplayer-notice > svg {
+    display: none;
+  }
+  .multiplayer-page .page-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .multiplayer-port-row {
+    flex-wrap: wrap;
+  }
+  .multiplayer-port-row > input {
+    flex-basis: 100%;
+  }
+  .multiplayer-field :is(input, textarea) {
+    font-size: 16px;
+  }
+  .multiplayer-game-details {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+}

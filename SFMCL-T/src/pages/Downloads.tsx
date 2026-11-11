@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { PageHeader } from "../PageHeader";
+import { DownloadMining } from "../DownloadMining";
 import { AnimatedSwap } from "../AnimatedSwap";
 import { useTabContentTransition } from "../useTabContentTransition";
 import { useButtonPressFeedback } from "../useButtonPressFeedback";
@@ -76,6 +77,7 @@ export function Downloads() {
         icon={<ArrowDownToLine />}
         eyebrow="EVERY BYTE COUNTS"
         title="下载中心"
+        action={<DownloadMining downloads={app.tasks.downloads} />}
       />
       <div className="stat-grid">
         <div className="panel stat has-surface">
@@ -116,7 +118,7 @@ export function Downloads() {
         <>
           <div className="section-heading">
             <h2>操作步骤</h2>
-            <span>安装、启动与账号状态</span>
+            <span>安装、启动、联机组件与账号状态</span>
           </div>
           <div className="job-list">
             {app.tasks.jobs.slice(0, 12).map((job) => (
@@ -371,7 +373,7 @@ function JobCard({ job, onLog }: { job: Job; onLog: () => void }) {
           {job.error && <p className="inline-error">{job.error}</p>}
           {job.status === "failed" && job.downloadId && (
             <p className="helper">
-              文件下载失败。重试下方下载任务后，安装将自动继续。
+              文件下载失败。重试下方下载任务后，操作将自动继续。
             </p>
           )}
         </div>

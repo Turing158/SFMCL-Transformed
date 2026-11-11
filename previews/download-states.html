@@ -1,0 +1,1013 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>SFMCL-T · 下载状态全景预览</title>
+  <style id="mining-styles">.downloads-page > .page-heading {
+  min-height: 68px;
+}
+.download-mining {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.download-mine-copy {
+  width: 92px;
+  text-align: right;
+}
+.download-mine-copy strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+}
+.download-mine-copy strong::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-right: 5px;
+  background: var(--muted);
+  vertical-align: middle;
+}
+.download-mining:is([data-state="running"], [data-state="done"])
+  strong::before {
+  background: var(--accent);
+}
+.download-mining[data-state="failed"] strong::before {
+  background: var(--danger);
+}
+.download-mine-copy small {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  line-height: 1.8;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.download-mine-viewport {
+  width: 178px;
+  height: 64px;
+  flex-shrink: 0;
+}
+.download-mine-scene {
+  position: relative;
+  width: 178px;
+  height: 64px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.download-mine-scene img {
+  position: absolute;
+  display: block;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+.download-mine-ground {
+  position: absolute;
+  left: 17px;
+  right: 11px;
+  bottom: 7px;
+  height: 2px;
+  background: var(--line);
+}
+.download-mine-ground::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform: scaleX(var(--mine-progress));
+  transform-origin: left;
+  opacity: 0.75;
+  transition: opacity 220ms ease;
+}
+.download-mine-scene[data-unknown="true"] .download-mine-ground::before {
+  opacity: 0;
+}
+.download-mine-scene[data-visual="idle"] .download-mine-ground::before {
+  opacity: 0;
+}
+.download-mine-grass {
+  position: absolute;
+  left: 23px;
+  bottom: 9px;
+  width: 3px;
+  height: 6px;
+  background: color-mix(in srgb, var(--accent) 35%, var(--bg));
+  box-shadow:
+    4px 2px 0 -1px var(--accent),
+    -4px 2px 0 -1px var(--line);
+}
+.download-mine-queue,
+.download-mine-rest-queue {
+  position: absolute;
+  left: 96px;
+  bottom: 10px;
+  width: 36px;
+  height: 36px;
+  transition: opacity 220ms ease;
+}
+.download-mine-rest-queue {
+  opacity: 0;
+  z-index: 4;
+}
+.download-mine-rest-queue img {
+  inset: 0;
+  width: 36px;
+  height: 36px;
+}
+.download-mine-scene[data-visual="idle"] .download-mine-queue {
+  opacity: 0;
+}
+.download-mine-scene[data-visual="idle"] .download-mine-rest-queue {
+  opacity: 1;
+}
+.download-mine-block {
+  position: absolute;
+  inset: 0;
+  width: 36px;
+  height: 36px;
+}
+.download-mine-block > img,
+.download-mine-chip img {
+  inset: 0;
+  width: 36px;
+  height: 36px;
+}
+.download-mine-cracks {
+  opacity: 0;
+}
+.download-mine-chip .download-mine-cracks {
+  opacity: 1;
+}
+.download-mine-chip {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+.download-mine-chip:nth-of-type(1) {
+  clip-path: inset(0 50% 50% 0);
+}
+.download-mine-chip:nth-of-type(2) {
+  clip-path: inset(0 0 50% 50%);
+}
+.download-mine-chip:nth-of-type(3) {
+  clip-path: inset(50% 50% 0 0);
+}
+.download-mine-chip:nth-of-type(4) {
+  clip-path: inset(50% 0 0 50%);
+}
+.download-mine-block[data-breaking="true"] > img {
+  visibility: hidden;
+}
+.download-mine-block[data-breaking="true"] > .download-mine-chip {
+  display: block;
+}
+.download-mine-pick {
+  position: absolute;
+  left: 61px;
+  top: 10px;
+  width: 38px;
+  height: 38px;
+  z-index: 5;
+  transform: rotate(-16deg);
+  transform-origin: 20% 90%;
+}
+.download-mine-idle-effects {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.download-mine-shadow {
+  position: absolute;
+  left: 67px;
+  top: 51.5px;
+  width: 24px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+}
+.download-mine-spark {
+  position: absolute;
+  left: 78.5px;
+  top: 27.5px;
+  width: 3px;
+  height: 3px;
+  color: color-mix(in srgb, #4cbbab 65%, var(--accent));
+  opacity: 0;
+}
+.download-mine-spark::before,
+.download-mine-spark::after {
+  content: "";
+  position: absolute;
+  background: currentColor;
+}
+.download-mine-spark::before {
+  left: 1px;
+  width: 1px;
+  height: 3px;
+}
+.download-mine-spark::after {
+  top: 1px;
+  width: 3px;
+  height: 1px;
+}
+.download-mine-pick img {
+  inset: 0;
+  width: 38px;
+  height: 38px;
+  /* The bitmap handle runs from bottom left to top right through its center. */
+  transform-origin: 50% 50%;
+  backface-visibility: visible;
+}
+.download-mine-diamond {
+  width: 28px;
+  height: 28px;
+  left: 100px;
+  bottom: 12px;
+  opacity: 0;
+  z-index: 6;
+  transition: opacity 120ms ease;
+}
+.download-mine-diamond.two {
+  width: 19px;
+  height: 19px;
+  left: 115px;
+  bottom: 10px;
+}
+@media (max-width: 1050px) {
+  .download-mine-copy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+@media (max-width: 650px) {
+  .downloads-page > .page-heading {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+  }
+  .download-mine-viewport {
+    width: 100px;
+  }
+  .download-mine-scene {
+    transform: scale(0.56);
+    transform-origin: left center;
+  }
+  .downloads-page > .page-heading .page-title-edition {
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+  .downloads-page > .page-heading .page-title {
+    gap: 8px;
+  }
+}
+</style>
+  <style>
+    :root{--bg:#f6f8f5;--panel:#fff;--ink:#24332c;--muted:#64736b;--line:#e3e9e3;--accent:#32785b;--soft:#eaf3ec;--danger:#b23e43;--warning:#956020;--on-accent:#fff;--grid:rgba(50,120,91,.06);font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;color-scheme:light}
+    :root[data-theme=dark]{--bg:#121b17;--panel:#1b2821;--ink:#e3eee6;--muted:#a6b9ad;--line:#334339;--accent:#81c69b;--soft:#283e30;--danger:#f19a9e;--warning:#e6be7c;--on-accent:#10261a;--grid:rgba(129,198,155,.07);color-scheme:dark}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink)}button,input,select{font:inherit}button,select{cursor:pointer}button{color:inherit}button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:4px}button:disabled{cursor:default;opacity:.45}svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}.mono{font-family:"Cascadia Code",Consolas,monospace}p,h1,h2,h3,h4{margin:0}button,select,input{touch-action:manipulation}
+    .topbar{height:62px;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 max(24px,calc((100vw - 1240px)/2));border-bottom:1px solid var(--line);background:var(--panel)}.brand{display:flex;align-items:center;gap:11px;font-size:13px}.brand-mark{width:28px;height:28px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;clip-path:polygon(0 4px,4px 4px,4px 0,24px 0,24px 4px,28px 4px,28px 24px,24px 24px,24px 28px,4px 28px,4px 24px,0 24px)}.brand-caption{padding-left:11px;border-left:1px solid var(--line);font-size:11px;color:var(--muted)}.top-note{font-size:10px;letter-spacing:1.5px;color:var(--muted)}.theme{width:44px;height:44px;display:grid;place-items:center;border:1px solid var(--line);background:transparent;border-radius:8px}.theme:hover{background:var(--soft)}
+    main{max-width:1296px;margin:auto;padding:34px 28px 25px}.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:25px}.eyebrow{font-size:10px;letter-spacing:1.7px;color:var(--accent);display:flex;align-items:center;gap:7px;margin-bottom:11px}.dot{display:inline-block;width:5px;height:5px;background:var(--accent);flex-shrink:0}h1{font-size:32px;font-weight:650;letter-spacing:-1px;line-height:1.4;margin-bottom:9px}.intro p{font-size:12px;color:var(--muted);line-height:1.9}.tools{display:flex;align-items:center;gap:8px;flex-shrink:0}.button{display:inline-flex;justify-content:center;align-items:center;gap:7px;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:7px;background:var(--panel);font-size:11px}.button:hover:not(:disabled){background:var(--soft)}.button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}.button.primary:hover{filter:brightness(.95)}.button.small{min-height:32px;font-size:10px;padding:0 10px}.flow-select{height:44px;padding:0 27px 0 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);font-size:11px;max-width:150px}.flow-select option{background:var(--panel)}
+    .showcase{display:grid;grid-template-columns:1.06fr 1fr;gap:20px}.panel{border:1px solid var(--line);border-radius:11px;background:var(--panel);overflow:hidden}.panel-top{height:47px;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:0 19px;border-bottom:1px solid var(--line);font-size:11px}.panel-top .meta{font-size:10px;color:var(--muted)}.live-label{display:flex;gap:7px;align-items:center;color:var(--accent)}.big-stage{height:220px;display:grid;place-items:center;position:relative;overflow:hidden;background-color:var(--bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:20px 20px}.big-stage:after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 65px 22px var(--bg)}.big-stage .download-mine-scene{z-index:1;transform-origin:center}.scene-label{position:absolute;left:19px;bottom:14px;font-size:10px;color:var(--muted);z-index:2}.phase-label{position:absolute;right:19px;top:15px;font-size:10px;color:var(--muted);z-index:2}.state-copy{padding:18px 19px}.state-heading{display:flex;align-items:center;gap:9px;margin-bottom:9px}.state-heading h2{font-size:20px;font-weight:650;letter-spacing:-.5px}.tag{font-size:10px;color:var(--accent);background:var(--soft);padding:3px 7px;border-radius:4px}.state-copy p{font-size:12px;line-height:1.85;color:var(--muted);min-height:44px}.state-copy .note{font-size:10px;line-height:1.7;margin-top:10px;min-height:0}.completion-controls{display:flex;gap:7px;margin-top:11px}.completion-controls[hidden]{display:none}.flow-line{border-top:1px solid var(--line);padding:13px 19px;display:flex;align-items:center;gap:9px;min-height:58px}.flow-status{font-size:10px;color:var(--muted);white-space:nowrap}.flow-steps{display:flex;gap:5px;flex:1;min-width:0;flex-wrap:wrap}.flow-step{font-size:9px;padding:4px 5px;border-radius:4px;color:var(--muted);background:var(--bg)}.flow-step.active{color:var(--on-accent);background:var(--accent)}
+    .app-content{padding:19px;background:var(--bg)}.app-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:68px;margin-bottom:13px}.page-title{display:flex;align-items:center;gap:10px;flex-shrink:0}.title-mark{width:38px;height:38px;display:grid;place-items:center;background:var(--soft);color:var(--accent);clip-path:polygon(0 4px,4px 4px,4px 0,34px 0,34px 4px,38px 4px,38px 34px,34px 34px,34px 38px,4px 38px,4px 34px,0 34px)}.page-title h3{font-size:20px;font-weight:650;line-height:1.4}.edition{display:block;font-size:8px;letter-spacing:1px;color:var(--muted);margin-top:4px}.app-content .download-mining{gap:8px}.app-content .download-mine-copy{width:92px}.app-content .download-mine-viewport{width:178px;height:64px}.app-content .download-mine-scene{transform:none;transform-origin:center}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.stat{padding:12px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}.stat-label{font-size:10px;color:var(--muted);display:flex;gap:5px;align-items:center;white-space:nowrap}.stat-label svg{width:13px;height:13px}.stat strong{display:block;font-size:21px;margin-top:7px;font-weight:650;font-variant-numeric:tabular-nums}.stat small{font-size:9px;font-weight:400;color:var(--muted);margin-left:4px}.task-heading{display:flex;justify-content:space-between;align-items:center;margin:17px 0 10px;font-size:10px;color:var(--muted)}.task-tabs{display:flex;gap:13px}.task-tabs span:first-child{color:var(--accent);font-weight:600}.task-card{padding:15px 13px;border:1px solid var(--line);border-radius:7px;background:var(--panel);min-height:145px}.task-main{display:flex;align-items:flex-start;gap:9px}.task-symbol{width:30px;height:30px;display:grid;place-items:center;border-radius:4px;background:var(--soft);color:var(--accent);flex-shrink:0}.task-name{min-width:0;flex:1}.task-name h4{font-size:12px;font-weight:600}.task-name p{font-size:9px;line-height:1.8;color:var(--muted);margin-top:4px}.status-badge{font-size:9px;background:var(--soft);color:var(--accent);white-space:nowrap;padding:4px 6px;border-radius:4px}.status-badge[data-status=failed]{color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--panel))}.status-badge:is([data-status=paused],[data-status=pausing],[data-status=queued]){color:var(--warning);background:color-mix(in srgb,var(--warning) 10%,var(--panel))}.status-badge[data-status=cancelled]{color:var(--muted);background:var(--bg)}.progress{height:4px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:17px}.progress span{display:block;height:100%;width:100%;background:var(--accent);transform-origin:left;border-radius:3px;transition:transform 120ms linear}.progress[data-status=failed] span{background:var(--danger)}.progress:is([data-status=paused],[data-status=pausing]) span{background:var(--warning)}.progress[data-status=cancelled] span{background:var(--muted)}.progress[data-unknown=true] span{opacity:.4;background:repeating-linear-gradient(90deg,var(--accent) 0 6px,transparent 6px 10px)}.task-bottom{display:flex;justify-content:space-between;gap:9px;margin-top:9px;color:var(--muted);font-size:9px;font-variant-numeric:tabular-nums}.task-actions{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:12px}.task-error{margin-top:11px;font-size:10px;line-height:1.6;color:var(--danger)}.empty{min-height:145px;background:var(--panel);border:1px solid var(--line);border-radius:7px;text-align:center;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px}.empty svg{color:var(--accent);width:25px;height:25px;opacity:.7}.empty h4{font-size:12px;font-weight:600}.empty p{font-size:10px;color:var(--muted)}.empty[hidden],.task-card[hidden],.task-error[hidden]{display:none}.progress-controls{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:10px;color:var(--muted)}.progress-controls label{white-space:nowrap}.progress-controls input[type=range]{flex:1;min-width:40px;height:24px;accent-color:var(--accent)}.progress-controls output{width:33px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}.unknown{margin-top:7px;display:flex;gap:6px;align-items:center;font-size:10px;color:var(--muted);min-height:25px}.unknown input{accent-color:var(--accent)}
+    .compare-title{display:flex;justify-content:space-between;align-items:center;gap:15px;margin:24px 0 12px}.compare-title h2{font-size:13px;font-weight:600}.compare-title p{font-size:10px;color:var(--muted)}.states{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.state-card{text-align:left;padding:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--panel);transition:border-color 180ms,box-shadow 180ms}.state-card:hover{border-color:var(--accent)}.state-card[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}.mini-stage{height:92px;position:relative;display:grid;place-items:center;background:var(--bg);overflow:hidden}.mini-stage .download-mine-scene{transform-origin:center}.card-number{position:absolute;top:9px;left:12px;font-size:9px;color:var(--muted);z-index:2}.selection-dot{display:none;position:absolute;right:12px;top:11px;width:5px;height:5px;background:var(--accent)}.state-card[aria-pressed=true] .selection-dot{display:block}.card-copy{padding:11px 13px 13px}.card-heading{display:flex;justify-content:space-between;align-items:center;gap:7px;margin-bottom:6px}.card-heading strong{font-size:12px;font-weight:650}.card-heading small{font-size:9px;color:var(--muted)}.card-copy p{font-size:10px;color:var(--muted);line-height:1.65}.footer{display:flex;justify-content:space-between;gap:20px;font-size:10px;color:var(--muted);line-height:1.8;margin-top:21px}.footer a{color:var(--muted);text-underline-offset:3px}.loading{padding:35px;text-align:center;font-size:12px;color:var(--muted)}
+    .task-actions{font-size:10px;color:var(--muted)}
+    @media(max-width:1150px){.intro{align-items:flex-start;flex-direction:column;gap:17px}.app-content .download-mine-copy{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.page-title h3{font-size:18px}.stat{padding:11px 9px}.card-copy{padding:11px}.flow-step{font-size:8px}}
+    @media(max-width:850px){main{padding-top:27px}.showcase{grid-template-columns:1fr}.app-content .download-mine-copy{position:static;width:92px;height:auto;overflow:visible;clip-path:none}.states{grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.card-heading{flex-wrap:wrap}.card-heading strong{font-size:11px}.mini-stage{height:80px}.flow-step{font-size:9px}.footer{flex-direction:column;gap:5px}}
+    @media(max-width:650px){.top-note{display:none}.topbar{padding:0 17px}.app-content .download-mine-copy{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.states{grid-template-columns:repeat(2,minmax(0,1fr))}.mini-stage{height:90px}.card-heading{flex-wrap:nowrap}.card-heading strong{font-size:12px}.big-stage{height:210px}.flow-line{align-items:flex-start;flex-direction:column;gap:7px}}
+    @media(max-width:480px){main{padding:24px 16px 20px}h1{font-size:25px;letter-spacing:-.7px}.intro p{font-size:11px}.tools{gap:6px;flex-wrap:wrap}.button{padding:0 9px;font-size:10px}.flow-select{max-width:130px;font-size:10px;padding-left:8px}.panel-top{padding:0 14px}.big-stage{height:182px}.scene-label,.phase-label{font-size:9px}.state-copy{padding:16px 14px}.state-copy p{font-size:11px}.state-heading h2{font-size:18px}.app-content{padding:15px 12px}.app-heading{gap:6px}.page-title{gap:7px}.title-mark{width:29px;height:29px}.page-title h3{font-size:16px}.edition{font-size:6px;letter-spacing:.6px}.stat-label{font-size:9px;gap:4px}.stat strong{font-size:18px}.stat small{font-size:8px;margin-left:3px}.stats{gap:7px}.stat{padding:10px 8px}.task-name h4{font-size:11px}.task-main{gap:7px}.task-card{padding:13px 10px}.task-symbol{width:27px;height:27px}.task-name p{font-size:8px}.compare-title p{font-size:9px}.card-copy{padding:10px}.card-heading strong{font-size:11px}.card-heading small{font-size:8px}.card-copy p{font-size:9px}}
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" style="display:none"><defs>
+    <symbol id="pick-icon" viewBox="0 0 24 24"><path d="m5 20 11-11M4 6l4-3 10 4 3 5-3 2-4-5-6-1-4 1z"/></symbol>
+    <symbol id="download-icon" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
+    <symbol id="moon-icon" viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></symbol>
+    <symbol id="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+    <symbol id="pause-icon" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="play-icon" viewBox="0 0 24 24"><path d="m8 4 12 8-12 8z"/></symbol>
+    <symbol id="replay-icon" viewBox="0 0 24 24"><path d="M4 10a8 8 0 1 1 1.4 8M4 4v6h6"/></symbol>
+    <symbol id="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="box-icon" viewBox="0 0 24 24"><path d="m3 7 9-4 9 4v10l-9 4-9-4zm0 0 9 4 9-4M12 11v10M7 5l10 4"/></symbol>
+    <symbol id="activity-icon" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  </defs></svg>
+  <header class="topbar"><div class="brand"><div class="brand-mark"><svg><use href="#pick-icon"/></svg></div><strong class="mono">SFMCL-T</strong><span class="brand-caption">下载状态预览</span></div><span class="top-note mono">FROM IDLE TO ADVENTURE.</span><button class="theme" id="theme" type="button" aria-label="切换到深色主题"><svg><use href="#moon-icon"/></svg></button></header>
+  <main>
+    <div class="intro"><div><div class="eyebrow"><span class="dot"></span><span class="mono">DOWNLOAD MOTION / ALL STATES</span></div><h1>从等待到完成，<span style="display:inline-block">看看镐子怎么工作。</span></h1><p>选择一种下载状态，或播放完整流程。动画、页头文字、任务进度与操作同步变化。</p></div><div class="tools"><select class="flow-select" id="flow-choice" aria-label="选择演示流程"><option value="normal">正常下载流程</option><option value="retry">失败后重试</option><option value="cancel">取消下载流程</option></select><button class="button primary" id="run-flow" type="button"><svg><use href="#play-icon"/></svg><span>播放完整流程</span></button><button class="button" id="pause-preview" type="button" aria-pressed="false"><svg><use href="#pause-icon"/></svg><span>暂停预览</span></button></div></div>
+    <div class="showcase">
+      <section class="panel" aria-labelledby="motion-title"><div class="panel-top"><span class="live-label"><span class="dot"></span><span id="motion-mode">空闲热身</span></span><span class="meta mono" id="zoom-label">ZOOM × 2.8</span></div><div class="big-stage" id="hero-host" aria-hidden="true"><span class="phase-label" id="phase-label">热身循环</span><span class="scene-label">放大观察 · 与页头同步播放</span></div><div class="state-copy"><div class="state-heading"><h2 id="motion-title">待下载</h2><span class="tag" id="motion-tag">方案 A · 1.5×</span></div><p id="state-description"></p><p class="note" id="state-note"></p><div class="completion-controls" id="completion-controls" hidden><button class="button small" id="replay-completion" type="button"><svg><use href="#replay-icon"/></svg>回放完成动效</button><button class="button small" id="show-history" type="button">查看已完成历史</button></div></div><div class="flow-line"><span class="flow-status" id="flow-status">手动查看</span><div class="flow-steps" id="flow-steps" aria-label="下载演示流程"></div></div></section>
+      <section class="panel" aria-labelledby="app-label"><div class="panel-top"><span id="app-label">下载中心中的实际效果</span><span class="meta mono">178 × 64 PX / 1:1</span></div><div class="app-content"><div class="app-heading"><div class="page-title"><span class="title-mark"><svg><use href="#download-icon"/></svg></span><div><h3>下载中心</h3><span class="edition mono">EVERY BYTE COUNTS</span></div></div><div class="download-mining" id="header-feedback" data-state="idle"><div class="download-mine-copy"><strong id="header-label" role="status">待下载</strong><small id="header-detail">等待下一次冒险</small></div><div class="download-mine-viewport" id="actual-host" aria-hidden="true"></div></div></div><div class="stats"><div class="stat"><span class="stat-label"><svg><use href="#download-icon"/></svg>当前速度</span><strong><span id="speed-value">0 B</span><small>/s</small></strong></div><div class="stat"><span class="stat-label"><svg><use href="#activity-icon"/></svg>进行中的任务</span><strong><span id="active-count">0</span><small>个</small></strong></div><div class="stat"><span class="stat-label"><svg><use href="#check-icon"/></svg>需要处理</span><strong><span id="failed-count">0</span><small>个任务</small></strong></div></div><div class="task-heading"><div class="task-tabs"><span>全部任务</span><span>进行中</span><span>已完成</span><span>需要处理</span></div><span id="task-count">0 个任务</span></div><div class="empty" id="empty-task"><svg><use href="#box-icon"/></svg><h4>这里暂时很安静</h4><p>安装一个版本，开始下一次冒险。</p><button class="button small" id="install-version" type="button">去安装一个版本</button></div><article class="task-card" id="task-card" hidden><div class="task-main"><span class="task-symbol"><svg><use href="#download-icon"/></svg></span><div class="task-name"><h4>Minecraft 1.21.4</h4><p id="file-detail">34 / 80 个文件 · 8 个工作线程</p></div><span class="status-badge" id="task-badge">下载中</span></div><div class="progress" id="task-progress"><span></span></div><div class="task-bottom"><span id="bytes-detail">107.5 MB / 256 MB</span><span id="progress-detail">42%</span></div><p class="task-error" id="task-error" hidden>下载失败，请重试此任务。</p><div class="task-actions" id="task-actions"></div></article><div class="progress-controls"><label for="progress">任务进度</label><input id="progress" type="range" min="0" max="100" value="42" disabled><output id="progress-output" for="progress">42%</output></div><label class="unknown"><input id="unknown-size" type="checkbox" disabled>文件大小未知，查看无百分比时的显示</label></div></section>
+    </div>
+    <div class="compare-title"><h2>八种状态，一次看全</h2><p>点击切换 · 进入和退出热身时平滑衔接</p></div><div class="states" id="state-cards" role="group" aria-label="选择下载状态"><div class="loading">正在准备像素素材…</div></div>
+    <footer class="footer"><span>使用项目当前动画与状态文案 · 空闲采用方案 A / 1.5× · 隐藏页面自动休眠</span><span>独立 HTML，可离线打开 · 素材：<a href="https://zh.minecraft.wiki/" target="_blank" rel="noreferrer">Minecraft Wiki</a> / Mojang Studios</span></footer>
+  </main>
+  <script id="embedded-assets">const embeddedAssets = {"pickaxe":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAHlBMVEUAAAANOjEu7Mknxagjr5VDMRNiSBsJIh2EYSMkGwvipJ2tAAAAAXRSTlMAQObYZgAAAF9JREFUeF6tzFEJwDAMhOFYqIVaiIWzEAu1EAuzELdrXtbAQWDQe/zgP7m3ketgTAV02GL4xN2BJxjqTOEt2AqoN2D70cFQA2khgw3KUIKEyVCDFCE4wRlDBj1ECMGvvQxuMfGjIVStAAAAAElFTkSuQmCC","stone":"data:image/png;base64,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","diamond":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAIVBMVEUAAAARcXn8/PzS/PNJ6taf+OUgw7MUXVIaqKUcj5gr3dUJiCq8AAAAAXRSTlMAQObYZgAAAGdJREFUeF6tyzERwDAMQ9FQCAVTMAVREAVTCAVTCIWirC6dlal/07vT+K+prjAjIqcHbYBZy4I2mYTEQ2QkYOBsgOzqZSG1uS8QpY3dFhJoVbUNjIUu1aVt4PmADiQbIPVwIDkNC/deot1OoWQYxyIAAAAASUVORK5CYII=","diamond-ore":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAXVBMVEUAAABWVlZLS0szMzMqKiotLS1ERER3d3dtbW2IiIg9PT0lJSUzP0GGp6xgYGASgIQrVU1UaWtGj4EUWlsNNjcMTE8gj5Fw5M6EoJpOX1sbzdJiYmLR//U7OzucnJx5i8c9AAAAAXRSTlMAQObYZgAAAbpJREFUeF6VkOeO4zAQg2+qqmtJz77/Yx4VJwGC2z1gx8n4Bynys/78ckKM6X9yh4kx/CDHlPpD34cYuu8sARNTSJcQusuxj/+GHw7HmBAQUpfaxE+0rjse9xW/LljwpVdRChHJiE0IuXWHy/HWw9D++xcRozzFPnUNAgqKwBtSEHkYmIkR/AXtcLjdsBGWYlRT2w3O2R2WEPZuNIZQVIvtBqI8ELEHKODssXtTszKqPgzOPBHD5i2h3ZSqiKrVZwIzO+Wc8abWYCJSShXDsyeQe87z0jaRmEIZV7z0CUl+yqdM00QwMbqLFKl2Hs3uDwPOzcOcJ3agsKk0i+m22n2H5HmarsPC3rpcpPGXaoLfXoGzxNM08cmdWc30vK2lAOWZAPzMAMwDZ2c0nLdaz+Naiz4rmAf3+TSDgAkMOFm2VUDyvmoE0LA405W1oF/HWmVcRV9XnYnwmQvBIeMGSqkI2eyVMC/cHJSvVy8VAUXkjBB9GhgSIDxjsxnwRcd1azSQdwsRX0/zQu7FMGJ3qWa7+gZdhgEUUNsdGOTPIQYmkZvWUUQ+5HcREBj9oGzC9xY2RfjPQwT5d/MXnX0Xe27ZhAEAAAAASUVORK5CYII=","destroy_oit_stage_2-cube":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAJYAAACWCAYAAAA8AXHiAAAC0ElEQVR42u3dQZKbMBAFUIniXvHNKG5mTkYWyVRNXLYRAcaS+r2tvRhrvptGklFKAAAAAAAAAAAAAAAAANC9yRD8kQ3BZYGaBYsrK9QsWAiUYAmUYMUIlUAJlkBdbTQEz63r+iullHLOAqVinReofwYp55tQCdapoXoI2GKUBOu0gKlYgnVquJ4ESp9VaDAEryvWuq53oVKxLu2xvlUvgVKxUm1zXlOUHRAq1kbletNnzTt2N0zRLqeCdWBdcF3X+7sGf+v1ngMmWP8Rqsem/ll4St7Tc7gE60CgnjX4Je+JELAcMCzz0YXmF8s+S+kM/puAzSpW2xVoPrq/6tsi9XJgieimx2pzZ8Lt3SVt47I0Xz0/1vPaY44wwfkVoFf9z0PA5h8I/GIeq5OdCQU9j50LgrVrZ8Ky53UAAAAAAAAAAAAAAAAAkuPYkif6CRctPypyEjDBAsFCsOign3X6l0AJVuAgzK3dcQtW39Vl0mPRTahUrBTy1I17Sm9PjhUs9gdKxaLJQOmxhEqw2N+4fzJU1VwKCx/ozwl3gj/1lOgx4h2LQMVt3ifH5J7jU8+xH4MsaQhUxOb9pEGIskFw80zFTzfuVVWsnPNy9DyczivcVPP0QtXTDTnnpbB6hTkt/m9YmqhS1fdYhdMPJdWp2QpWGJSvz3ev7e8fO1gwnQr/AXNHoaq+Go+9bHiLMMla8hlrOSZv7LGB7S1cJZfF2s5dHFqcg9lqVmtsZq+8manxMM+h5UHdCk/LAWv95Neh9QEuCU9r4erhOOGxtyWMEyZZWwjcTbAELGQFG3ptanfM4qNi7a9OwqVihW52BQsECz1WsnM0dfQbgdFjd/xeMOylsId1v2hftrGnLSMCpWKpXp23BKPqlMzfRd2aTHsTwqOFZdML4dcKoy7dtFi5BwHC1mQES/VK1grRYwIAAAAAAAAAAAAAAAAAAAAAAFTiN998Xs5bv4cpAAAAAElFTkSuQmCC","destroy_oit_stage_5-cube":"data:image/png;base64,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","destroy_oit_stage_8-cube":"data:image/png;base64,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"};</script>
+  <script id="production-motion">const crackStages = [2, 5, 8];
+const timing = {
+    strike: 288,
+    hits: 3,
+    breaking: 96,
+    advancing: 220,
+    gap: 38,
+    dropping: 416,
+    collecting: 480,
+};
+const idleDuration = 8500 / 1.5;
+function idlePose(time) {
+    const smooth = (value) => value * value * (3 - 2 * value);
+    let y = 15;
+    let angle = -16;
+    if (time < 2) {
+        y -= Math.sin(time * Math.PI) * 1.3;
+        angle += Math.sin(time * Math.PI) * 6;
+    }
+    else if (time < 2.6) {
+        const progress = smooth((time - 2) / 0.6);
+        y += 3 * progress;
+        angle -= 20 * progress;
+    }
+    else if (time < 4.2) {
+        const progress = (time - 2.6) / 1.6;
+        y = 18 - 13 * Math.sin(progress * Math.PI);
+        angle = -36 + 380 * smooth(progress);
+    }
+    else if (time < 5.2) {
+        const progress = time - 4.2;
+        const bounce = Math.sin(progress * Math.PI * 3) * (1 - progress);
+        y = 18 - 3 * smooth(progress) + 2.8 * bounce;
+        // Keep the completed revolution so interpolation never unwinds the throw.
+        angle = 344 + 16 * bounce;
+    }
+    else {
+        const progress = (time - 5.2) / 3.3;
+        y -= Math.sin(progress * Math.PI * 2) * 0.7;
+        angle = 344 + Math.sin(progress * Math.PI * 2) * 1.5;
+    }
+    return { y, angle };
+}
+const idlePoses = Array.from({ length: 171 }, (_, index) => ({
+    offset: index / 170,
+    ...idlePose(index / 20),
+}));
+const idlePickFrames = idlePoses.map(({ offset, y, angle }) => {
+    // Undo the fixed -16° swing around the handle before rotating at the sprite's
+    // center. The outer mining anchor stays in place, including during handoff.
+    const radians = (16 * Math.PI) / 180;
+    const dx = 19 - 38 * 0.2;
+    const dy = 19 - 38 * 0.9 + y - 10;
+    const x = Math.cos(radians) * dx - Math.sin(radians) * dy - dx;
+    const translateY = Math.sin(radians) * dx + Math.cos(radians) * dy - (19 - 38 * 0.9);
+    return {
+        offset,
+        transform: `translate(${x}px, ${translateY}px) rotate(${angle + 16}deg)`,
+    };
+});
+const idleShadowFrames = idlePoses.map(({ offset, y }) => ({
+    offset,
+    opacity: 0.11,
+    transform: `scaleX(${(12 - (15 - y) * 0.1) / 12})`,
+}));
+/** Owns only the queue and transforms; task polling never recreates the scene. */
+function createDownloadMiningMotion(scene) {
+    const queue = scene.querySelector(".download-mine-queue");
+    const pick = scene.querySelector(".download-mine-pick");
+    const pickSprite = pick.querySelector("img");
+    const diamonds = [
+        ...scene.querySelectorAll(".download-mine-diamond"),
+    ];
+    const shadow = scene.querySelector(".download-mine-shadow");
+    const sparks = [
+        ...scene.querySelectorAll(".download-mine-spark"),
+    ];
+    let idleAnimations = [];
+    let handoffAnimations = [];
+    let warming = false;
+    let hasPlayback = false;
+    let pendingReset = false;
+    let miningPickTransform = "rotate(-16deg)";
+    let blocks = [];
+    let state = "idle";
+    let phase = "mining";
+    let elapsed = 0;
+    let renderedHits = 0;
+    let started = false;
+    let finishing = false;
+    let oreQueued = false;
+    let visible = true;
+    let disposed = false;
+    let frame = 0;
+    let last = null;
+    const restQueue = document.createElement("div");
+    restQueue.className = "download-mine-rest-queue";
+    for (let index = 0; index < 2; index++) {
+        const stone = document.createElement("img");
+        stone.src = embeddedAssets.stone;
+        stone.alt = "";
+        stone.draggable = false;
+        stone.style.transform = `translateX(${index * timing.gap}px)`;
+        restQueue.append(stone);
+    }
+    queue.after(restQueue);
+    function setMiningPick(angle) {
+        miningPickTransform = `rotate(${angle}deg)`;
+        pick.style.transform = miningPickTransform;
+    }
+    function makeBlock(kind, index) {
+        const element = document.createElement("div");
+        element.className = "download-mine-block";
+        element.dataset.kind = kind;
+        element.style.transform = `translateX(${index * timing.gap}px)`;
+        const sprite = document.createElement("img");
+        sprite.src = embeddedAssets[kind === "ore" ? "diamond-ore" : "stone"];
+        sprite.alt = "";
+        sprite.draggable = false;
+        element.append(sprite);
+        // Load all three textures before their hit so the fast final stage never
+        // depends on swapping an image URL at contact time.
+        const cracks = crackStages.map((stage) => {
+            const crack = document.createElement("img");
+            crack.src = embeddedAssets[`destroy_oit_stage_${stage}-cube`];
+            crack.alt = "";
+            crack.draggable = false;
+            crack.className = "download-mine-cracks";
+            crack.dataset.stage = String(stage);
+            element.append(crack);
+            return crack;
+        });
+        const chips = Array.from({ length: 4 }, () => {
+            const chip = document.createElement("div");
+            chip.className = "download-mine-chip";
+            chip.append(sprite.cloneNode());
+            chip.append(cracks[cracks.length - 1].cloneNode());
+            element.append(chip);
+            return chip;
+        });
+        return { kind, element, cracks, chips };
+    }
+    function setPhase(next) {
+        phase = next;
+        elapsed = 0;
+        if (next === "mining")
+            renderedHits = 0;
+        scene.dataset.phase = next;
+    }
+    function reset() {
+        blocks = [makeBlock("stone", 0), makeBlock("stone", 1)];
+        queue.replaceChildren(...blocks.map((b) => b.element));
+        started = finishing = oreQueued = false;
+        setPhase("mining");
+        pendingReset = false;
+        delete scene.dataset.reward;
+        miningPickTransform = "rotate(-16deg)";
+        hideDiamonds();
+    }
+    function requestReset() {
+        pendingReset = true;
+        started = finishing = oreQueued = false;
+        delete scene.dataset.reward;
+        hideDiamonds();
+        // Replace the hidden mining queue after its fade, keeping the outgoing
+        // block and pick pose intact while entering the resting scene.
+        if (warming && !handoffAnimations.length)
+            reset();
+    }
+    function hideDiamonds() {
+        diamonds.forEach((d) => {
+            d.style.opacity = "0";
+        });
+    }
+    function appendBlock(kind) {
+        const block = makeBlock(kind, 2);
+        queue.append(block.element);
+        blocks.push(block);
+    }
+    function finishCollection() {
+        // Keep the same stone that was waiting behind the ore, now in the front slot.
+        blocks.forEach((b, i) => {
+            b.element.style.transform = `translateX(${i * timing.gap}px)`;
+            b.element.style.opacity = "1";
+        });
+        started = finishing = oreQueued = false;
+        setPhase("idle");
+        scene.dataset.visual = "idle";
+        scene.dataset.reward = "collected";
+        syncPickWarmup();
+    }
+    function advance() {
+        if (phase === "mining") {
+            blocks[0].element.dataset.breaking = "true";
+            setPhase("breaking");
+        }
+        else if (phase === "breaking") {
+            const mined = blocks.shift();
+            mined.element.remove();
+            if (mined.kind === "ore") {
+                setMiningPick(-16);
+                scene.dataset.reward = "mined";
+                setPhase("dropping");
+                return;
+            }
+            const kind = finishing && !oreQueued ? "ore" : "stone";
+            appendBlock(kind);
+            if (kind === "ore")
+                oreQueued = true;
+            setPhase("advancing");
+        }
+        else if (phase === "dropping")
+            setPhase("collecting");
+        else if (phase === "collecting") {
+            hideDiamonds();
+            appendBlock("stone");
+            setPhase("restocking");
+        }
+        else if (phase === "restocking")
+            finishCollection();
+        else
+            setPhase("mining");
+    }
+    function draw() {
+        if (!blocks.length)
+            return;
+        blocks.forEach((b, i) => (b.element.style.zIndex = String(3 - i)));
+        if (phase === "mining") {
+            const t = (elapsed % timing.strike) / timing.strike;
+            const poses = [
+                [0, -16],
+                [0.28, -52],
+                [0.5, 22],
+                [0.62, 14],
+                [1, -16],
+            ];
+            const end = poses.findIndex(([at]) => at >= t);
+            const a = poses[Math.max(0, end - 1)], b = poses[end];
+            const mix = b[0] === a[0] ? 0 : (t - a[0]) / (b[0] - a[0]);
+            setMiningPick(a[1] + ((b[1] - a[1]) * (1 - Math.cos(mix * Math.PI))) / 2);
+            const hits = Math.min(timing.hits, Math.floor(elapsed / timing.strike + 0.5));
+            blocks[0].cracks.forEach((crack, index) => {
+                crack.style.opacity = hits === index + 1 ? "1" : "0";
+            });
+            blocks.forEach((b, i) => {
+                b.element.style.transform = `translateX(${i * timing.gap}px)`;
+                b.element.style.opacity = "1";
+            });
+        }
+        else if (phase === "breaking") {
+            const t = elapsed / timing.breaking;
+            setMiningPick(22 - 38 * t);
+            const offsets = [
+                [-15, -10],
+                [16, -12],
+                [-12, 13],
+                [15, 11],
+            ];
+            blocks[0].chips.forEach((chip, i) => {
+                chip.style.transform = `translate(${offsets[i][0] * t}px,${offsets[i][1] * t + 8 * t * t}px) rotate(${(i % 2 ? 1 : -1) * t * 16}deg)`;
+                chip.style.opacity = String(1 - t);
+            });
+        }
+        else if (phase === "advancing" || phase === "restocking") {
+            setMiningPick(-16);
+            const t = elapsed / timing.advancing, eased = t * t * (3 - 2 * t);
+            blocks.forEach((b, i) => {
+                b.element.style.transform = `translateX(${(i + 1 - eased) * timing.gap}px)`;
+                b.element.style.opacity = String(i === 1 ? Math.min(1, t * 4) : 1);
+            });
+        }
+        else if (phase === "dropping") {
+            const t = elapsed / timing.dropping;
+            const y = t < 0.7
+                ? -14 * (1 - t / 0.7) - 12 * Math.sin((Math.PI * t) / 0.7)
+                : -3 * Math.sin((Math.PI * (t - 0.7)) / 0.3);
+            diamonds.forEach((d) => {
+                d.style.opacity = "1";
+                d.style.transform = `translateY(${y}px) scale(${0.65 + 0.35 * Math.min(1, t * 4)})`;
+            });
+        }
+        else if (phase === "collecting") {
+            const t = elapsed / timing.collecting;
+            diamonds.forEach((d, i) => {
+                d.style.opacity = "1";
+                d.style.transform = `translate(${-160 * t}px,${-18 * Math.sin(Math.PI * t)}px) rotate(${-200 * t * (i ? 1 : 0.7)}deg)`;
+            });
+        }
+    }
+    const canAnimate = () => !disposed &&
+        visible &&
+        !document.hidden &&
+        !handoffAnimations.length &&
+        phase !== "idle" &&
+        (state === "running" || finishing);
+    function tick(now) {
+        frame = 0;
+        if (!canAnimate()) {
+            last = null;
+            return;
+        }
+        elapsed += last === null ? 0 : Math.min(now - last, 80);
+        last = now;
+        if (phase === "mining") {
+            const hits = Math.min(timing.hits, Math.floor(elapsed / timing.strike + 0.5));
+            if (hits > renderedHits) {
+                // Present each contact for a frame even when a slow frame crosses
+                // its narrow peak, keeping all three hits and textures visible.
+                elapsed = timing.strike * (hits - 0.5);
+                renderedHits = hits;
+            }
+        }
+        const duration = phase === "mining"
+            ? timing.strike * (timing.hits - 0.45)
+            : phase === "breaking"
+                ? timing.breaking
+                : phase === "dropping"
+                    ? timing.dropping
+                    : phase === "collecting"
+                        ? timing.collecting
+                        : timing.advancing;
+        if (elapsed >= duration)
+            advance();
+        draw();
+        if (canAnimate())
+            frame = requestAnimationFrame(tick);
+    }
+    function capturePose() {
+        return {
+            anchor: getComputedStyle(pick).transform,
+            sprite: getComputedStyle(pickSprite).transform,
+            shadow: getComputedStyle(shadow).opacity,
+            sparks: sparks.map((spark) => ({
+                opacity: getComputedStyle(spark).opacity,
+                transform: getComputedStyle(spark).transform,
+            })),
+        };
+    }
+    function handoff(from, waiting) {
+        const options = {
+            duration: 260,
+            easing: "cubic-bezier(0.22, 0.8, 0.3, 1)",
+        };
+        handoffAnimations = [
+            pick.animate([{ transform: from.anchor }, { transform: pick.style.transform }], { ...options, id: "download-mine-handoff-anchor" }),
+            pickSprite.animate([
+                { transform: from.sprite },
+                { transform: waiting ? idlePickFrames[0].transform : "none" },
+            ], { ...options, id: "download-mine-handoff-pick" }),
+            shadow.animate([{ opacity: from.shadow }, { opacity: waiting ? 0.11 : 0 }], { ...options, id: "download-mine-handoff-shadow" }),
+            ...sparks.map((spark, index) => spark.animate([from.sparks[index], { ...from.sparks[index], opacity: 0 }], { ...options, id: `download-mine-handoff-spark-${index}` })),
+        ];
+        scene.dataset.handoff = waiting ? "warmup" : "mining";
+        const anchor = handoffAnimations[0];
+        anchor.onfinish = () => {
+            if (disposed || handoffAnimations[0] !== anchor)
+                return;
+            const finished = handoffAnimations;
+            handoffAnimations = [];
+            delete scene.dataset.handoff;
+            finished.forEach((animation) => animation.cancel());
+            if (pendingReset && warming)
+                reset();
+            syncPlayback();
+        };
+    }
+    function syncPickWarmup() {
+        const waiting = state !== "running" && !finishing;
+        scene.dataset.visual = waiting ? "idle" : "running";
+        if (waiting !== warming || !hasPlayback) {
+            // Capture both nested transforms before cancelling either animation.
+            // Their origins stay fixed, so reversals retain the exact rendered pose.
+            const from = capturePose();
+            handoffAnimations.forEach((animation) => animation.cancel());
+            handoffAnimations = [];
+            idleAnimations.forEach((animation) => animation.cancel());
+            idleAnimations = [];
+            warming = waiting;
+            pick.style.transform = waiting ? "rotate(-16deg)" : miningPickTransform;
+            if (waiting) {
+                const options = {
+                    duration: idleDuration,
+                    iterations: Infinity,
+                    easing: "linear",
+                };
+                idleAnimations = [
+                    pickSprite.animate(idlePickFrames, {
+                        ...options,
+                        id: "download-mine-idle-warmup",
+                    }),
+                    shadow.animate(idleShadowFrames, {
+                        ...options,
+                        id: "download-mine-idle-shadow",
+                    }),
+                    ...sparks.map((spark, index) => {
+                        const angle = (index * Math.PI) / 2 + 0.6;
+                        const from = `translate(${Math.cos(angle) * 10}px, ${Math.sin(angle) * 10}px) scale(1)`;
+                        const to = `translate(${Math.cos(angle) * 18}px, ${Math.sin(angle) * 18}px) scale(0.01)`;
+                        return spark.animate([
+                            { offset: 0, opacity: 0, transform: from },
+                            { offset: 4.2 / 8.5, opacity: 0, transform: from },
+                            { offset: 4.25 / 8.5, opacity: 0.6, transform: from },
+                            { offset: 5.2 / 8.5, opacity: 0, transform: to },
+                            { offset: 1, opacity: 0, transform: to },
+                        ], { ...options, id: `download-mine-idle-spark-${index}` });
+                    }),
+                ];
+                idleAnimations.forEach((animation) => {
+                    animation.pause();
+                    animation.currentTime = 0;
+                });
+            }
+            if (hasPlayback)
+                handoff(from, waiting);
+            hasPlayback = true;
+        }
+        const playing = visible && !document.hidden;
+        const pause = (animation) => {
+            const time = animation.currentTime;
+            animation.pause();
+            // Resolve the pending pause at this pose, including mid-handoff.
+            if (time !== null)
+                animation.currentTime = time;
+        };
+        for (const animation of idleAnimations) {
+            const playIdle = playing && waiting && !handoffAnimations.length;
+            if (playIdle && animation.playState === "paused")
+                animation.play();
+            if (!playIdle && animation.playState !== "paused")
+                pause(animation);
+        }
+        for (const animation of handoffAnimations) {
+            if (animation.playState === "finished")
+                continue;
+            if (playing && animation.playState === "paused")
+                animation.play();
+            if (!playing && animation.playState !== "paused")
+                pause(animation);
+        }
+    }
+    function syncPlayback() {
+        scene.dataset.paused = String(!visible || document.hidden);
+        syncPickWarmup();
+        if (canAnimate()) {
+            if (!frame)
+                frame = requestAnimationFrame(tick);
+        }
+        else {
+            cancelAnimationFrame(frame);
+            frame = 0;
+            last = null;
+        }
+    }
+    reset();
+    document.addEventListener("visibilitychange", syncPlayback);
+    return {
+        setState(next) {
+            if (state === next)
+                return;
+            state = next;
+            if (next === "idle" || next === "cancelled")
+                requestReset();
+            else if (next === "running") {
+                if (finishing || pendingReset)
+                    reset();
+                if (phase === "idle")
+                    setPhase("mining");
+                delete scene.dataset.reward;
+                started = true;
+                scene.dataset.visual = "running";
+            }
+            else if (next === "done") {
+                if (started)
+                    finishing = true;
+                else {
+                    reset();
+                    setPhase("idle");
+                }
+            }
+            else if (finishing || phase === "idle")
+                requestReset();
+            syncPlayback();
+        },
+        setVisible(value) {
+            visible = value;
+            syncPlayback();
+        },
+        dispose() {
+            disposed = true;
+            cancelAnimationFrame(frame);
+            idleAnimations.forEach((animation) => animation.cancel());
+            handoffAnimations.forEach((animation) => animation.cancel());
+            restQueue.remove();
+            document.removeEventListener("visibilitychange", syncPlayback);
+            queue.replaceChildren();
+        },
+    };
+}
+function downloadMiningState(downloads) {
+    const active = downloads.filter((d) => ["running", "paused", "pausing", "queued"].includes(d.status));
+    const running = active.filter((d) => d.status === "running");
+    const state = running.length
+        ? "running"
+        : active.some((d) => ["paused", "pausing"].includes(d.status))
+            ? "paused"
+            : active.length
+                ? "queued"
+                : downloads.some((d) => d.status === "failed")
+                    ? "failed"
+                    : downloads.some((d) => d.status === "cancelled")
+                        ? "cancelled"
+                        : downloads.length
+                            ? "done"
+                            : "idle";
+    // Historical completed downloads must not inflate the current batch's progress.
+    const total = active.reduce((sum, d) => sum + d.total, 0);
+    const progress = active.length
+        ? active.some((d) => d.unknownSize || d.total <= 0)
+            ? null
+            : active.reduce((sum, d) => sum + Math.max(0, Math.min(d.downloaded, d.total)), 0) / total
+        : state === "done"
+            ? 1
+            : 0;
+    const label = {
+        idle: "待下载",
+        running: "下载中",
+        paused: "已暂停",
+        queued: "等待下载",
+        failed: "需要处理",
+        cancelled: "已取消",
+        done: "下载完成",
+    }[state];
+    const detail = active.length
+        ? `${progress === null ? "大小未知" : `${Math.round(progress * 100)}%`} · ${active.length} 个任务`
+        : state === "done"
+            ? "资源已就绪"
+            : state === "failed"
+                ? "请检查失败任务"
+                : state === "cancelled"
+                    ? "等待下一次下载"
+                    : "等待下一次冒险";
+    return { state, progress, label, detail };
+}
+</script>
+  <script>
+    'use strict';
+    const cases = [
+      {id:'idle',title:'待下载',short:'抛镐热身',tag:'方案 A · 1.5×',description:'没有下载任务时，镐子晃动蓄力、抛起转一圈，再稳稳接住，闪过几颗星点。动作后留出短暂的停顿。',note:'已采用加速后的方案 A，一轮约 5.7 秒。',mode:'空闲热身'},
+      {id:'running',title:'下载中',short:'持续挖矿',tag:'三次敲击 · 加速',description:'镐子快速敲击石头三次，裂纹逐次加深，第三次敲击后石头碎裂，后面的方块快速向前补位。只要还有下载中的任务，挖矿就继续。',note:'三次敲击依次使用半透明裂纹 2 / 5 / 8 阶段。每次间隔 288ms，整轮约 1.05 秒。拖动任务进度，可以观察页头数字和地面进度线同步变化。',mode:'持续挖矿'},
+      {id:'paused',title:'已暂停',short:'抛镐热身',tag:'暂停时热身',description:'下载暂停后，镐子从当前姿态平滑进入待下载的抛镐热身，完整石头渐渐显现。继续下载时，镐子平滑接回停下的挖掘姿态。',note:'挖掘进度在内部保留，热身动画持续播放。切换到其他等待状态时，同一轮热身不会重新开始。',mode:'暂停时热身'},
+      {id:'pausing',title:'正在暂停',short:'抛镐热身',tag:'暂停过渡',description:'任务正在等待写入停止，镐子已经平滑进入抛镐热身。页头显示“已暂停”，任务卡片显示“正在暂停”。',note:'进入“已暂停”后继续同一轮热身，不会重播开头。',mode:'暂停中热身'},
+      {id:'queued',title:'等待下载',short:'抛镐热身',tag:'排队时热身',description:'任务已进入队列，镐子播放与待下载相同的抛镐热身。开始下载时，镐子平滑接回挖掘姿态，再继续敲击。',note:'等待下载、需要处理和暂停之间切换时，热身循环持续播放。',mode:'排队时热身'},
+      {id:'failed',title:'需要处理',short:'抛镐等待处理',tag:'待处理时热身',description:'下载失败后，镐子平滑进入抛镐热身，任务卡片保留失败提示和重试操作。',note:'点击“重试”，可以观察镐子从当前热身姿态平滑接回挖掘。',mode:'待处理时热身'},
+      {id:'cancelled',title:'已取消',short:'抛镐热身',tag:'取消后热身',description:'取消下载后，镐子平滑回到待下载的抛镐热身，完整石头渐渐显现。',note:'清理任务后继续同一轮热身。取消过程中不会播放收集钻石。',mode:'取消后热身'},
+      {id:'done',title:'下载完成',short:'挖钻石并收集',tag:'完成时播放一次',description:'最后一段下载结束后，镐子挖开钻石矿石，钻石落下，再向左飞出完成收集。石头补回原位，镐子回到空闲热身。',note:'“查看已完成历史”只展示资源已就绪和热身循环，不会再次播放收集钻石。',mode:'完成收尾'}
+    ];
+    const caseMap = new Map(cases.map(item=>[item.id,item]));
+    const flows = {
+      normal:[['idle',1500,'待下载'],['queued',1200,'排队'],['running',3200,'下载'],['pausing',900,'暂停中'],['paused',1500,'已暂停'],['running',2800,'继续'],['done',8000,'完成'],['idle',1200,'待机']],
+      retry:[['running',3000,'下载'],['failed',1800,'失败'],['running',3000,'重试'],['done',8000,'完成'],['idle',1200,'待机']],
+      cancel:[['running',3500,'下载'],['cancelled',2000,'取消'],['idle',2200,'待机']]
+    };
+    const phaseNames={mining:'下镐敲击',breaking:'石头碎裂',advancing:'方块补位',dropping:'钻石落下',collecting:'收集钻石',restocking:'石头归位',idle:'热身循环'};
+    const taskNames={running:'下载中',paused:'已暂停',pausing:'正在暂停',queued:'等待下载',failed:'下载失败',cancelled:'已取消',done:'已完成'};
+    const activeStates=['running','paused','pausing','queued'];
+    const sceneInstances=[];
+    let mainInstances=[],current='idle',progress=42,unknown=false,previewPaused=false,ready=false;
+    let auto=false,flowName='normal',flowIndex=0,flowElapsed=0,lastTime=null,autoFrame=0;
+    let currentDownloads=[];
+    const byId=id=>document.getElementById(id);
+    const icon=name=>`<svg aria-hidden="true"><use href="#${name}-icon"></use></svg>`;
+    function makeScene(host){
+      const scene=document.createElement('div');scene.className='download-mine-scene';scene.dataset.unknown='false';scene.style.setProperty('--mine-progress','0');
+      scene.innerHTML=`<div class="download-mine-ground"></div><i class="download-mine-grass"></i><div class="download-mine-queue"></div><div class="download-mine-idle-effects"><i class="download-mine-shadow"></i>${'<i class="download-mine-spark"></i>'.repeat(4)}</div><div class="download-mine-pick"><img src="${embeddedAssets.pickaxe}" alt="" draggable="false"></div><img class="download-mine-diamond" src="${embeddedAssets.diamond}" alt="" draggable="false"><img class="download-mine-diamond two" src="${embeddedAssets.diamond}" alt="" draggable="false">`;
+      host.append(scene);const controller=createDownloadMiningMotion(scene);controller.setVisible(!previewPaused);
+      const instance={scene,controller};sceneInstances.push(instance);return instance;
+    }
+    function snapshot(id){
+      if(id==='idle')return [];
+      const status=id==='done'?'completed':id;
+      const percent=id==='done'?100:id==='queued'?0:progress;
+      return [{id:'preview-download',title:'Minecraft 1.21.4',status,downloaded:256*1024*1024*percent/100,total:256*1024*1024,unknownSize:unknown&&activeStates.includes(id),completed:Math.round(80*percent/100),fileCount:80,failed:id==='failed'?1:0,speed:id==='running'?4.8*1024*1024:0,workers:8,steps:[]}];
+    }
+    function applySnapshot(instance,downloads,completion=false){
+      const state=downloadMiningState(downloads);
+      instance.scene.dataset.unknown=String(state.progress===null);instance.scene.style.setProperty('--mine-progress',String(state.progress??0));
+      if(completion)instance.controller.setState('running');
+      instance.controller.setState(state.state);return state;
+    }
+    function updatePhase(){
+      if(!ready)return;
+      const scene=mainInstances[0].scene;
+      const idle=scene.dataset.visual==='idle';
+      byId('phase-label').textContent=scene.dataset.handoff==='warmup'?'进入热身':scene.dataset.handoff==='mining'?'接回挖掘':idle?'热身循环':phaseNames[scene.dataset.phase]||'准备就绪';
+      const item=caseMap.get(current);
+      byId('motion-mode').textContent=previewPaused?'预览已暂停':idle?'空闲热身':item.mode;
+    }
+    function renderTask(){
+      currentDownloads=snapshot(current);const header=downloadMiningState(currentDownloads);
+      for(const instance of mainInstances)applySnapshot(instance,currentDownloads);
+      const feedback=byId('header-feedback');feedback.dataset.state=header.state;byId('header-label').textContent=header.label;byId('header-detail').textContent=header.detail;
+      byId('speed-value').textContent=current==='running'?'4.8 MB':'0 B';byId('active-count').textContent=String(activeStates.includes(current)?1:0);byId('failed-count').textContent=current==='failed'?'1':'0';byId('task-count').textContent=current==='idle'?'0 个任务':'1 个任务';
+      byId('empty-task').hidden=current!=='idle';byId('task-card').hidden=current==='idle';
+      const task=currentDownloads[0];const percent=task?Math.round(task.downloaded/task.total*100):0;
+      if(task){
+        const badge=byId('task-badge');badge.textContent=taskNames[current];badge.dataset.status=current;
+        byId('file-detail').textContent=`${task.completed} / 80 个文件 · 8 个工作线程`;
+        byId('bytes-detail').textContent=`${(256*percent/100).toFixed(1)} MB / ${task.unknownSize?'部分大小未知':'256 MB'}`;
+        byId('progress-detail').textContent=task.unknownSize?'大小未知':current==='running'?'4.8 MB/s':`${percent}%`;
+        byId('task-progress').dataset.status=current;byId('task-progress').dataset.unknown=String(task.unknownSize);byId('task-progress').firstElementChild.style.transform=`scaleX(${task.unknownSize?1:percent/100})`;
+      }
+      byId('task-error').hidden=current!=='failed';
+      const actions=[];
+      if(current==='running'){actions.push(['暂停','paused'],['取消','cancelled']);}
+      else if(current==='paused')actions.push(['继续','running'],['取消','cancelled']);
+      else if(current==='failed')actions.push(['重试','running'],['清理','idle']);
+      else if(current==='queued')actions.push(['开始下载','running'],['取消','cancelled']);
+      else if(['done','cancelled'].includes(current))actions.push(['清理任务','idle']);
+      const host=byId('task-actions');host.replaceChildren(...actions.map(([label,id])=>{const button=document.createElement('button');button.type='button';button.className='button small';button.textContent=label;button.addEventListener('click',()=>selectCase(id));return button;}));
+      if(current==='pausing')host.textContent='等待写入停止…';
+      const active=activeStates.includes(current);byId('progress').disabled=!active||unknown||current==='queued';byId('unknown-size').disabled=!active;byId('unknown-size').checked=unknown;
+      byId('progress').value=String(percent);byId('progress-output').textContent=active&&unknown?'未知':`${percent}%`;
+      updatePhase();
+    }
+    function drawFlow(){
+      const steps=flows[flowName];byId('flow-steps').replaceChildren(...steps.map((step,index)=>{const span=document.createElement('span');span.className='flow-step'+(auto&&flowIndex===index?' active':'');span.textContent=step[2];return span;}));
+      byId('flow-status').textContent=auto?'流程演示中':'手动查看';byId('run-flow').querySelector('span').textContent=auto?'重新播放流程':'播放完整流程';
+    }
+    function stopFlow(){auto=false;cancelAnimationFrame(autoFrame);autoFrame=0;lastTime=null;drawFlow();}
+    function selectCase(id,{fromFlow=false,history=false,replay=false}={}){
+      if(!ready)return;if(!fromFlow)stopFlow();
+      const previous=current;current=id;const item=caseMap.get(id);
+      const replayDone=id==='done'&&!history&&(replay||previous!=='running');
+      if(history){for(const instance of mainInstances){instance.controller.setState('idle');instance.controller.setState('done');}}
+      else if(replayDone){for(const instance of mainInstances)instance.controller.setState('running');}
+      byId('motion-title').textContent=item.title;byId('state-description').textContent=item.description;byId('state-note').textContent=item.note;byId('motion-tag').textContent=item.tag;byId('completion-controls').hidden=id!=='done';
+      document.querySelectorAll('.state-card').forEach(card=>card.setAttribute('aria-pressed',String(card.dataset.state===id)));
+      historyReplace(id);renderTask();
+    }
+    function historyReplace(id){history.replaceState(null,'','#'+id);}
+    function runFlow(){
+      if(!ready)return;stopFlow();auto=true;flowName=byId('flow-choice').value;flowIndex=0;flowElapsed=0;progress=8;unknown=false;lastTime=null;
+      selectCase(flows[flowName][0][0],{fromFlow:true});drawFlow();scheduleFlow();
+    }
+    function scheduleFlow(){if(auto&&!previewPaused&&!document.hidden&&!autoFrame)autoFrame=requestAnimationFrame(tickFlow);}
+    function tickFlow(now){
+      autoFrame=0;if(!auto||previewPaused||document.hidden){lastTime=null;return;}
+      flowElapsed+=lastTime===null?0:Math.min(now-lastTime,100);lastTime=now;
+      const steps=flows[flowName];const duration=steps[flowIndex][1];
+      if(flowElapsed>=duration){flowElapsed-=duration;flowIndex++;if(flowIndex>=steps.length){auto=false;drawFlow();byId('flow-status').textContent='演示结束';return;}selectCase(steps[flowIndex][0],{fromFlow:true});drawFlow();}
+      if(current==='running'){
+        const total=steps.reduce((sum,step)=>sum+step[1],0);
+        const elapsed=steps.slice(0,flowIndex).reduce((sum,step)=>sum+step[1],0)+flowElapsed;
+        const finishingTime=steps.some(step=>step[0]==='done')?8000:0;
+        const next=Math.max(8,Math.min(99,Math.round(8+91*elapsed/(total-finishingTime))));
+        if(next!==progress){progress=next;renderTask();}
+      }
+      scheduleFlow();
+    }
+    function syncPlayback(){
+      sceneInstances.forEach(instance=>instance.controller.setVisible(!previewPaused));
+      if(previewPaused||document.hidden){cancelAnimationFrame(autoFrame);autoFrame=0;lastTime=null;}else scheduleFlow();
+      const button=byId('pause-preview');button.setAttribute('aria-pressed',String(previewPaused));button.querySelector('use').setAttribute('href',previewPaused?'#play-icon':'#pause-icon');button.querySelector('span').textContent=previewPaused?'继续预览':'暂停预览';updatePhase();
+    }
+    function fitScenes(){
+      const hero=mainInstances[0];if(hero){const scale=Math.min(2.8,(byId('hero-host').clientWidth-28)/178);hero.scene.style.transform=`scale(${scale})`;byId('zoom-label').textContent='ZOOM × '+scale.toFixed(1);}
+      document.querySelectorAll('.mini-stage .download-mine-scene').forEach(scene=>{scene.style.transform=`scale(${Math.min(1.12,(scene.parentElement.clientWidth-16)/178)})`;});
+    }
+    function init(){
+      const cards=byId('state-cards');cards.replaceChildren();
+      mainInstances=[makeScene(byId('hero-host')),makeScene(byId('actual-host'))];
+      for(const [index,item] of cases.entries()){
+        const card=document.createElement('button');card.type='button';card.className='state-card';card.dataset.state=item.id;card.setAttribute('aria-pressed','false');card.setAttribute('aria-label',item.title+'，'+item.short);
+        card.innerHTML=`<div class="mini-stage" aria-hidden="true"><span class="card-number mono">0${index+1}</span><span class="selection-dot"></span></div><div class="card-copy"><div class="card-heading"><strong>${item.title}</strong><small>${item.id==='idle'?'1.5×':item.id==='done'?'收尾一次':'状态示意'}</small></div><p>${item.short}</p></div>`;
+        cards.append(card);const instance=makeScene(card.firstElementChild);applySnapshot(instance,snapshot(item.id),item.id==='done');
+        card.addEventListener('click',()=>selectCase(item.id,{replay:item.id==='done'}));
+      }
+      ready=true;const hash=location.hash.slice(1);selectCase(caseMap.has(hash)?hash:'idle');fitScenes();drawFlow();
+      new ResizeObserver(fitScenes).observe(byId('hero-host'));
+      new MutationObserver(updatePhase).observe(mainInstances[0].scene,{attributes:true,attributeFilter:['data-phase','data-reward']});
+    }
+    byId('run-flow').addEventListener('click',runFlow);
+    byId('flow-choice').addEventListener('change',()=>{stopFlow();flowName=byId('flow-choice').value;drawFlow();});
+    byId('pause-preview').addEventListener('click',()=>{previewPaused=!previewPaused;syncPlayback();});
+    byId('progress').addEventListener('input',event=>{stopFlow();progress=Number(event.target.value);renderTask();});
+    byId('unknown-size').addEventListener('change',event=>{stopFlow();unknown=event.target.checked;renderTask();});
+    byId('install-version').addEventListener('click',()=>selectCase('running'));
+    byId('replay-completion').addEventListener('click',()=>selectCase('done',{replay:true}));
+    byId('show-history').addEventListener('click',()=>selectCase('done',{history:true}));
+    byId('theme').addEventListener('click',()=>{const dark=document.documentElement.dataset.theme!=='dark';document.documentElement.dataset.theme=dark?'dark':'light';byId('theme').setAttribute('aria-label',dark?'切换到浅色主题':'切换到深色主题');byId('theme').querySelector('use').setAttribute('href',dark?'#sun-icon':'#moon-icon');});
+    document.addEventListener('visibilitychange',syncPlayback);
+    window.addEventListener('hashchange',()=>{const id=location.hash.slice(1);if(caseMap.has(id))selectCase(id);});
+    window.addEventListener('pagehide',()=>{cancelAnimationFrame(autoFrame);autoFrame=0;lastTime=null;sceneInstances.forEach(instance=>instance.controller.setVisible(false));});
+    window.addEventListener('pageshow',()=>{if(ready)syncPlayback();});
+    Promise.all(Object.values(embeddedAssets).map(src=>new Promise((resolve,reject)=>{const image=new Image();image.onload=resolve;image.onerror=()=>reject(new Error('像素素材加载失败'));image.src=src;}))).then(init).catch(error=>{byId('state-cards').textContent=error.message;});
+    window.downloadStatePreview={get state(){return {ready,current,progress,unknown,paused:previewPaused,auto,flowName,flowIndex,phase:mainInstances[0]?.scene.dataset.phase,reward:mainInstances[0]?.scene.dataset.reward};}};
+  </script>
+</body>
+</html>

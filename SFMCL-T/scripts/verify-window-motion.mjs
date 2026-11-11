@@ -116,7 +116,7 @@ const idle = async () => {
   await expect(page.locator("body")).toHaveCSS("transform", "none");
   await expect(page.locator("body")).toHaveCSS("opacity", "1");
   await expect(page.locator("body")).toHaveCSS("pointer-events", "auto");
-  await expect(page.locator("body")).toHaveCSS("clip-path", "none");
+  await expect(page.locator("body")).toHaveCSS("clip-path", /^polygon\(/);
   await expect
     .poll(() => page.evaluate(() => window.__windowTest.frameVisible))
     .toBe(true);
@@ -301,7 +301,7 @@ try {
   ).toBe(true);
   checks.push(
     "Hide/show preserves a transparent native canvas, suppresses the frame during motion, and restores it only after the full UI is visible.",
-    "Minimize, hide and show retain four rounded surface corners in light and dark themes; idle releases the animation clip for popovers.",
+    "Minimize, hide and show retain four pixel-stepped corners in light and dark themes; idle keeps portal backdrops clipped to the same silhouette.",
   );
 
   const beforeRace = await page.evaluate(

@@ -59,7 +59,7 @@ html[data-startup="loading"] #root {
 }
 html[data-startup="revealing"] #root {
   background: var(--sidebar, var(--startup-bg));
-  clip-path: inset(0 round var(--window-corner-radius, 12px));
+  clip-path: var(--window-corner-shape);
   transform-origin: center;
   will-change: transform, opacity;
 }

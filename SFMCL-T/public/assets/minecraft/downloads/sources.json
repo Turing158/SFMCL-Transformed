@@ -1,0 +1,66 @@
+[
+  {
+    "name": "diamond.png",
+    "url": "https://zh.minecraft.wiki/images/Invicon_Diamond.png?09379",
+    "source": "https://zh.minecraft.wiki/w/钻石",
+    "bytes": 218,
+    "type": "image/png"
+  },
+  {
+    "name": "pickaxe.png",
+    "url": "https://zh.minecraft.wiki/images/Invicon_Diamond_Pickaxe.png?a0396",
+    "source": "https://zh.minecraft.wiki/w/镐",
+    "bytes": 207,
+    "type": "image/png"
+  },
+  {
+    "name": "diamond-ore.png",
+    "url": "https://zh.minecraft.wiki/images/Invicon_Diamond_Ore.png?e8355",
+    "source": "https://zh.minecraft.wiki/w/钻石矿石",
+    "bytes": 617,
+    "type": "image/png"
+  },
+  {
+    "name": "stone.png",
+    "url": "https://zh.minecraft.wiki/images/thumb/Stone_JE5_BE3.png/150px-Stone_JE5_BE3.png?33434",
+    "source": "https://zh.minecraft.wiki/w/File:Stone_JE5_BE3.png",
+    "bytes": 8994,
+    "type": "image/png"
+  },
+  {
+    "name": "destroy_oit_stage_2.png",
+    "url": "https://honghemc.cn/textures/destroy_oit_stage_2.png",
+    "source": "https://honghemc.cn/app/textures.html",
+    "bytes": 5816,
+    "type": "image/png"
+  },
+  {
+    "name": "destroy_oit_stage_2-cube.png",
+    "derivedFrom": "destroy_oit_stage_2.png",
+    "projection": "Three visible isometric faces of the 150px stone sprite; nearest-neighbor sampling; alpha masked to stone; near-transparent background removed."
+  },
+  {
+    "name": "destroy_oit_stage_5.png",
+    "url": "https://honghemc.cn/textures/destroy_oit_stage_5.png",
+    "source": "https://honghemc.cn/app/textures.html",
+    "bytes": 5958,
+    "type": "image/png"
+  },
+  {
+    "name": "destroy_oit_stage_5-cube.png",
+    "derivedFrom": "destroy_oit_stage_5.png",
+    "projection": "Three visible isometric faces of the 150px stone sprite; nearest-neighbor sampling; alpha masked to stone; near-transparent background removed."
+  },
+  {
+    "name": "destroy_oit_stage_8.png",
+    "url": "https://honghemc.cn/textures/destroy_oit_stage_8.png",
+    "source": "https://honghemc.cn/app/textures.html",
+    "bytes": 6159,
+    "type": "image/png"
+  },
+  {
+    "name": "destroy_oit_stage_8-cube.png",
+    "derivedFrom": "destroy_oit_stage_8.png",
+    "projection": "Three visible isometric faces of the 150px stone sprite; nearest-neighbor sampling; alpha masked to stone; near-transparent background removed."
+  }
+]

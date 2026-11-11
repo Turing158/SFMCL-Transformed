@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Compass,
   House,
+  Network,
   Play,
   Settings2,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { desktop, statusLabel } from "./api";
 import { Skin, useImage, PixelFrame } from "./components";
 import { Players } from "./pages/Players";
 import { Versions } from "./pages/Versions";
+import { Multiplayer } from "./pages/Multiplayer";
 import { Resources } from "./pages/Resources";
 import { Downloads } from "./pages/Downloads";
 import { SettingsPage } from "./pages/Settings";
@@ -31,6 +33,7 @@ import { YggdrasilDropTarget } from "./YggdrasilDropTarget";
 import { navigationPage, pageNames, pageViews } from "./navigation";
 import { useNavigationTransition } from "./useNavigationTransition";
 import { usePlayerCaption } from "./usePlayerCaption";
+import { playerAccountLabel } from "./playerAccountLabel";
 import { appIcon } from "./branding";
 import { BrandWordmark } from "./BrandWordmark";
 import { PageHeader } from "./PageHeader";
@@ -43,6 +46,7 @@ import "./home.css";
 const navigation = [
   { id: "home", name: pageNames.home, icon: House },
   { id: "versions", name: pageNames.versions, icon: Box },
+  { id: "multiplayer", name: pageNames.multiplayer, icon: Network },
   { id: "resources", name: pageNames.resources, icon: Compass },
   { id: "settings", name: pageNames.settings, icon: Settings2 },
 ] as const;
@@ -50,6 +54,7 @@ const pages = {
   home: Home,
   players: Players,
   versions: Versions,
+  multiplayer: Multiplayer,
   resources: Resources,
   downloads: Downloads,
   settings: SettingsPage,
@@ -227,11 +232,7 @@ export default function App() {
               <strong>{player?.name || "添加你的角色"}</strong>
               <small>
                 {player
-                  ? player.yggdrasil
-                    ? "第三方账号"
-                    : player.online
-                      ? "Microsoft 账号"
-                      : "离线角色"
+                  ? playerAccountLabel(player)
                   : "准备好开启冒险"}
               </small>
             </span>

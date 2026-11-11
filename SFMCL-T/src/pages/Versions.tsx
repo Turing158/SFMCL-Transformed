@@ -392,10 +392,13 @@ export function Versions() {
                       <span className="versions-skeleton-block versions-skeleton-meta" />
                       <span className="versions-skeleton-block versions-skeleton-directory" />
                     </div>
-                    <div className="version-actions">
-                      <span className="versions-skeleton-block versions-skeleton-action" />
-                      <span className="versions-skeleton-block versions-skeleton-action" />
-                      <span className="versions-skeleton-block versions-skeleton-action" />
+                    <div className="version-controls">
+                      <div className="version-actions">
+                        <span className="versions-skeleton-block versions-skeleton-action" />
+                        <span className="versions-skeleton-block versions-skeleton-action" />
+                        <span className="versions-skeleton-block versions-skeleton-action" />
+                        <span className="versions-skeleton-block versions-skeleton-action" />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -519,64 +522,66 @@ export function Versions() {
                       </p>
                     )}
                   </div>
-                  <span className="version-selection" aria-hidden="true">
-                    <Check size={14} /> 已选择
-                  </span>
-                  <div className="version-actions">
-                    <button
-                      type="button"
-                      className="icon-button has-surface version-favorite"
-                      data-tooltip={v.favorite ? "取消收藏" : "收藏版本"}
-                      aria-label={`${v.favorite ? "取消收藏" : "收藏"} ${v.id}`}
-                      aria-pressed={!!v.favorite}
-                      disabled={app.busy}
-                      onClick={() =>
-                        void app.mutate(
-                          "versions.favorite",
-                          versionPayload(v, { favorite: !v.favorite }),
-                          v.favorite ? "已取消收藏" : "已收藏版本",
-                        )
-                      }
-                    >
-                      <PixelFrame />
-                      <Star
-                        size={17}
-                        fill={v.favorite ? "currentColor" : "none"}
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button has-surface"
-                      data-tooltip="本地资源"
-                      aria-label={`查看 ${v.id} 本地资源`}
-                      onClick={() => app.openVersionPage("resources", v)}
-                    >
-                      <PixelFrame />
-                      <FolderOpen size={17} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button has-surface"
-                      data-tooltip={`游戏设置 · ${v.independentSettings ? "独立" : "全局"}`}
-                      aria-label={`游戏设置 ${v.id}`}
-                      onClick={() => app.openVersionPage("settings", v)}
-                    >
-                      <PixelFrame />
-                      <Settings2 size={17} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button has-surface"
-                      data-tooltip="更多操作"
-                      aria-label={`管理 ${v.id}`}
-                      aria-haspopup="dialog"
-                      onClick={() => {
-                        versionMenu.setManaged(v);
-                      }}
-                    >
-                      <PixelFrame />
-                      <MoreHorizontal size={18} />
-                    </button>
+                  <div className="version-controls">
+                    <span className="version-selection" aria-hidden="true">
+                      {view === "list" && <Check size={14} />} 已选择
+                    </span>
+                    <div className="version-actions">
+                      <button
+                        type="button"
+                        className="icon-button has-surface version-favorite"
+                        data-tooltip={v.favorite ? "取消收藏" : "收藏版本"}
+                        aria-label={`${v.favorite ? "取消收藏" : "收藏"} ${v.id}`}
+                        aria-pressed={!!v.favorite}
+                        disabled={app.busy}
+                        onClick={() =>
+                          void app.mutate(
+                            "versions.favorite",
+                            versionPayload(v, { favorite: !v.favorite }),
+                            v.favorite ? "已取消收藏" : "已收藏版本",
+                          )
+                        }
+                      >
+                        <PixelFrame />
+                        <Star
+                          size={17}
+                          fill={v.favorite ? "currentColor" : "none"}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button has-surface"
+                        data-tooltip="本地资源"
+                        aria-label={`查看 ${v.id} 本地资源`}
+                        onClick={() => app.openVersionPage("resources", v)}
+                      >
+                        <PixelFrame />
+                        <FolderOpen size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button has-surface"
+                        data-tooltip={`游戏设置 · ${v.independentSettings ? "独立" : "全局"}`}
+                        aria-label={`游戏设置 ${v.id}`}
+                        onClick={() => app.openVersionPage("settings", v)}
+                      >
+                        <PixelFrame />
+                        <Settings2 size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button has-surface"
+                        data-tooltip="更多操作"
+                        aria-label={`管理 ${v.id}`}
+                        aria-haspopup="dialog"
+                        onClick={() => {
+                          versionMenu.setManaged(v);
+                        }}
+                      >
+                        <PixelFrame />
+                        <MoreHorizontal size={18} />
+                      </button>
+                    </div>
                   </div>
                   {v.error && <p className="inline-error">{v.error}</p>}
                 </article>

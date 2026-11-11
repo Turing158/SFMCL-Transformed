@@ -81,7 +81,7 @@ const read = () =>
   page.evaluate(() => {
     const main = document.querySelector("main.page");
     const card = document.querySelector(".launch-dock-main");
-    const dock = card.parentElement;
+    const dock = card.closest(".launch-dock");
     const status = dock.querySelector(".launch-status");
     const content = main.querySelector(".home-content");
     const last = Math.max(

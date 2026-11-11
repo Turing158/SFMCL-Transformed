@@ -267,7 +267,7 @@ try {
     );
     const outgoing = await native();
     expect(outgoing.rendering).toBe(1);
-    expect(outgoing.corners).toBe(2);
+    expect(outgoing.corners).toBe(1);
     expect(outgoing.shadowVisible).toBe(false);
     expect(outgoing.width).toBe(outgoing.clientWidth);
     expect(outgoing.height).toBe(outgoing.clientHeight);
@@ -282,7 +282,7 @@ try {
     );
     const incoming = await native();
     expect(incoming.rendering).toBe(1);
-    expect(incoming.corners).toBe(2);
+    expect(incoming.corners).toBe(1);
     expect(incoming.shadowVisible).toBe(false);
     await finishMotion();
     await idle();
@@ -410,7 +410,7 @@ try {
   await assertTopEdge("top-edge-startup");
   checks.push(
     "External shadow follows move/resize/restore, stays outside the client, cannot take mouse input or focus, and hides during motion and maximization.",
-    "Native corner preference remains rounded while hiding/restoring the shadow, and the moving startup surface paints four transparent rounded corners.",
+    "Native rounding stays disabled while hiding/restoring the shadow, and CSS preserves four transparent pixel-stepped corners during startup and window motion.",
   );
   await writeFile(
     path.join(evidence, "checks.json"),

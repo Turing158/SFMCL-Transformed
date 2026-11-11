@@ -367,106 +367,112 @@ export function LaunchDock({
       data-error={failure || undefined}
       data-warning={warning || undefined}
     >
-      <div className="launch-dock-main">
-        {locked && mode !== "running" && (
-          <div
-            className={`launch-progress ${pending && !task.active ? "indeterminate" : ""}`}
-            role="progressbar"
-            aria-label="游戏启动步骤进度"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={pending && !task.active ? undefined : task.progress}
-            aria-valuetext={message}
-            style={
-              {
-                "--launch-progress": (task.progress || 0) / 100,
-              } as CSSProperties
-            }
-          >
-            <span />
-          </div>
-        )}
-        <div className="launch-version">
-          <ResourceImage
-            path={versionIcon(version)}
-            alt={version?.loader || "Minecraft"}
-          />
-          <div className="launch-version-copy">
-            {task.active && (
-              <span className="overline">
-                {mode === "running" ? "正在运行的版本" : "正在启动的版本"}
-              </span>
-            )}
-            <div className="launch-version-title">
-              <h3
-                data-tooltip={
-                  (task.active ? task.versionId : version?.id) ||
-                  "选择你的第一个版本"
-                }
-              >
-                {(task.active ? task.versionId : version?.id) ||
-                  "选择你的第一个版本"}
-              </h3>
+      <div className="launch-dock-shadow">
+        <div className="launch-dock-main">
+          {locked && mode !== "running" && (
+            <div
+              className={`launch-progress ${pending && !task.active ? "indeterminate" : ""}`}
+              role="progressbar"
+              aria-label="游戏启动步骤进度"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={
+                pending && !task.active ? undefined : task.progress
+              }
+              aria-valuetext={message}
+              style={
+                {
+                  "--launch-progress": (task.progress || 0) / 100,
+                } as CSSProperties
+              }
+            >
+              <span />
             </div>
-            {version ? (
-              <div className="launch-version-tags">
-                <Badge className="launch-loader">
-                  {version.loader === "Vanilla" ? "原版" : version.loader}
-                </Badge>
-                <Badge className="launch-java">Java {version.javaMajor}</Badge>
-              </div>
-            ) : (
-              <p>
-                {task.active
-                  ? "在下载中心查看这次游戏的进度与日志"
-                  : "添加已有游戏，或安装一个全新的世界。"}
-              </p>
-            )}
-          </div>
-        </div>
-        <div ref={actions} className="launch-actions">
-          <LaunchButton
-            className="launch-switch"
-            aria-haspopup={!locked ? "dialog" : undefined}
-            aria-expanded={!locked ? pickerOpen : undefined}
-            aria-controls={!locked ? pickerId : undefined}
-            disabled={busy}
-            onClick={() => {
-              if (mode === "running") app.setPage("downloads");
-              else if (canCancel) void request("cancel");
-              else showPicker();
-            }}
-          >
-            {mode === "running"
-              ? "查看日志"
-              : canCancel
-                ? "取消启动"
-                : version
-                  ? "切换版本"
-                  : "选择版本"}
-            {canCancel ? (
-              <X size={16} />
-            ) : mode === "running" ? (
-              <FolderOpen size={16} />
-            ) : (
-              <ChevronUp size={16} />
-            )}
-          </LaunchButton>
-          <LaunchButton
-            primary
-            className="launch-primary"
-            aria-describedby={statusId}
-            aria-busy={spinning}
-            disabled={busy || mode === "empty" || spinning}
-            onClick={primaryAction}
-          >
-            <PrimaryIcon
-              size={17}
-              className={spinning ? "spin" : undefined}
-              fill={PrimaryIcon === Play ? "currentColor" : "none"}
+          )}
+          <div className="launch-version">
+            <ResourceImage
+              path={versionIcon(version)}
+              alt={version?.loader || "Minecraft"}
             />
-            {primaryText}
-          </LaunchButton>
+            <div className="launch-version-copy">
+              {task.active && (
+                <span className="overline">
+                  {mode === "running" ? "正在运行的版本" : "正在启动的版本"}
+                </span>
+              )}
+              <div className="launch-version-title">
+                <h3
+                  data-tooltip={
+                    (task.active ? task.versionId : version?.id) ||
+                    "选择你的第一个版本"
+                  }
+                >
+                  {(task.active ? task.versionId : version?.id) ||
+                    "选择你的第一个版本"}
+                </h3>
+              </div>
+              {version ? (
+                <div className="launch-version-tags">
+                  <Badge className="launch-loader">
+                    {version.loader === "Vanilla" ? "原版" : version.loader}
+                  </Badge>
+                  <Badge className="launch-java">
+                    Java {version.javaMajor}
+                  </Badge>
+                </div>
+              ) : (
+                <p>
+                  {task.active
+                    ? "在下载中心查看这次游戏的进度与日志"
+                    : "添加已有游戏，或安装一个全新的世界。"}
+                </p>
+              )}
+            </div>
+          </div>
+          <div ref={actions} className="launch-actions">
+            <LaunchButton
+              className="launch-switch"
+              aria-haspopup={!locked ? "dialog" : undefined}
+              aria-expanded={!locked ? pickerOpen : undefined}
+              aria-controls={!locked ? pickerId : undefined}
+              disabled={busy}
+              onClick={() => {
+                if (mode === "running") app.setPage("downloads");
+                else if (canCancel) void request("cancel");
+                else showPicker();
+              }}
+            >
+              {mode === "running"
+                ? "查看日志"
+                : canCancel
+                  ? "取消启动"
+                  : version
+                    ? "切换版本"
+                    : "选择版本"}
+              {canCancel ? (
+                <X size={16} />
+              ) : mode === "running" ? (
+                <FolderOpen size={16} />
+              ) : (
+                <ChevronUp size={16} />
+              )}
+            </LaunchButton>
+            <LaunchButton
+              primary
+              className="launch-primary"
+              aria-describedby={statusId}
+              aria-busy={spinning}
+              disabled={busy || mode === "empty" || spinning}
+              onClick={primaryAction}
+            >
+              <PrimaryIcon
+                size={17}
+                className={spinning ? "spin" : undefined}
+                fill={PrimaryIcon === Play ? "currentColor" : "none"}
+              />
+              {primaryText}
+            </LaunchButton>
+          </div>
         </div>
       </div>
       {active && (

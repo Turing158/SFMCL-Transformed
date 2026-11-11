@@ -2,7 +2,7 @@ use super::*;
 use axum::{
     body::Bytes,
     extract::State,
-    http::{HeaderMap, Uri},
+    http::{HeaderMap, Method, Uri},
     response::{IntoResponse, Response},
     Json, Router,
 };
@@ -18,6 +18,7 @@ struct Service {
     begin_error: String,
     empty: bool,
     denied_profiles: bool,
+    missing_profile_route: bool,
     wrong_profile: bool,
     redirect: bool,
     fail_mint: bool,
@@ -28,6 +29,7 @@ struct Service {
 async fn serve(
     State(state): State<Arc<Mutex<Service>>>,
     uri: Uri,
+    method: Method,
     headers: HeaderMap,
     bytes: Bytes,
 ) -> Response {
@@ -92,7 +94,12 @@ async fn serve(
                 )
                     .into_response()
             } else if let Some(error) = s.errors.pop_front() {
-                (StatusCode::BAD_REQUEST, Json(json!({"error":error, "error_description":"private-device private-refresh"}))).into_response()
+                let status = if error == "server_error" {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                } else {
+                    StatusCode::BAD_REQUEST
+                };
+                (status, Json(json!({"error":error, "error_description":"private-device private-refresh"}))).into_response()
             } else {
                 if body["grant_type"] == "refresh_token" {
                     assert_eq!(
@@ -109,9 +116,16 @@ async fn serve(
                 }
                 Json(json!({"token_type":"Bearer", "access_token":format!("private-oauth-{}",s.rotation), "refresh_token":format!("private-refresh-{}",s.rotation), "expires_in":259200})).into_response()
             }
-        } else if path.ends_with("/profiles") {
+        } else if path == "/api/yggdrasil/sessionserver/session/minecraft/profile" {
+            assert_eq!(method, Method::GET);
             assert_eq!(bearer, format!("Bearer private-oauth-{}", s.rotation));
-            if s.denied_profiles {
+            if s.missing_profile_route {
+                (StatusCode::NOT_FOUND, Json(json!({
+                    "error": "Not Found",
+                    "statusCode": 404,
+                    "message": "Cannot GET /sessionserver/session/minecraft/profile private-device private-refresh"
+                }))).into_response()
+            } else if s.denied_profiles {
                 Json(json!({"code":403})).into_response()
             } else if s.empty {
                 Json(json!([])).into_response()
@@ -129,6 +143,17 @@ async fn serve(
             }
         } else if path.contains("/profile/") {
             Json(json!({"id":path.rsplit('/').next().unwrap(),"name":"Second","properties":[]}))
+                .into_response()
+        } else if path == "/api/yggdrasil/sessionserver/session/minecraft/profiles" {
+            // Match the deployed service, not the stale OpenAPI collection path.
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({
+                    "message": "Cannot GET /sessionserver/session/minecraft/profiles",
+                    "error": "Not Found",
+                    "statusCode": 404
+                })),
+            )
                 .into_response()
         } else {
             StatusCode::NOT_FOUND.into_response()
@@ -214,6 +239,79 @@ impl Harness {
 impl Drop for Harness {
     fn drop(&mut self) {
         self.server.abort();
+    }
+}
+
+#[tokio::test]
+async fn missing_profile_route_reports_the_step_and_http_404_without_leaking_tokens() {
+    let h = Harness::new().await;
+    h.state.lock().unwrap().missing_profile_route = true;
+    let device = h.fast_device().await;
+    let error = h
+        .accounts
+        .wait_littleskin(&device.session_id)
+        .await
+        .err()
+        .unwrap();
+    let error = format!("{error:#}");
+    assert!(error.contains("读取 LittleSkin 角色列表失败"), "{error}");
+    assert!(error.contains("接口不存在（HTTP 404）"), "{error}");
+    assert!(!error.contains("授权失败"), "{error}");
+    assert!(!error.contains("private-"), "{error}");
+    assert!(h.accounts.list().is_empty());
+    assert!(!h.dir.path().join("credentials.dat").exists());
+    assert!(h.accounts.yggdrasil_pending.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn oauth_request_and_server_errors_report_their_cause_without_response_secrets() {
+    let h = Harness::new().await;
+    for (code, status, cause) in [
+        ("invalid_request", 400, "请求无效"),
+        ("server_error", 500, "内部错误"),
+        ("private-refresh", 400, "HTTP 400"),
+    ] {
+        h.state.lock().unwrap().errors.push_back(code.into());
+        let device = h.fast_device().await;
+        let error = h
+            .accounts
+            .wait_littleskin(&device.session_id)
+            .await
+            .err()
+            .unwrap();
+        let error = format!("{error:#}");
+        assert!(error.contains("获取 LittleSkin 授权结果失败"), "{error}");
+        assert!(error.contains(&format!("HTTP {status}")), "{error}");
+        assert!(error.contains(cause), "{error}");
+        if !code.starts_with("private-") {
+            assert!(error.contains(&format!("错误码 {code}")), "{error}");
+        }
+        assert!(!error.contains("private-"), "{error}");
+        assert!(h.accounts.list().is_empty());
+    }
+}
+
+#[test]
+fn yggdrasil_errors_retain_http_status_and_never_echo_untrusted_error_fields() {
+    for (status, value) in [
+        (
+            StatusCode::FORBIDDEN,
+            json!({
+                "error": "ForbiddenOperationException", "errorMessage": "private-access"
+            }),
+        ),
+        (
+            StatusCode::TOO_MANY_REQUESTS,
+            json!({"error": "private-refresh"}),
+        ),
+        (StatusCode::OK, json!({"error": "private-device"})),
+    ] {
+        let error = accepted(status, value).unwrap_err().to_string();
+        assert!(
+            error.contains(&format!("HTTP {}", status.as_u16())),
+            "{error}"
+        );
+        assert!(!error.contains("private-"), "{error}");
     }
 }
 
@@ -349,9 +447,11 @@ async fn expired_denied_invalid_scope_and_redirect_responses_stop_without_leakin
             .wait_littleskin(&device.session_id)
             .await
             .err()
-            .unwrap()
-            .to_string();
-        assert_eq!(error, oauth_error(code));
+            .unwrap();
+        let error = format!("{error:#}");
+        assert!(error.contains(oauth_error(code)), "{error}");
+        assert!(error.contains("获取 LittleSkin 授权结果失败"), "{error}");
+        assert!(error.contains(&format!("错误码 {code}")), "{error}");
         assert!(!error.contains("private-"));
     }
     let device = h.device().await;
@@ -413,14 +513,13 @@ async fn empty_or_denied_profile_lists_and_wrong_profile_selection_do_not_save()
     h.state.lock().unwrap().empty = false;
     h.state.lock().unwrap().denied_profiles = true;
     let device = h.fast_device().await;
-    assert!(h
+    let error = h
         .accounts
         .wait_littleskin(&device.session_id)
         .await
         .err()
-        .unwrap()
-        .to_string()
-        .contains("权限"));
+        .unwrap();
+    assert!(format!("{error:#}").contains("权限"));
     h.state.lock().unwrap().denied_profiles = false;
     let login = h.login().await;
     assert!(h
@@ -481,14 +580,8 @@ async fn cancelled_profile_exchange_cannot_save_and_rotated_refresh_survives_api
 async fn missing_client_and_whitelist_errors_are_actionable() {
     let h = Harness::new().await;
     h.state.lock().unwrap().begin_error = "invalid_client".into();
-    assert!(h
-        .accounts
-        .begin_littleskin()
-        .await
-        .err()
-        .unwrap()
-        .to_string()
-        .contains("白名单"));
+    let error = h.accounts.begin_littleskin().await.err().unwrap();
+    assert!(format!("{error:#}").contains("白名单"));
     std::fs::remove_file(h.dir.path().join("service-credentials/littleskin.dat")).unwrap();
     assert!(h
         .accounts

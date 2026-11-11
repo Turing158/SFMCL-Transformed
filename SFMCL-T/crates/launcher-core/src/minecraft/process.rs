@@ -8,10 +8,14 @@ pub enum LaunchEvent {
     Exited,
 }
 pub type LaunchEvents = tokio::sync::mpsc::UnboundedSender<LaunchEvent>;
-struct ExitEvent(Option<LaunchEvents>);
+struct ExitEvent {
+    events: Option<LaunchEvents>,
+    job: Arc<Job>,
+}
 impl Drop for ExitEvent {
     fn drop(&mut self) {
-        if let Some(events) = &self.0 {
+        self.job.set_launch_running(false);
+        if let Some(events) = &self.events {
             let _ = events.send(LaunchEvent::Exited);
         }
     }
@@ -86,6 +90,11 @@ pub async fn run_java_with_settings(
         .kill_on_drop(true)
         .spawn()
         .context("无法启动 Java 进程")?;
+    job.set_launch_running(true);
+    let _exit = ExitEvent {
+        events: events.clone(),
+        job: job.clone(),
+    };
     let pid = child.id().unwrap_or(0);
     if let Err(e) = super::window::set_priority(pid, &settings.process_priority) {
         job.log(format!("设置游戏进程优先级失败，继续使用系统默认值：{e}"));
@@ -96,7 +105,6 @@ pub async fn run_java_with_settings(
             restore: settings.restore_launcher,
         });
     }
-    let _exit = ExitEvent(events);
     let mut window = super::window::Controller::new(settings, directory, job.clone());
     let out = child.stdout.take().context("无法读取 Java 输出")?;
     let err = child.stderr.take().context("无法读取 Java 错误输出")?;
@@ -125,6 +133,52 @@ pub async fn run_java_with_settings(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn live_launch_context_is_cleared_when_its_process_is_cancelled() {
+        let directory = tempfile::tempdir().unwrap();
+        let jobs = Arc::new(crate::jobs::Jobs::default());
+        let job = jobs.create(
+            crate::jobs::JobKind::Launch,
+            "启动 test".into(),
+            &["游戏运行"],
+        );
+        job.set_launch_context(crate::jobs::LaunchContext {
+            version_id: "test".into(),
+            game_version: "1.21.4".into(),
+            directory: directory.path().to_string_lossy().into(),
+            player_name: "Alex".into(),
+            running: false,
+        });
+        let (events, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let running_job = job.clone();
+        let process = tokio::spawn(async move {
+            run_java_with_settings(
+                "powershell.exe",
+                &[
+                    "-NoProfile".into(),
+                    "-Command".into(),
+                    "Start-Sleep -Seconds 30".into(),
+                ],
+                directory.path(),
+                running_job,
+                &[],
+                &crate::config::Settings::default(),
+                Some(events),
+            )
+            .await
+        });
+        let started =
+            tokio::time::timeout(std::time::Duration::from_secs(10), receiver.recv()).await;
+        let detected = jobs.running_launches().len();
+        job.cancel.cancel();
+        let result = process.await.unwrap();
+        assert!(matches!(started, Ok(Some(LaunchEvent::Started { .. }))));
+        assert_eq!(detected, 1);
+        assert!(result.is_err());
+        assert!(!job.snapshot().launch.unwrap().running);
+        assert!(jobs.running_launches().is_empty());
+    }
     #[cfg(windows)]
     #[tokio::test]
     async fn lifecycle_events_start_only_after_spawn_and_always_pair_with_exit() {

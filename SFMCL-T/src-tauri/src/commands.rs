@@ -41,6 +41,7 @@ pub struct Runtime {
     pub official_notices: sfmcl_t_core::notices::OfficialNotices,
     pub home_content: sfmcl_t_core::home_content::HomeContentStore,
     pub directory: PathBuf,
+    pub multiplayer: Arc<sfmcl_t_core::multiplayer::Multiplayer>,
 }
 fn version_entries(settings: &Settings, payload: &Value) -> Result<Vec<Value>> {
     let directory = match payload.get("directory") {
@@ -112,6 +113,11 @@ impl Runtime {
             directory.clone(),
             installer.client.clone(),
         );
+        let multiplayer = sfmcl_t_core::multiplayer::Multiplayer::new(
+            directory.join("multiplayer"),
+            downloads.clone(),
+            jobs.clone(),
+        );
         Ok(Self {
             settings,
             accounts,
@@ -122,6 +128,7 @@ impl Runtime {
             modpacks: Arc::new(Modpacks::default()),
             official_notices,
             home_content: Default::default(),
+            multiplayer,
             directory,
         })
     }
@@ -218,6 +225,60 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         bail!("本地数据操作已开始，启动器即将自动重新打开");
     }
     match op {
+        "multiplayer.status" => Ok(json!(r.multiplayer.snapshot())),
+        "multiplayer.prepare" => Ok(json!(r
+            .multiplayer
+            .prepare(p["archive"].as_str().map(PathBuf::from))?)),
+        "multiplayer.preview" => Ok(json!(
+            sfmcl_t_core::multiplayer::invitation::Invitation::decode(text(&p, "invitation")?)?
+                .preview()
+        )),
+        "multiplayer.create" => {
+            let request: sfmcl_t_core::multiplayer::CreateRequest = decode(p)?;
+            let context =
+                sfmcl_t_core::multiplayer::host_launch(&r.jobs, request.launch_id.as_deref())?;
+            let (game_version, player_name) = if let Some(context) = context {
+                (context.game_version, context.player_name)
+            } else {
+                let settings = r.settings.get();
+                let player = r
+                    .accounts
+                    .list()
+                    .into_iter()
+                    .find(|player| player.uuid == settings.active_player)
+                    .context("请先选择角色")?;
+                let version = versions::scan(&settings.active_game_root()?)?
+                    .into_iter()
+                    .find(|version| version.id == settings.active_version)
+                    .context("请先选择游戏版本")?;
+                (version.version, player.name)
+            };
+            Ok(json!(r.multiplayer.create(
+                request,
+                game_version,
+                player_name
+            )?))
+        }
+        "multiplayer.join" => {
+            let settings = r.settings.get();
+            let player = r
+                .accounts
+                .list()
+                .into_iter()
+                .find(|player| player.uuid == settings.active_player)
+                .context("请先选择角色")?;
+            Ok(json!(r
+                .multiplayer
+                .join(text(&p, "invitation")?, player.name)?))
+        }
+        "multiplayer.leave" => {
+            r.multiplayer.leave(Some(text(&p, "sessionId")?)).await?;
+            Ok(json!(r.multiplayer.snapshot()))
+        }
+        "multiplayer.invitation" => Ok(json!(r.multiplayer.invitation(text(&p, "sessionId")?)?)),
+        "multiplayer.check-local-port" => Ok(serde_json::to_value(
+            sfmcl_t_core::multiplayer::check_local_port(decode(p)?).await?,
+        )?),
         "bootstrap" => Ok(
             json!({"settings":r.settings.get(),"players":r.accounts.list(),"dataDir":r.directory,"defaultDownloadCacheDir":r.directory.join("downloads").join("cache"),"backgroundPath":sfmcl_t_core::notices::background(&r.directory,&r.settings.get()),"version":env!("CARGO_PKG_VERSION"),"localDataResult":app.try_state::<crate::local_data::DataManager>().and_then(|manager| manager.result.clone())}),
         ),
@@ -569,10 +630,24 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                 bail!("游戏目录或版本已切换，请重新选择收藏版本");
             }
             let player = r.accounts.launch_identity(&s.active_player).await?;
+            let current = r.settings.get();
+            if current.active_dir != s.active_dir
+                || current.active_version != s.active_version
+                || current.active_player != s.active_player
+            {
+                bail!("游戏目录、版本或角色已切换，请重新启动");
+            }
+            let target = match p.get("sessionId") {
+                Some(value) => Some(
+                    r.multiplayer
+                        .launch_target(value.as_str().context("联机会话无效")?)?,
+                ),
+                None => None,
+            };
             let (events, mut receiver) = tokio::sync::mpsc::unbounded_channel();
             let id = r
                 .installer
-                .launch_with_events(s.active_version, player, Some(events))
+                .launch_with_target(s.active_version, player, Some(events), target)
                 .await?;
             let event_id = id.clone();
             tauri::async_runtime::spawn(async move {

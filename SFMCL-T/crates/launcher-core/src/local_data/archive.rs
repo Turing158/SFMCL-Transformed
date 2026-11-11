@@ -44,7 +44,9 @@ struct Entry {
     sha256: String,
 }
 
-pub(crate) fn collect(root: &Path) -> Result<(Vec<String>, Vec<(String, PathBuf)>)> {
+pub(crate) type CollectedPaths = (Vec<String>, Vec<(String, PathBuf)>);
+
+pub(crate) fn collect(root: &Path) -> Result<CollectedPaths> {
     reject_links(root)?;
     fn visit(
         root: &Path,

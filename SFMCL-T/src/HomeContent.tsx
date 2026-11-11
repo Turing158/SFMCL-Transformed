@@ -808,15 +808,28 @@ function ComponentLibrary({
                 addCustom();
               }}
             >
-              <label className="field">
-                <span>组件标题</span>
-                <Input
-                  value={draft.title}
-                  maxLength={120}
-                  disabled={content.saving}
-                  onChange={(event) => setDraft({ title: event.target.value })}
-                />
-              </label>
+              <div className="home-custom-title-row">
+                <label className="field">
+                  <span>组件标题</span>
+                  <Input
+                    value={draft.title}
+                    maxLength={120}
+                    disabled={content.saving}
+                    onChange={(event) => setDraft({ title: event.target.value })}
+                  />
+                </label>
+                {customType === "info" && (
+                  <label className="field">
+                    <span>底部备注</span>
+                    <Input
+                      value={draft.note}
+                      maxLength={120}
+                      disabled={content.saving}
+                      onChange={(event) => setDraft({ note: event.target.value })}
+                    />
+                  </label>
+                )}
+              </div>
               <label className="field">
                 <span>内容</span>
                 <Textarea
@@ -828,17 +841,6 @@ function ComponentLibrary({
                   }
                 />
               </label>
-              {customType === "info" && (
-                <label className="field">
-                  <span>底部备注</span>
-                  <Input
-                    value={draft.note}
-                    maxLength={120}
-                    disabled={content.saving}
-                    onChange={(event) => setDraft({ note: event.target.value })}
-                  />
-                </label>
-              )}
               <div className="dialog-actions">
                 <Button type="submit" primary disabled={content.saving}>
                   <Plus size={16} />

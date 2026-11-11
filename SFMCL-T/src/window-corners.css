@@ -1,0 +1,38 @@
+/* Match Turing158.github.io's --pxc: two square steps, each 3 CSS pixels. */
+:root {
+  --window-corner-step: 3px;
+  --window-corner-size: calc(2 * var(--window-corner-step));
+  --window-corner-shape: polygon(
+    var(--window-corner-size) 0,
+    calc(100% - var(--window-corner-size)) 0,
+    calc(100% - var(--window-corner-size)) var(--window-corner-step),
+    calc(100% - var(--window-corner-step)) var(--window-corner-step),
+    calc(100% - var(--window-corner-step)) var(--window-corner-size),
+    100% var(--window-corner-size),
+    100% calc(100% - var(--window-corner-size)),
+    calc(100% - var(--window-corner-step))
+      calc(100% - var(--window-corner-size)),
+    calc(100% - var(--window-corner-step))
+      calc(100% - var(--window-corner-step)),
+    calc(100% - var(--window-corner-size))
+      calc(100% - var(--window-corner-step)),
+    calc(100% - var(--window-corner-size)) 100%,
+    var(--window-corner-size) 100%,
+    var(--window-corner-size) calc(100% - var(--window-corner-step)),
+    var(--window-corner-step) calc(100% - var(--window-corner-step)),
+    var(--window-corner-step) calc(100% - var(--window-corner-size)),
+    0 calc(100% - var(--window-corner-size)),
+    0 var(--window-corner-size),
+    var(--window-corner-step) var(--window-corner-size),
+    var(--window-corner-step) var(--window-corner-step),
+    var(--window-corner-size) var(--window-corner-step)
+  );
+}
+:root[data-window-maximized="true"] {
+  --window-corner-step: 0px;
+}
+body {
+  min-height: 100dvh;
+  /* Include body portals so dialog backdrops cannot fill the cut-out corners. */
+  clip-path: var(--window-corner-shape);
+}

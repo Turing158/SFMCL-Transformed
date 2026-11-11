@@ -7,6 +7,7 @@ pub mod home_content;
 pub mod jobs;
 pub mod local_data;
 pub mod minecraft;
+pub mod multiplayer;
 pub mod notices;
 pub mod paths;
 pub mod resources;

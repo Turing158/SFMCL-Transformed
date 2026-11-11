@@ -459,6 +459,14 @@
 .home-custom-form .field {
   margin: 0;
 }
+.home-custom-title-row {
+  display: flex;
+  gap: 16px;
+}
+.home-custom-title-row .field {
+  flex: 1;
+  min-width: 0;
+}
 .home-custom-form textarea {
   min-height: 150px;
 }

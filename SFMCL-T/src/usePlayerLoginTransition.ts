@@ -1,25 +1,35 @@
 import { useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
-import type { PlayerLoginState } from "./usePlayerLogin";
 import { usePageActive } from "./PageActivity";
+
+interface AuthTransitionState {
+  completed: boolean;
+  expired: boolean;
+  failed: boolean;
+  loading: boolean;
+  login: unknown;
+  step: number;
+  state?: string;
+}
 
 export function usePlayerLoginTransition(
   root: RefObject<HTMLDivElement | null>,
   active: boolean,
-  auth: PlayerLoginState,
+  auth: AuthTransitionState,
 ) {
   const pageActive = usePageActive();
   const state = !active
     ? ""
-    : auth.completed
-      ? "completed"
-      : auth.expired
-        ? "expired"
-        : auth.failed
-          ? "failed"
-          : auth.loading || !auth.login
-            ? "preparing"
-            : ["waiting", "xbox", "minecraft", "saving"][auth.step];
+    : (auth.state ??
+      (auth.completed
+        ? "completed"
+        : auth.expired
+          ? "expired"
+          : auth.failed
+            ? "failed"
+            : auth.loading || !auth.login
+              ? "preparing"
+              : ["waiting", "xbox", "minecraft", "saving"][auth.step]));
   const key = state ? `${state}:${auth.step}` : "";
   const previous = useRef(key);
 

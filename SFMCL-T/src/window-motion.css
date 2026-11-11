@@ -9,8 +9,8 @@ html[data-window-motion] body {
      rectangle behind the shrinking app. The app surface supplies its own fill. */
   background: transparent;
   min-height: 100dvh;
-  /* DWM rounds the native rectangle, not the surface moving inside it. */
-  clip-path: inset(0 round var(--window-corner-radius, 12px));
+  /* Keep the same stepped silhouette while the entire surface moves. */
+  clip-path: var(--window-corner-shape);
   transform-origin: center;
   will-change: transform, opacity;
   pointer-events: none;

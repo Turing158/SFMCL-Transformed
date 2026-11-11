@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Check,
   ChevronRight,
@@ -54,11 +55,32 @@ const providers = [
     caption: "MINECRAFT",
     detail: "获取游戏资料",
   },
-  { name: "SFMCL-T", id: "sfmcl-t", caption: "SFMCL-T LAUNCHER", detail: "保存角色" },
+  {
+    name: "SFMCL-T",
+    id: "sfmcl-t",
+    caption: "SFMCL-T LAUNCHER",
+    detail: "保存角色",
+  },
 ];
 
-export function PlayerAuthStage({ auth }: { auth: PlayerLoginState }) {
-  const provider = providers[auth.step];
+export interface AuthProvider {
+  name: string;
+  id: string;
+  caption: string;
+  detail: string;
+  icon?: ReactNode;
+}
+
+type AuthSceneState = Pick<PlayerLoginState, "step" | "failed" | "completed">;
+
+export function PlayerAuthStage({
+  auth,
+  stages = providers,
+}: {
+  auth: AuthSceneState;
+  stages?: readonly AuthProvider[];
+}) {
+  const provider = stages[auth.step];
   return (
     <div
       className="players-auth-stage"
@@ -77,6 +99,8 @@ export function PlayerAuthStage({ auth }: { auth: PlayerLoginState }) {
         <PixelFrame />
         {auth.completed ? (
           <Check />
+        ) : provider.icon ? (
+          provider.icon
         ) : auth.step === 0 ? (
           <MicrosoftIcon />
         ) : auth.step === 1 ? (
@@ -99,7 +123,7 @@ export function PlayerAuthStage({ auth }: { auth: PlayerLoginState }) {
         {auth.completed ? "READY TO PLAY" : provider.caption}
       </span>
       <div className="players-auth-pips" aria-hidden="true">
-        {providers.map((item, i) => (
+        {stages.map((item, i) => (
           <i key={item.id} className={i <= auth.step ? "active" : ""} />
         ))}
       </div>
@@ -107,8 +131,14 @@ export function PlayerAuthStage({ auth }: { auth: PlayerLoginState }) {
   );
 }
 
-export function PlayerAuthIdentity({ auth }: { auth: PlayerLoginState }) {
-  const provider = providers[auth.step];
+export function PlayerAuthIdentity({
+  auth,
+  stages = providers,
+}: {
+  auth: AuthSceneState;
+  stages?: readonly AuthProvider[];
+}) {
+  const provider = stages[auth.step];
   return (
     <div className="players-identity-top">
       <div className="players-identity-name">
@@ -124,7 +154,8 @@ export function PlayerAuthIdentity({ auth }: { auth: PlayerLoginState }) {
       </div>
       <span className="players-equipped">
         {auth.completed ? <Check size={13} /> : null}
-        {String(auth.step + 1).padStart(2, "0")} / 04
+        {String(auth.step + 1).padStart(2, "0")} /{" "}
+        {String(stages.length).padStart(2, "0")}
       </span>
     </div>
   );
@@ -235,6 +266,8 @@ export function PlayerOfflineLogin({
   );
 }
 
+const microsoftStepNames = ["浏览器授权", "Xbox Live", "Minecraft", "保存角色"];
+
 export function PlayerMicrosoftLogin({ auth }: { auth: PlayerLoginState }) {
   const app = useApp();
   const time = `${String(Math.floor(auth.remaining / 60)).padStart(2, "0")}:${String(auth.remaining % 60).padStart(2, "0")}`;
@@ -245,8 +278,8 @@ export function PlayerMicrosoftLogin({ auth }: { auth: PlayerLoginState }) {
           <Check size={13} />
           登录成功
         </Badge>
-        <h3>准备好，出发吧。</h3>
-        <p>Microsoft 账号已加入「我的角色」。</p>
+        <h3>可以开始游戏了。</h3>
+        <p>账号已加入「我的角色」。</p>
       </div>
     );
   return (
@@ -260,18 +293,14 @@ export function PlayerMicrosoftLogin({ auth }: { auth: PlayerLoginState }) {
             {auth.failed
               ? "登录未完成"
               : auth.loading
-                ? "正在准备登录"
+                ? "准备登录"
                 : auth.step === 0
-                  ? "在浏览器中完成授权"
-                  : auth.steps[auth.step]?.name}
+                  ? "浏览器授权"
+                  : microsoftStepNames[auth.step]}
           </h3>
-          <p>
-            {auth.loading
-              ? "正在获取 Microsoft 设备代码…"
-              : auth.step === 0
-                ? "在浏览器中输入代码，完成授权后自动添加角色。"
-                : "验证完成后将自动进入下一步，请稍候。"}
-          </p>
+          {!auth.loading && !auth.failed && auth.step === 0 && (
+            <p>输入代码，授权后自动继续。</p>
+          )}
         </div>
         {auth.failed ? (
           <div className="players-login-error">
@@ -355,10 +384,6 @@ export function PlayerMicrosoftLogin({ auth }: { auth: PlayerLoginState }) {
                 {auth.browserError}
               </p>
             )}
-            <p className="players-login-status" role="status">
-              <LoaderCircle size={13} className="spin" />
-              等待浏览器授权，完成后自动继续
-            </p>
           </>
         ) : (
           <div className="players-login-wait" role="status">
@@ -367,8 +392,14 @@ export function PlayerMicrosoftLogin({ auth }: { auth: PlayerLoginState }) {
           </div>
         )}
       </div>
-      <div className="players-login-steps" aria-label="登录进度">
-        <Steps steps={auth.steps} />
+      <div className="players-login-steps" aria-label="登录进度" role="status">
+        <Steps
+          steps={auth.steps.map((step, index) => ({
+            ...step,
+            name: microsoftStepNames[index] ?? step.name,
+            detail: "",
+          }))}
+        />
       </div>
     </div>
   );

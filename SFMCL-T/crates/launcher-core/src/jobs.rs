@@ -16,6 +16,16 @@ pub enum JobKind {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LaunchContext {
+    pub version_id: String,
+    pub game_version: String,
+    pub directory: String,
+    pub player_name: String,
+    pub running: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JobSnapshot {
     pub id: String,
     pub title: String,
@@ -26,6 +36,8 @@ pub struct JobSnapshot {
     pub error: Option<String>,
     pub log: Vec<String>,
     pub created_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch: Option<LaunchContext>,
 }
 pub struct Job {
     kind: JobKind,
@@ -51,6 +63,18 @@ impl Job {
     }
     fn update(&self, change: impl FnOnce(&mut JobSnapshot)) {
         change(&mut self.snapshot.lock().unwrap_or_else(|e| e.into_inner()));
+    }
+    pub fn set_launch_context(&self, context: LaunchContext) {
+        if matches!(self.kind, JobKind::Launch) {
+            self.update(|snapshot| snapshot.launch = Some(context));
+        }
+    }
+    pub fn set_launch_running(&self, running: bool) {
+        self.update(|snapshot| {
+            if let Some(launch) = &mut snapshot.launch {
+                launch.running = running;
+            }
+        });
     }
     pub fn step(&self, index: usize, detail: impl Into<String>) {
         self.update(|s| {
@@ -126,6 +150,7 @@ impl Jobs {
                 error: None,
                 log: vec![],
                 created_at: now(),
+                launch: None,
                 steps: steps
                     .iter()
                     .map(|name| Step {
@@ -149,6 +174,23 @@ impl Jobs {
             .iter()
             .rev()
             .map(|j| j.snapshot())
+            .collect()
+    }
+    pub fn running_launches(&self) -> Vec<JobSnapshot> {
+        self.jobs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .rev()
+            .filter(|job| matches!(job.kind, JobKind::Launch) && !job.cancel.is_cancelled())
+            .map(|job| job.snapshot())
+            .filter(|snapshot| {
+                snapshot.status == Status::Running
+                    && snapshot
+                        .launch
+                        .as_ref()
+                        .is_some_and(|launch| launch.running)
+            })
             .collect()
     }
     pub fn cancel(&self, id: &str) -> anyhow::Result<()> {

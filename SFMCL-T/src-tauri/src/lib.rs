@@ -98,7 +98,9 @@ fn with_bundled_webview2(mut context: tauri::Context<tauri::Wry>) -> tauri::Cont
 }
 
 pub fn run() {
-    if local_data::run_helper() { return; }
+    if local_data::run_helper() {
+        return;
+    }
     let context = tauri::generate_context!();
     #[cfg(windows)]
     let context = with_bundled_webview2(context);
@@ -111,7 +113,10 @@ pub fn run() {
                 &default_directory,
                 sfmcl_t_core::brand::environment("DATA_DIR"),
             )?;
-            app.manage(local_data::DataManager::new(&default_directory, &directory)?);
+            app.manage(local_data::DataManager::new(
+                &default_directory,
+                &directory,
+            )?);
             let webview_directory = directory.join("webview");
             let runtime = commands::Runtime::new(directory)?;
             let settings = runtime.settings.get();

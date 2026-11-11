@@ -1,8 +1,11 @@
 use sfmcl_t_core::minecraft::process::LaunchEvent;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+static QUITTING: AtomicBool = AtomicBool::new(false);
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -47,8 +50,39 @@ pub fn show(app: &tauri::AppHandle) -> tauri::Result<()> {
 }
 
 pub fn quit(app: tauri::AppHandle) {
+    if QUITTING.swap(true, Ordering::AcqRel) {
+        return;
+    }
     let runtime = app.state::<Arc<crate::commands::Runtime>>().inner().clone();
+    if runtime.multiplayer.active() {
+        app.dialog()
+            .message("退出将断开当前联机。")
+            .title("退出启动器")
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                "退出".into(),
+                "取消".into(),
+            ))
+            .show(move |confirmed| {
+                if confirmed {
+                    finish_quit(app, runtime);
+                } else {
+                    QUITTING.store(false, Ordering::Release);
+                }
+            });
+    } else {
+        finish_quit(app, runtime);
+    }
+}
+fn finish_quit(app: tauri::AppHandle, runtime: Arc<crate::commands::Runtime>) {
     tauri::async_runtime::spawn(async move {
+        if let Err(error) = runtime.multiplayer.shutdown().await {
+            app.dialog()
+                .message(error.to_string())
+                .title("联机尚未结束")
+                .show(|_| {});
+            QUITTING.store(false, Ordering::Release);
+            return;
+        }
         if let Err(error) = runtime.downloads.pause_all().await {
             eprintln!("Cannot pause downloads: {error}");
         }

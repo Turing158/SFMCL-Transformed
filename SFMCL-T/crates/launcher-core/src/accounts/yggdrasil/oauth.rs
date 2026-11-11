@@ -51,6 +51,9 @@ fn oauth_error(code: &str) -> &'static str {
         "access_denied" | "authorization_declined" => "你已拒绝 LittleSkin 授权，可重新发起登录",
         "expired_token" => "LittleSkin 授权码已过期，请重新登录",
         "invalid_grant" => "LittleSkin 授权已失效或被撤销，请重新登录",
+        "invalid_request" => "LittleSkin 授权请求无效，请更新启动器或联系维护者",
+        "server_error" => "LittleSkin 授权服务内部错误，请稍后重试",
+        "temporarily_unavailable" => "LittleSkin 授权服务暂时不可用，请稍后重试",
         _ => "LittleSkin 授权失败，请稍后重试",
     }
 }
@@ -67,22 +70,58 @@ async fn response_json(mut response: reqwest::Response) -> Result<(StatusCode, V
         }
         bytes.extend_from_slice(&chunk);
     }
-    let value = serde_json::from_slice(&bytes).context("LittleSkin 返回了无效响应")?;
+    let value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("LittleSkin 返回了无效响应（HTTP {}）", status.as_u16()))?;
     Ok((status, value))
 }
 
 fn accepted(status: StatusCode, value: Value) -> Result<Value> {
-    if let Some(code) = value["error"].as_str() {
-        bail!(oauth_error(code));
+    let code = value["error"].as_str();
+    // OAuth errors have a known vocabulary. Other endpoints return Yggdrasil
+    // or HTTP error names (e.g. "Not Found"), which must retain their HTTP cause.
+    // Never echo arbitrary error text: it can include credentials.
+    if let Some(code) = code.filter(|code| {
+        matches!(
+            *code,
+            "invalid_client"
+                | "unauthorized_client"
+                | "invalid_scope"
+                | "access_denied"
+                | "authorization_declined"
+                | "expired_token"
+                | "invalid_grant"
+                | "invalid_request"
+                | "server_error"
+                | "temporarily_unavailable"
+        )
+    }) {
+        bail!(
+            "{}（HTTP {}，错误码 {}）",
+            oauth_error(code),
+            status.as_u16(),
+            code
+        );
     }
     if status == StatusCode::UNAUTHORIZED {
-        bail!("LittleSkin 授权已失效，请重新登录");
+        bail!("LittleSkin 授权已失效，请重新登录（HTTP 401）");
     }
     if status == StatusCode::FORBIDDEN || value["code"].as_i64() == Some(403) {
-        bail!("LittleSkin 未授予所需权限，请重新授权或检查应用白名单");
+        bail!(
+            "LittleSkin 拒绝访问，请重新授权或检查令牌、权限及应用白名单（HTTP {}）",
+            status.as_u16()
+        );
+    }
+    if status == StatusCode::NOT_FOUND {
+        bail!("LittleSkin 接口不存在（HTTP 404），请更新启动器或联系维护者");
     }
     if !status.is_success() {
         bail!("LittleSkin 服务返回 HTTP {}，请稍后重试", status.as_u16());
+    }
+    if code.is_some() {
+        bail!(
+            "LittleSkin 返回了无法识别的服务错误（HTTP {}），请联系维护者",
+            status.as_u16()
+        );
     }
     Ok(value)
 }
@@ -128,8 +167,10 @@ impl Accounts {
             .send()
             .await
             .context("无法获取 LittleSkin 授权码")?;
-        let (status, value) = response_json(response).await?;
-        let value = accepted(status, value)?;
+        let (status, value) = response_json(response)
+            .await
+            .context("获取 LittleSkin 授权码失败")?;
+        let value = accepted(status, value).context("获取 LittleSkin 授权码失败")?;
         let expires_in = value["expires_in"]
             .as_u64()
             .filter(|v| (1..=3600).contains(v))
@@ -286,15 +327,18 @@ impl Accounts {
                     grant.interval += Duration::from_secs(5);
                     continue;
                 }
-                _ => break accepted(status, value)?,
+                _ => {
+                    break accepted(status, value).context("获取 LittleSkin 授权结果失败")?;
+                }
             }
         };
         let credentials = oauth_tokens(&value, &grant.client_id)?;
-        // OpenAPI is authoritative: the collection endpoint is plural.
+        // The deployed LittleSkin service uses the singular collection route;
+        // the older OpenAPI document's /profiles route returns HTTP 404.
         let response = client()?
             .get(
                 server_url(&self.littleskin_endpoints.yggdrasil)?
-                    .join("sessionserver/session/minecraft/profiles")?,
+                    .join("sessionserver/session/minecraft/profile")?,
             )
             .header("Accept", "application/json")
             .bearer_auth(&credentials.access)
@@ -302,8 +346,10 @@ impl Accounts {
             .send()
             .await
             .context("无法读取 LittleSkin 角色列表")?;
-        let (status, value) = response_json(response).await?;
-        let value = accepted(status, value)?;
+        let (status, value) = response_json(response)
+            .await
+            .context("读取 LittleSkin 角色列表失败")?;
+        let value = accepted(status, value).context("读取 LittleSkin 角色列表失败")?;
         let profiles = value
             .as_array()
             .context("LittleSkin 返回的角色列表无效")?
@@ -330,8 +376,10 @@ impl Accounts {
             .send()
             .await
             .context("无法获取 LittleSkin Minecraft 令牌")?;
-        let (status, value) = response_json(response).await?;
-        accepted(status, value)
+        let (status, value) = response_json(response)
+            .await
+            .context("获取 LittleSkin Minecraft 令牌失败")?;
+        accepted(status, value).context("获取 LittleSkin Minecraft 令牌失败")
     }
 
     pub(super) async fn renew_littleskin(
@@ -345,7 +393,10 @@ impl Accounts {
                 ("refresh_token", &oauth.refresh),
             ])
             .await?;
-        oauth_tokens(&accepted(status, value)?, &oauth.client_id)
+        oauth_tokens(
+            &accepted(status, value).context("刷新 LittleSkin 授权失败")?,
+            &oauth.client_id,
+        )
     }
 
     pub(super) async fn refresh_littleskin(

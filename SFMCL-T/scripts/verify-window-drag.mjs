@@ -10,6 +10,8 @@ await mkdir(evidence, { recursive: true });
 const browser = await chromium.launch({
   ...(process.platform === "win32" ? { channel: "msedge" } : {}),
   headless: true,
+  // Exercise native scrollbar tracks instead of Playwright's hidden scrollbars.
+  ignoreDefaultArgs: ["--hide-scrollbars"],
 });
 const errors = [],
   checks = [];
@@ -19,6 +21,8 @@ page.on("pageerror", (error) => errors.push(error.message));
 await page.addInitScript(pixelAppFixture);
 await page.addInitScript(playersFixture);
 await page.addInitScript(() => {
+  window.__pixelTest.data.settings.downloadTaskDisplay = "always";
+  window.__pixelTest.versions[1].favorite = true;
   window.__windowDrag = [];
   const invoke = window.__TAURI_INTERNALS__.invoke;
   window.__TAURI_INTERNALS__.invoke = async (command, args) => {
@@ -39,13 +43,13 @@ const count = (operation = "start_dragging") =>
         .length,
     operation,
   );
-const drag = async (locator) => {
+const drag = async (locator, { position, tooltip = false } = {}) => {
   const before = await count();
-  await locator.hover();
+  await locator.hover({ position });
   await expect(locator).toHaveCSS("cursor", "default");
   await page.waitForTimeout(450);
-  await expect(page.locator("#sfmcl-t-tooltip")).toHaveCount(0);
-  await locator.click();
+  if (!tooltip) await expect(page.locator("#sfmcl-t-tooltip")).toHaveCount(0);
+  await locator.click({ position });
   expect(await count()).toBe(before + 1);
 };
 const noDrag = async (action) => {
@@ -55,6 +59,12 @@ const noDrag = async (action) => {
   expect(await count()).toBe(before);
   expect(await count("toggle_maximize")).toBe(beforeMaximize);
 };
+const toggleSidebar = () =>
+  noDrag(async () => {
+    await page.locator(".brand-logo").hover();
+    await expect(page.locator(".sidebar-collapse")).toHaveCSS("opacity", "1");
+    await page.locator(".sidebar-collapse").click();
+  });
 const check = (name) => {
   checks.push(name);
   console.log(`PASS ${name}`);
@@ -84,6 +94,27 @@ try {
     "The SFMCL wordmark starts native window dragging without navigation or a button tab stop; right clicks do not drag.",
   );
 
+  await drag(page.locator(".sidebar"), { position: { x: 4, y: 100 } });
+  await drag(page.locator(".sidebar-favorites-space"));
+  await toggleSidebar();
+  await expect(page.locator(".app")).toHaveClass(/collapsed/);
+  await drag(page.locator(".sidebar"), { position: { x: 4, y: 100 } });
+  await toggleSidebar();
+  await expect(page.locator(".app")).not.toHaveClass(/collapsed/);
+  const favorite = page.locator(".sidebar-favorite");
+  await noDrag(() => favorite.locator(".sidebar-favorite-icon").click());
+  await expect(favorite).toHaveAttribute("aria-pressed", "true");
+  await noDrag(() => favorite.click({ button: "right" }));
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await noDrag(() => page.locator(".sidebar-task").click());
+  await expect(
+    page.locator(".topbar-breadcrumb strong[aria-current='page']"),
+  ).toHaveText("下载中心");
+  check(
+    "Sidebar padding and empty menu space drag in expanded and collapsed layouts; collapse, download and favorite buttons and context menus retain their actions.",
+  );
+
   for (const name of ["开始游戏", "版本管理", "资源中心", "设置"]) {
     await noDrag(() =>
       page
@@ -93,6 +124,18 @@ try {
     );
     await noDrag(() => page.locator(".page h1:visible").first().dblclick());
     await drag(page.locator(".topbar-breadcrumb strong[aria-current='page']"));
+    await drag(page.locator(".topbar-drag-space"));
+    const footer = page.locator(
+      name === "开始游戏" ? ".launch-status" : ".workspace-footer",
+    );
+    await drag(footer, { position: { x: 4, y: 18 } });
+    await drag(footer.locator(".footer-text[data-footer-text='message']"), {
+      tooltip: true,
+    });
+    await drag(footer.locator(".footer-text[data-footer-text='player']"), {
+      tooltip: true,
+    });
+    await noDrag(() => footer.click({ button: "right" }));
     const before = await count();
     const workspace = page.locator(".workspace");
     const bounds = await workspace.boundingBox();
@@ -104,9 +147,11 @@ try {
     });
     expect(await count()).toBe(before);
   }
-  await noDrag(() => page.locator(".workspace-footer-status").dblclick());
+  const beforeFooterMaximize = await count("toggle_maximize");
+  await page.locator(".workspace-footer-status").dblclick();
+  expect(await count("toggle_maximize")).toBe(beforeFooterMaximize);
   check(
-    "Page titles, workspace whitespace and footer text do not drag or maximize the window; current breadcrumb text still drags on every main page.",
+    "Titlebar whitespace and status strip padding, messages and player captions drag on every main page; page content keeps its gestures and the footer does not maximize on double-click.",
   );
 
   await noDrag(() => page.locator(".sidebar .profile-button").click());
@@ -240,6 +285,57 @@ try {
   check(
     "Native scrollbar tracks remain usable and do not start window dragging.",
   );
+
+  const sidebar = page.locator(".sidebar");
+  await sidebar.evaluate((rail) => {
+    rail.style.height = "100px";
+    rail.style.alignSelf = "start";
+  });
+  const sidebarTrack = await sidebar.evaluate((rail) => {
+    const box = rail.getBoundingClientRect();
+    return {
+      x: box.left + rail.clientLeft + rail.clientWidth + 3,
+      y: box.top + rail.clientTop + 30,
+      scrollable: rail.scrollHeight > rail.clientHeight,
+    };
+  });
+  expect(sidebarTrack.scrollable).toBe(true);
+  await noDrag(() =>
+    sidebar.dispatchEvent("mousedown", {
+      button: 0,
+      detail: 1,
+      clientX: sidebarTrack.x,
+      clientY: sidebarTrack.y,
+    }),
+  );
+  await sidebar.evaluate((rail) => {
+    rail.style.removeProperty("height");
+    rail.style.removeProperty("align-self");
+    rail.scrollTop = 0;
+  });
+  await page.setViewportSize({ width: 760, height: 900 });
+  await expect(sidebar).toHaveClass(/rail-collapsed/);
+  await expect(page.locator(".sidebar-collapse")).toBeDisabled();
+  await noDrag(() =>
+    page.locator(".sidebar-collapse").dispatchEvent("mousedown", {
+      button: 0,
+      detail: 1,
+    }),
+  );
+  await drag(sidebar, { position: { x: 4, y: 100 } });
+  await drag(page.locator(".workspace-footer"), {
+    position: { x: 4, y: 18 },
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  check(
+    "Sidebar scrollbar tracks and disabled collapse controls do not drag; menu padding and footer whitespace still drag in a narrow window.",
+  );
+
+  const beforeControlDrag = await count();
+  const beforeControlMaximize = await count("toggle_maximize");
+  await page.getByRole("button", { name: "最大化窗口", exact: true }).click();
+  expect(await count()).toBe(beforeControlDrag);
+  expect(await count("toggle_maximize")).toBe(beforeControlMaximize + 1);
 
   const beforeMaximize = await count("toggle_maximize");
   const beforeTitleDrag = await count();

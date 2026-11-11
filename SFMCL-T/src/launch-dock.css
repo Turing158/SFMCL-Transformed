@@ -7,7 +7,15 @@
   min-width: 0;
   padding-top: 8px;
 }
+.launch-dock-shadow {
+  /* Keep the outside shadow visible while the card clips its stepped corners. */
+  filter: drop-shadow(
+    0 -4px 8px color-mix(in srgb, var(--shadow-color), transparent 50%)
+  );
+}
 .launch-dock-main {
+  --launch-corner-step: 3px;
+  --launch-corner-size: calc(2 * var(--launch-corner-step));
   position: relative;
   min-height: 84px;
   display: flex;
@@ -18,10 +26,23 @@
   padding: 12px calc(var(--launch-gutter) - var(--launch-card-inset));
   border: 1px solid var(--line);
   border-bottom: 0;
-  border-radius: 12px 12px 0 0;
+  border-radius: 0;
+  /* The bottom joins the status strip; only the two top corners are cut out. */
+  clip-path: polygon(
+    var(--launch-corner-size) 0,
+    calc(100% - var(--launch-corner-size)) 0,
+    calc(100% - var(--launch-corner-size)) var(--launch-corner-step),
+    calc(100% - var(--launch-corner-step)) var(--launch-corner-step),
+    calc(100% - var(--launch-corner-step)) var(--launch-corner-size),
+    100% var(--launch-corner-size),
+    100% 100%,
+    0 100%,
+    0 var(--launch-corner-size),
+    var(--launch-corner-step) var(--launch-corner-size),
+    var(--launch-corner-step) var(--launch-corner-step),
+    var(--launch-corner-size) var(--launch-corner-step)
+  );
   background: var(--panel);
-  box-shadow: 0 -4px 16px
-    color-mix(in srgb, var(--shadow-color), transparent 50%);
   overflow: clip;
   /* Keep the raster layer stable through exit; alpha and inert hide the card. */
   opacity: var(--launch-card-alpha);

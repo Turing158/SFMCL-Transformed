@@ -6,7 +6,7 @@ use super::{
     version_settings, versions,
 };
 use crate::{
-    jobs::{self, Job, JobKind},
+    jobs::{self, Job, JobKind, LaunchContext},
     paths::safe_join,
 };
 use anyhow::{bail, Context, Result};
@@ -19,6 +19,10 @@ pub struct LaunchIdentity {
     pub online: bool,
     pub auth_server: Option<String>,
 }
+struct LaunchOptions {
+    events: Option<LaunchEvents>,
+    target: Option<crate::multiplayer::LaunchTarget>,
+}
 
 impl Installer {
     pub async fn launch(self: &Arc<Self>, id: String, player: LaunchIdentity) -> Result<String> {
@@ -30,6 +34,15 @@ impl Installer {
         player: LaunchIdentity,
         events: Option<LaunchEvents>,
     ) -> Result<String> {
+        self.launch_with_target(id, player, events, None).await
+    }
+    pub async fn launch_with_target(
+        self: &Arc<Self>,
+        id: String,
+        player: LaunchIdentity,
+        events: Option<LaunchEvents>,
+        target: Option<crate::multiplayer::LaunchTarget>,
+    ) -> Result<String> {
         if player.name.is_empty() || player.uuid.is_empty() {
             bail!("请先选择角色");
         }
@@ -38,7 +51,10 @@ impl Installer {
         }
         let settings = self.settings.get();
         let root = settings.active_game_root()?;
-        let settings = version_settings::resolve(&root, &id, &settings)?;
+        let mut settings = version_settings::resolve(&root, &id, &settings)?;
+        if let Some(target) = &target {
+            target.apply(&mut settings)?;
+        }
         let lock_path = safe_join(&root, format!(".tmcl/locks/launch-{id}.lock"))?;
         std::fs::create_dir_all(lock_path.parent().unwrap())?;
         let lock = std::fs::OpenOptions::new()
@@ -64,7 +80,14 @@ impl Installer {
         tokio::spawn(async move {
             let _lock = lock;
             let result = installer
-                .launch_inner(&root, &id, player, settings, job.clone(), events)
+                .launch_inner(
+                    &root,
+                    &id,
+                    player,
+                    settings,
+                    job.clone(),
+                    LaunchOptions { events, target },
+                )
                 .await;
             job.finish(&result);
         });
@@ -77,10 +100,22 @@ impl Installer {
         player: LaunchIdentity,
         settings: crate::config::Settings,
         job: Arc<Job>,
-        events: Option<LaunchEvents>,
+        options: LaunchOptions,
     ) -> Result<()> {
         job.step(0, "解析版本与兼容 Java");
         let version = versions::resolve(root, id)?;
+        job.set_launch_context(LaunchContext {
+            version_id: id.into(),
+            game_version: version["inheritsFrom"]
+                .as_str()
+                .or(version["clientVersion"].as_str())
+                .or(version["id"].as_str())
+                .unwrap_or(id)
+                .into(),
+            directory: settings.active_dir.clone(),
+            player_name: player.name.clone(),
+            running: false,
+        });
         // Reject an unsupported or missing direct-entry target before downloads begin.
         super::quick_play::arguments(
             &version,
@@ -139,6 +174,9 @@ impl Installer {
         if job.cancel.is_cancelled() {
             bail!(job.cancellation_message());
         }
+        if let Some(target) = &options.target {
+            target.validate().await?;
+        }
         job.step(4, "Minecraft 正在运行，可在此查看日志或结束游戏");
         run_java_with_settings(
             &java.path,
@@ -147,7 +185,7 @@ impl Installer {
             job,
             &[player.access_token],
             &settings,
-            events,
+            options.events,
         )
         .await?;
         Ok(())

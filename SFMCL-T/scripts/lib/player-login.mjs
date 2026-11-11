@@ -3,8 +3,8 @@ import { expect } from "@playwright/test";
 export const loginMethods = {
   offline: "离线登录",
   microsoft: "Microsoft 登录",
-  yggdrasil: "第三方账号登录",
-  "yggdrasil-oauth": "第三方授权登录",
+  "yggdrasil-oauth": "LittleSkin登录",
+  yggdrasil: "第三方登录",
 };
 
 export async function openPlayerLogin(page, kind) {

@@ -1,0 +1,21 @@
+SFMCL-T multiplayer uses EasyTier v2.6.4 as an independent executable.
+Copyright EasyTier contributors. Licensed under LGPL-3.0; see LICENSE and COPYING.
+Source (exact revision): https://github.com/EasyTier/EasyTier/tree/8428a89d2dabc94c97d370ec607c6ca142473626
+Corresponding source archive: https://github.com/EasyTier/EasyTier/archive/refs/tags/v2.6.4.tar.gz
+Official binaries: https://github.com/EasyTier/EasyTier/releases/tag/v2.6.4
+No modifications are made to the upstream executables. SFMCL-T generates configuration
+in memory and communicates through stdin and the local EasyTier CLI/RPC interface.
+easytier-core.exe and easytier-cli.exe are downloaded from upstream on demand.
+The archive's Npcap Packet.dll is NOT installed or distributed by this project.
+The required Packet.dll import is supplied by the BSD-licensed WinPcap 4.1.3
+compatibility library (see WINPCAP-LICENSE). No driver is installed. Packet
+capture is not enabled; the application exclusively uses the no-TUN proxy mode.
+WinPcap binaries originate from https://www.winpcap.org/install/bin/WinPcap_4_1_3.exe
+Installer SHA256: fc4623b113a1f603c0d9ad5f83130bd6de1c62b973be9892305132389c8588de
+x64 Packet.dll SHA256: ab3cce674f5216895fd26a073771f82b05d4c8b214a89f0f288a59774a06b14b
+x86 Packet.dll SHA256: 49656c178b17198470ad6906e9ee0865f16f01c1dbbf11c613b55a07246a7918
+This product includes software developed by the University of California,
+Berkeley and its contributors.
+Third-party dependencies and their license information are available in the pinned
+source tree and Cargo.lock. Distribution of an offline bundle must also comply with
+the upstream license's corresponding-source distribution requirements.
