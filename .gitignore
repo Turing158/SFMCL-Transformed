@@ -21,6 +21,7 @@ littleskin.dat.*
 
 # Local design and development documents
 /preview/
+/previews/
 /design-system/
 /docs/plan/
 /docs/internal/
