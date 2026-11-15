@@ -2,7 +2,7 @@ use super::{
     components,
     engine::{self, Engine, Member},
     invitation::{self, Invitation},
-    minecraft, tunnel,
+    minecraft, official, tunnel,
 };
 use crate::{
     downloads::DownloadManager,
@@ -25,6 +25,8 @@ pub struct Snapshot {
     pub session_id: Option<String>,
     pub component_ready: bool,
     pub component_version: &'static str,
+    pub tunnel_ready: bool,
+    pub tunnel_version: String,
     pub component_job_id: Option<String>,
     pub role: Option<String>,
     pub name: String,
@@ -33,6 +35,8 @@ pub struct Snapshot {
     pub world_open: bool,
     pub members: Vec<Member>,
     pub error: Option<String>,
+    pub service: Option<&'static str>,
+    pub invite_code: Option<String>,
 }
 impl Default for Snapshot {
     fn default() -> Self {
@@ -41,6 +45,8 @@ impl Default for Snapshot {
             session_id: None,
             component_ready: false,
             component_version: components::VERSION,
+            tunnel_ready: false,
+            tunnel_version: tunnel::VERSION.into(),
             component_job_id: None,
             role: None,
             name: String::new(),
@@ -49,6 +55,8 @@ impl Default for Snapshot {
             world_open: false,
             members: vec![],
             error: None,
+            service: None,
+            invite_code: None,
         }
     }
 }
@@ -119,12 +127,19 @@ impl LaunchTarget {
 
 impl Multiplayer {
     pub fn new(directory: PathBuf, downloads: Arc<DownloadManager>, jobs: Arc<Jobs>) -> Arc<Self> {
+        // Readiness is rebuilt from verified local files on every launcher start.
+        // This check neither downloads components nor creates a preparation job.
+        let snapshot = Snapshot {
+            component_ready: components::installed(&directory),
+            tunnel_ready: tunnel::installed(&directory),
+            ..Default::default()
+        };
         Arc::new(Self {
             directory,
             downloads,
             jobs,
             state: Mutex::new(State {
-                snapshot: Snapshot::default(),
+                snapshot,
                 active: None,
                 maintenance: false,
             }),
@@ -160,17 +175,33 @@ impl Multiplayer {
         host: bool,
         name: String,
         archive: Option<PathBuf>,
+        owner: Option<official::Owner>,
+        prepare_tunnel: bool,
     ) -> Result<Snapshot> {
         let mut state = self.lock();
-        ensure!(!state.maintenance, "本地数据操作进行中");
-        ensure!(state.active.is_none(), "请先离开当前房间或取消组件准备");
+        if state.maintenance || state.active.is_some() {
+            if let Some(owner) = owner {
+                // A shutdown or another IPC request may win while creation is
+                // awaiting HTTP. Close the newly registered room in that race.
+                tokio::spawn(async move {
+                    let cancelled = CancellationToken::new();
+                    cancelled.cancel();
+                    let _ = owner.start(cancelled).stop_close().await;
+                });
+            }
+            anyhow::bail!("请先结束当前会话或本地数据操作");
+        }
         let id = uuid::Uuid::new_v4().to_string();
         let cancel = CancellationToken::new();
         let done = CancellationToken::new();
         let previous_ready = state.snapshot.component_ready;
+        let previous_tunnel_ready = state.snapshot.tunnel_ready;
+        let previous_tunnel_version = state.snapshot.tunnel_version.clone();
+        let prepare_tunnel =
+            prepare_tunnel || (host && invite.as_ref().is_some_and(Invitation::uses_tunnel));
         let job = self.jobs.create(
             JobKind::Other,
-            if host && invite.as_ref().is_some_and(Invitation::uses_tunnel) {
+            if prepare_tunnel {
                 format!(
                     "准备联机组件 · EasyTier {} / Cloudflare Tunnel",
                     components::VERSION
@@ -178,12 +209,25 @@ impl Multiplayer {
             } else {
                 format!("准备联机组件 · EasyTier {}", components::VERSION)
             },
-            &["检查组件", "获取组件", "校验并安装"],
+            if prepare_tunnel {
+                &[
+                    "检查 EasyTier",
+                    "获取 EasyTier",
+                    "校验并安装 EasyTier",
+                    "检查 Cloudflare Tunnel",
+                    "获取 Cloudflare Tunnel",
+                    "校验并安装 Cloudflare Tunnel",
+                ]
+            } else {
+                &["检查组件", "获取组件", "校验并安装"]
+            },
         );
         state.snapshot = Snapshot {
             state: "preparing".into(),
             session_id: Some(id.clone()),
             component_ready: previous_ready,
+            tunnel_ready: previous_tunnel_ready,
+            tunnel_version: previous_tunnel_version,
             component_job_id: Some(job.snapshot().id),
             role: invite
                 .as_ref()
@@ -196,6 +240,19 @@ impl Multiplayer {
                 .as_ref()
                 .map(|value| value.game_version.clone())
                 .unwrap_or_default(),
+            service: invite.as_ref().map(|value| {
+                if value.official.is_some() {
+                    "official"
+                } else {
+                    "custom"
+                }
+            }),
+            invite_code: invite.as_ref().and_then(|value| {
+                value
+                    .official
+                    .as_ref()
+                    .map(|network| network.invite_code.clone())
+            }),
             ..Default::default()
         };
         state.active = Some(Active {
@@ -209,6 +266,7 @@ impl Multiplayer {
         let snapshot = state.snapshot.clone();
         let manager = self.clone();
         tokio::spawn(async move {
+            let lease = owner.map(|owner| owner.start(cancel.clone()));
             // Preparation handles cancellation itself so download workers stop
             // before its owned temporary directory is released.
             let mut prepared = async {
@@ -221,11 +279,16 @@ impl Multiplayer {
                 )
                 .await?;
                 manager.update(&id, |snapshot| snapshot.component_ready = true);
-                let cloudflared = if host && invite.as_ref().is_some_and(Invitation::uses_tunnel) {
-                    Some(
-                        tunnel::prepare(&manager.directory, &manager.downloads, &job, &cancel)
-                            .await?,
-                    )
+                let cloudflared = if prepare_tunnel {
+                    manager.update(&id, |snapshot| snapshot.tunnel_ready = false);
+                    let installation =
+                        tunnel::prepare(&manager.directory, &manager.downloads, &job, &cancel, 3)
+                            .await?;
+                    manager.update(&id, |snapshot| {
+                        snapshot.tunnel_ready = true;
+                        snapshot.tunnel_version = installation.version;
+                    });
+                    Some(installation.executable)
                 } else {
                     None
                 };
@@ -247,22 +310,31 @@ impl Multiplayer {
             );
             let outcome = match prepared {
                 Ok(files) => {
-                    tokio::select! {
-                        biased;
-                        _ = cancel.cancelled() => Ok(()),
-                        result = manager.run(&id,invite,host,name,files,&cancel) => result,
+                    if cancel.is_cancelled() {
+                        Ok(())
+                    } else {
+                        manager
+                            .run(&id, invite, host, name, files, &cancel, lease.as_ref())
+                            .await
                     }
                 }
                 Err(_) if job.cancel.is_cancelled() => Ok(()),
                 Err(error) => Err(error),
             };
             cancel.cancel();
+            let outcome = if let Some(lease) = &lease {
+                outcome.and(lease.stop_close().await)
+            } else {
+                outcome
+            };
             let mut state = manager.lock();
             if state.active.as_ref().is_some_and(|active| active.id == id) {
                 state.active = None;
                 let ready = state.snapshot.component_ready;
                 state.snapshot = Snapshot {
                     component_ready: ready,
+                    tunnel_ready: state.snapshot.tunnel_ready,
+                    tunnel_version: state.snapshot.tunnel_version.clone(),
                     ..Default::default()
                 };
                 if let Err(error) = outcome {
@@ -274,8 +346,8 @@ impl Multiplayer {
         });
         Ok(snapshot)
     }
-    pub fn prepare(self: &Arc<Self>, archive: Option<PathBuf>) -> Result<Snapshot> {
-        self.begin(None, false, String::new(), archive)
+    pub fn prepare(self: &Arc<Self>, archive: Option<PathBuf>, tunnel: bool) -> Result<Snapshot> {
+        self.begin(None, false, String::new(), archive, None, tunnel)
     }
     pub fn create(
         self: &Arc<Self>,
@@ -289,11 +361,54 @@ impl Multiplayer {
         } else {
             Invitation::new(request.name, request.port, request.server, game_version)?
         };
-        self.begin(Some(invite), true, player, None)
+        self.begin(Some(invite), true, player, None, None, false)
     }
     pub fn join(self: &Arc<Self>, value: &str, player: String) -> Result<Snapshot> {
         ensure!(invitation::text_field(&player, 48), "请先选择角色");
-        self.begin(Some(Invitation::decode(value)?), false, player, None)
+        self.begin(
+            Some(Invitation::decode(value)?),
+            false,
+            player,
+            None,
+            None,
+            false,
+        )
+    }
+    pub async fn official_preview(value: &str) -> Result<invitation::InvitationPreview> {
+        official::RoomApi::new()?.preview(value).await
+    }
+    pub async fn create_official(
+        self: &Arc<Self>,
+        request: CreateRequest,
+        game_version: String,
+        player: String,
+    ) -> Result<Snapshot> {
+        ensure!(invitation::text_field(&player, 48), "请先选择角色");
+        {
+            let state = self.lock();
+            ensure!(
+                !state.maintenance && state.active.is_none(),
+                "请先结束当前会话或本地数据操作"
+            );
+        }
+        minecraft::ping(SocketAddr::from((Ipv4Addr::LOCALHOST, request.port)))
+            .await
+            .context("未检测到 Minecraft 世界，请先对局域网开放")?;
+        let (invite, owner) = official::RoomApi::new()?
+            .create(&request.name, request.port, &game_version)
+            .await?;
+        self.begin(Some(invite), true, player, None, Some(owner), false)
+    }
+    pub async fn join_official(self: &Arc<Self>, value: &str, player: String) -> Result<Snapshot> {
+        ensure!(invitation::text_field(&player, 48), "请先选择角色");
+        self.begin(
+            Some(official::RoomApi::new()?.join(value).await?),
+            false,
+            player,
+            None,
+            None,
+            false,
+        )
     }
     pub fn invitation(&self, id: &str) -> Result<String> {
         let state = self.lock();
@@ -306,7 +421,12 @@ impl Multiplayer {
             .as_ref()
             .filter(|active| active.id == id && active.host)
             .context("当前房间已失效")?;
-        active.invite.as_ref().context("房间未创建")?.encode()
+        let invite = active.invite.as_ref().context("房间未创建")?;
+        if let Some(network) = &invite.official {
+            Ok(network.invite_code.clone())
+        } else {
+            invite.encode()
+        }
     }
     pub fn launch_target(&self, id: &str) -> Result<LaunchTarget> {
         let state = self.lock();
@@ -353,6 +473,7 @@ impl Multiplayer {
         }
         result
     }
+    #[allow(clippy::too_many_arguments)] // Session state includes the optional official room lease.
     async fn run(
         &self,
         id: &str,
@@ -361,6 +482,7 @@ impl Multiplayer {
         name: String,
         components: PreparedComponents,
         cancel: &CancellationToken,
+        lease: Option<&official::Lease>,
     ) -> Result<()> {
         let Some(mut invite) = invite else {
             return Ok(());
@@ -439,6 +561,11 @@ impl Multiplayer {
             }
             Ok(())
         }.await;
+        let result = if let Some(lease) = lease {
+            result.and(lease.stop_close().await)
+        } else {
+            result
+        };
         let tunnel_stopped = tunnel
             .as_ref()
             .map(|tunnel| tunnel.stop())

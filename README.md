@@ -10,7 +10,7 @@ StarFall Minecraft Launcher-Transformed · 基于 Rust、Tauri 2 和 React 的 M
 
 <p>
   <img src="https://img.shields.io/badge/平台-Windows%20x64%20%2F%20x86-0078D4?style=flat-square" alt="Windows x64 / x86" />
-  <img src="https://img.shields.io/badge/版本-0.1.1-4C8BF5?style=flat-square" alt="版本 0.1.1" />
+  <img src="https://img.shields.io/badge/版本-1.0.0-4C8BF5?style=flat-square" alt="版本 1.0.0" />
   <img src="https://img.shields.io/badge/核心-Rust-DEA584?style=flat-square" alt="Rust 核心" />
   <img src="https://img.shields.io/badge/界面-Tauri%202%20%2B%20React-24C8D8?style=flat-square" alt="Tauri 2 + React" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-2EA043?style=flat-square" alt="MIT License" /></a>
@@ -44,7 +44,13 @@ SFMCL-T 是 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-
 
 ## 快速上手
 
-「联机」入口位于「版本管理」下方，房主填写房间名称和游戏端口后创建。「联机方式」默认选择「Cloudflare Tunnel + 本机EasyTier」，自动启动本机 EasyTier 与 Cloudflare 临时隧道，将 WSS 入口写入完整邀请码；选择「共享EasyTier节点」后，选择框收窄到右侧，左侧输入框用于填写指定的 EasyTier TCP / UDP 节点。好友粘贴邀请码即可加入。采用免虚拟网卡代理，组件按需下载、校验；关闭房间时释放本实例网络进程。Cloudflare 临时服务的可用性和联机延迟受网络影响，跨网络双机和实际游戏进世界仍需验收。使用方式与验证范围见 [联机说明](docs/multiplayer.md)。
+「联机」入口位于「版本管理」下方。默认「官方」使用官方 EasyTier 节点和 8 位英文字母邀请码，房主填写房间名称与游戏中对局域网开放的端口后创建，好友查询邀请码再加入。房主心跳由桌面会话负责，切换页面不会中断；关闭房间或退出启动器时注销邀请码并释放本实例网络进程。
+
+「自定义」保留完整长邀请码，默认使用「共享EasyTier节点」，左侧输入框可填写 TCP / UDP / WSS 节点，WSS 未填写端口时默认使用 443；也可切换为「Cloudflare Tunnel + 本机EasyTier」。即使填入官方中继地址，这一路径仍使用原有长邀请码。两种模式均采用免虚拟网卡代理，组件按需下载、校验。使用方式与验证范围见 [联机说明](docs/multiplayer.md)。
+
+房主需要允许离线好友进入时，在「联机」页面「创建房间」按钮这一行的最右侧打开「离线联机」。开关读取房主游戏对应的设置：该版本使用独立高级启动参数时保存到版本，否则保存到全局设置。更改后重启 Minecraft，再进入存档并对局域网开放；仅切换启动器角色或重开网络房间不会改变正在运行的游戏。好友应使用不同角色名。此功能通过启动器内置的 Java Agent 仅覆盖原版单人内置服务器的在线认证，不安装 Minecraft 模组、不修改客户端 JAR，也不改变连接外部服务器时的账号认证。默认开启；已有配置中明确关闭的选择会保留。关闭后重启游戏恢复原有认证。当前验证覆盖原版 26.3 的真实登录握手；混淆版本按官方客户端映射定位，缺少官方映射的旧版及 Fabric / Forge / Quilt / NeoForge 加载器暂不支持开启该选项，会明确报错而不会静默失效。
+
+Agent 源码位于 `SFMCL-T/java/offline-lan`，编译结果内嵌于启动器，用户只需要游戏 JRE。维护者设置 `SFMCL_T_AGENT_JDK` 为 JDK 17+ 路径后运行 `npm run build:offline-lan-agent`（生成 Java 8 字节码）和 `npm run test:offline-lan-agent`；可设置 `SFMCL_T_LAN_TEST_VERSION` 为本机原版 26.x 的版本 JSON 路径，验证真实 Minecraft 的离线握手及独立服务端仍要求在线认证。
 
 **1. 启动应用**
 
@@ -136,7 +142,7 @@ CurseForge 访问需要后端渠道凭据。发布程序不附带开发者的本
 
 ## 下载、外观与公告
 
-下载中心可查看任务、文件进度和日志。侧栏任务摘要默认关闭，可在「设置 → 启动器设置 → 下载 → 侧栏下载任务」选择「下载时」「始终」或「关闭」；点击摘要可进入下载中心。关闭应用时会先暂停并保存下载任务。
+下载中心可查看任务、文件进度和日志。侧栏任务摘要默认始终显示，可在「设置 → 启动器设置 → 下载 → 侧栏下载任务」选择「下载时」「始终」或「关闭」；点击摘要可进入下载中心。关闭应用时会先暂停并保存下载任务。
 
 设置中还可调整下载并发数与缓存文件夹。缓存路径修改后会自动保存并用于新任务，已有任务继续使用原目录；文件下载完成后自动清理对应缓存。
 
@@ -305,7 +311,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File SFMCL-T/scripts/import-curse
 | `installer` | `SFMCL-T_v<版本>_<架构>_installer.exe` | NSIS 安装包；检测系统 WebView2，缺少时可下载安装。 |
 | `single` | `SFMCL-T_v<版本>_<架构>.exe` | 前端嵌入 EXE，使用系统 WebView2；默认通过 UPX 压缩。 |
 
-版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v0.1.1_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
+版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v1.0.0_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
 
 也可调用 `build.ps1 -Mode <模式> -Architecture <架构>`，或在 `SFMCL-T/` 内运行 `npm run package`、`npm run package:x86`、`npm run package:x64`。`npm run package:installer -- -Architecture x86` 和 `npm run package:single -- -Architecture x86` 可分别生成 x86 安装版和单文件版。
 

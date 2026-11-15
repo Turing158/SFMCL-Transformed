@@ -6,7 +6,7 @@ use axum::{
     Router,
 };
 use sfmcl_t_core::{
-    download_sources::{candidates, SourceSelector, MC_MIRROR},
+    download_sources::{candidates, SourceSelector, GITHUB_ACCELERATORS, MC_MIRROR},
     downloads::{DownloadManager, DownloadSpec, Status},
     minecraft::download_source::MinecraftDownloadSource,
 };
@@ -277,6 +277,121 @@ async fn picks_fastest_source_caches_probes_and_shares_concurrent_measurements()
     assert_eq!(fast.probes.load(Ordering::SeqCst), 1);
     sources.set_mode(MinecraftDownloadSource::Official);
     assert_eq!(sources.order(&client, &urls, &cancel).await.unwrap(), urls);
+}
+
+#[test]
+fn multiplayer_components_share_only_equivalent_github_release_sources() {
+    for official in [
+        "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip",
+        "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-i686-v2.6.4.zip",
+        "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-amd64.exe",
+        "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-386.exe",
+    ] {
+        let official = official.to_string();
+        let expected: Vec<_> = std::iter::once(official.clone())
+            .chain(
+                GITHUB_ACCELERATORS
+                    .iter()
+                    .map(|root| format!("{root}{official}")),
+            )
+            .collect();
+        assert_eq!(candidates(&official), expected);
+        for mirror in expected.iter().skip(1) {
+            assert_eq!(candidates(mirror), expected);
+        }
+    }
+    for url in [
+        "https://github.com/cloudflare/other/releases/download/2026.10.7/cloudflared-windows-amd64.exe",
+        "https://github.com/cloudflare/cloudflared/releases/download/latest/cloudflared-windows-amd64.exe",
+        "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-linux-amd64",
+        "https://github.com/Other/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip",
+        "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.7.0.zip",
+        "https://ghfast.top/https://example.org/easytier-windows-x86_64-v2.6.4.zip",
+        "https://ghfast.top.example.org/https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip",
+        "https://user:secret@github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip",
+        "https://github.com:444/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip",
+        "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip?token=private",
+    ] {
+        assert_eq!(candidates(url), vec![url.to_string()]);
+    }
+}
+
+#[tokio::test]
+async fn multiplayer_components_measure_all_sources_regardless_of_minecraft_preference() {
+    let mut servers = Vec::new();
+    for delay in [160, 100, 5, 80, 60, 120] {
+        servers.push(Server::start(&vec![42; 65536], delay).await);
+    }
+    let client = reqwest::Client::new();
+    for official in [
+        "https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip",
+        "https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-amd64.exe",
+    ] {
+        let urls = candidates(official);
+        for mode in [
+            MinecraftDownloadSource::Auto,
+            MinecraftDownloadSource::Official,
+            MinecraftDownloadSource::Bmclapi,
+        ] {
+            let sources = SourceSelector::default();
+            sources.set_mode(mode);
+            let ordered = sources
+                .order_with(&urls, &CancellationToken::new(), |url| {
+                    let index = urls.iter().position(|candidate| candidate == url).unwrap();
+                    Ok(client.get(servers[index].file("component.zip")))
+                })
+                .await
+                .unwrap();
+            assert_eq!(ordered[0], urls[2]);
+            assert_eq!(ordered.len(), 6);
+        }
+    }
+    for server in &servers {
+        assert_eq!(server.probes.load(Ordering::SeqCst), 6);
+    }
+}
+
+#[tokio::test]
+async fn shared_component_sources_measure_and_record_failures_separately() {
+    let slow = Server::start(&vec![42; 65536], 100).await;
+    let fast = Server::start(&vec![42; 65536], 5).await;
+    let easytier = candidates("https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip");
+    let cloudflared = candidates("https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-windows-amd64.exe");
+    let client = reqwest::Client::new();
+    let sources = SourceSelector::default();
+    let cancel = CancellationToken::new();
+    let ordered = sources
+        .order_with(&easytier, &cancel, |url| {
+            Ok(client.get(if url == easytier[1] {
+                fast.file("easytier.zip")
+            } else {
+                slow.file("easytier.zip")
+            }))
+        })
+        .await
+        .unwrap();
+    assert_eq!(ordered[0], easytier[1]);
+    let ordered = sources
+        .order_with(&cloudflared, &cancel, |url| {
+            Ok(client.get(if url == cloudflared[2] {
+                fast.file("cloudflared.exe")
+            } else {
+                slow.file("cloudflared.exe")
+            }))
+        })
+        .await
+        .unwrap();
+    assert_eq!(ordered[0], cloudflared[2]);
+    assert_eq!(fast.probes.load(Ordering::SeqCst), 2);
+    assert_eq!(slow.probes.load(Ordering::SeqCst), 10);
+    sources.failed(&easytier[2]).await;
+    let ordered = sources
+        .order_with(&cloudflared, &cancel, |_| {
+            panic!("cloudflared measurements should stay cached after an EasyTier failure")
+        })
+        .await
+        .unwrap();
+    assert_eq!(ordered[0], cloudflared[2]);
 }
 
 #[tokio::test]

@@ -51,9 +51,9 @@ const shot = async (name) => {
 };
 const available = {
   status: "available",
-  currentVersion: "0.1.1",
-  latestVersion: "0.2.0",
-  htmlUrl: "https://github.com/Turing158/SFMCL-Transformed/releases/tag/v0.2.0",
+  currentVersion: "1.0.0",
+  latestVersion: "1.1.0",
+  htmlUrl: "https://github.com/Turing158/SFMCL-Transformed/releases/tag/v1.1.0",
 };
 
 try {
@@ -80,7 +80,7 @@ try {
   await page.getByRole("tab", { name: "启动器设置", exact: true }).click();
   await finish(available);
   await page.getByRole("tab", { name: "关于", exact: true }).click();
-  await expect(button).toHaveText("下载更新 v0.2.0");
+  await expect(button).toHaveText("下载更新 v1.1.0");
   await expect(button).toBeEnabled();
   await expect(button).toHaveClass(/primary/);
   await shot("available-light");
@@ -105,14 +105,14 @@ try {
   await expect
     .poll(() => page.evaluate(() => window.__updateTest.opened.length))
     .toBe(2);
-  await expect(button).toHaveText("下载更新 v0.2.0");
+  await expect(button).toHaveText("下载更新 v1.1.0");
 
   await state.getByRole("button", { name: "重新检测", exact: true }).click();
   await expect(button).toBeDisabled();
   await finish({
     status: "latest",
-    currentVersion: "0.1.1",
-    latestVersion: "0.1.1",
+    currentVersion: "1.0.0",
+    latestVersion: "1.0.0",
   });
   await expect(button).toHaveText("已是最新版本");
   await expect(button).toBeDisabled();
@@ -125,7 +125,7 @@ try {
 
   await state.getByRole("button", { name: "重新检测", exact: true }).click();
   await expect(state).toHaveAttribute("data-update-state", "checking");
-  await finish({ status: "unpublished", currentVersion: "0.1.1" });
+  await finish({ status: "unpublished", currentVersion: "1.0.0" });
   await expect(button).toHaveText("暂无发布");
   await expect(button).toBeDisabled();
   await shot("unpublished-dark");
@@ -145,7 +145,7 @@ try {
   await button.click();
   await expect(state).toHaveAttribute("data-update-state", "checking");
   await finish(available);
-  await expect(button).toHaveText("下载更新 v0.2.0");
+  await expect(button).toHaveText("下载更新 v1.1.0");
   await shot("available-dark");
   expect(await page.evaluate(() => window.__updateTest.calls)).toBe(5);
   expect(errors).toEqual([]);

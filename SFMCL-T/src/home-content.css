@@ -399,11 +399,6 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
-@container (min-width: 540px) {
-  .home-widget-row[data-home-widget-type="announcement"] {
-    grid-column: 1 / -1;
-  }
-}
 .home-widget-list[data-home-editing="true"] .notice-control {
   display: none;
 }

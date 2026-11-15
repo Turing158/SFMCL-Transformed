@@ -28,12 +28,37 @@ await page.addInitScript({
     (${resourceCenterFixture.toString()})();`,
 });
 await page.addInitScript(() => {
+  const callbacks = new Map();
+  const listeners = new Map();
+  let serial = 0;
   const invoke = window.__TAURI_INTERNALS__.invoke;
   window.__confirmationTest = {
     native: [],
     motions: [],
     animations: [],
     holdExit: false,
+    quitResponses: [],
+    quitRequests: 0,
+    emitQuit(payload) {
+      for (const [id, listener] of listeners) {
+        if (listener.event === "sfmcl-t-quit")
+          callbacks.get(listener.handler)({
+            id,
+            event: listener.event,
+            payload,
+          });
+      }
+    },
+  };
+  window.__TAURI_INTERNALS__.transformCallback = (callback) => {
+    const id = ++serial;
+    callbacks.set(id, callback);
+    return id;
+  };
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+    unregisterListener(_event, id) {
+      listeners.delete(id);
+    },
   };
   const animate = Element.prototype.animate;
   Element.prototype.animate = function (...args) {
@@ -47,6 +72,20 @@ await page.addInitScript(() => {
     return animation;
   };
   window.__TAURI_INTERNALS__.invoke = async (command, args) => {
+    if (command === "plugin:event|listen") {
+      const id = ++serial;
+      listeners.set(id, args);
+      return id;
+    }
+    if (command === "plugin:window|close") {
+      window.__confirmationTest.quitRequests++;
+      window.__confirmationTest.emitQuit({ kind: "confirm" });
+      return;
+    }
+    if (command === "resolve_launcher_quit") {
+      window.__confirmationTest.quitResponses.push(args.confirmed);
+      return;
+    }
     if (
       command.startsWith("plugin:dialog|") &&
       command !== "plugin:dialog|open"
@@ -313,6 +352,84 @@ try {
     "Download cancellation uses the custom confirmation and preserves its original command",
   );
 
+  await go("开始游戏");
+  const closeWindow = button("关闭窗口");
+  const quitResponses = () =>
+    page.evaluate(() => window.__confirmationTest.quitResponses);
+  for (const method of ["cancel", "escape", "close", "backdrop", "enter"]) {
+    const previous = (await quitResponses()).length;
+    await closeWindow.click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAccessibleDescription(
+      "退出启动器将断开当前联机，确定要退出吗？",
+    );
+    await expect(
+      dialog.getByRole("button", { name: "取消", exact: true }),
+    ).toBeFocused();
+    expect((await quitResponses()).length).toBe(previous);
+    // Repeated native close or tray requests cannot queue another dialog.
+    await page.evaluate(() => {
+      window.__confirmationTest.emitQuit({ kind: "confirm" });
+      window.__confirmationTest.emitQuit({ kind: "confirm" });
+    });
+    await expect(dialog).toHaveCount(1);
+    if (method === "cancel") await answerConfirmation(page, false);
+    else if (method === "escape") await page.keyboard.press("Escape");
+    else if (method === "close")
+      await dialog.getByRole("button", { name: "关闭对话框" }).click();
+    else if (method === "backdrop") await page.mouse.click(4, 4);
+    else await page.keyboard.press("Enter");
+    await expect(dialog).toHaveCount(0);
+    await expect.poll(quitResponses).toEqual(Array(previous + 1).fill(false));
+    await expect(closeWindow).toBeFocused();
+  }
+  check(
+    "Multiplayer window close uses the project confirmation; all dismissals cancel and repeated native requests do not queue dialogs",
+  );
+
+  await closeWindow.click();
+  await expect(dialog).toBeVisible();
+  await page.evaluate(() => {
+    window.__confirmationTest.holdExit = true;
+  });
+  await dialog.getByRole("button", { name: "确认", exact: true }).click();
+  await expect(dialog).toHaveAttribute("data-closing", "true");
+  expect(await quitResponses()).toEqual(Array(5).fill(false));
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => {
+    window.__confirmationTest.animations
+      .filter((animation) => animation.playState === "paused")
+      .forEach((animation) => animation.finish());
+    window.__confirmationTest.holdExit = false;
+  });
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(quitResponses).toEqual([...Array(5).fill(false), true]);
+  check(
+    "Confirmed launcher exit waits for the modal animation and responds once",
+  );
+
+  await page.evaluate(() => {
+    window.__confirmationTest.emitQuit({
+      kind: "error",
+      message: "联机尚未结束：联机仍在退出，请稍后重试",
+    });
+  });
+  await expect(
+    page.locator(".toast.error").filter({
+      hasText: "联机尚未结束：联机仍在退出，请稍后重试",
+    }),
+  ).toBeVisible();
+  await expect(closeWindow).toBeEnabled();
+  await closeWindow.click();
+  await answerConfirmation(page, false);
+  await expect
+    .poll(quitResponses)
+    .toEqual([...Array(5).fill(false), true, false]);
+  check(
+    "Shutdown failures use the project notification and allow another quit attempt",
+  );
+
   expect(await page.evaluate(() => window.__confirmationTest.native)).toEqual(
     [],
   );
@@ -323,7 +440,7 @@ try {
     JSON.stringify({ checks, errors, nativeDialogs }, null, 2),
   );
   console.log(
-    "PASS All six confirmation flows use the existing Modal without native confirmations.",
+    "PASS All confirmation flows, including multiplayer launcher exit, use the existing Modal without native confirmations.",
   );
 } catch (error) {
   await page.screenshot({ path: `${evidence}/failure.png` });

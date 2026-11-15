@@ -21,6 +21,7 @@ pub struct Release {
     pub arch: &'static str,
     pub size: u64,
     pub archive_hash: &'static str,
+    pub archive_sha512: &'static str,
     pub core_hash: &'static str,
     pub cli_hash: &'static str,
     pub packet_hash: &'static str,
@@ -35,6 +36,7 @@ pub(super) fn release_for(arch: &str) -> Result<Release> {
             arch: "x86_64",
             size: 32657720,
             archive_hash: "27af91e270e554709b048bd32327fefd2dfce5062ae1e8701af7550c6f525f84",
+            archive_sha512: "d209568a3eef31bb4d80f73ec06cd5deffd149910bd5f4a48c9aa17e3363af12454f4b26ed80ba11d40fa0a427f32422e6bbfa57b11d59f8ad8c905a394f0c4c",
             core_hash: "da7eb2d24b5416f3d3407636949e964a0750e3f9dc53a828cb6799a57ead445d",
             cli_hash: "d8783e851e944b44a9b71b39fd02f227ec0a2a82b3165c55ead5dd32dcde53a1",
             packet_hash: "ab3cce674f5216895fd26a073771f82b05d4c8b214a89f0f288a59774a06b14b",
@@ -43,6 +45,7 @@ pub(super) fn release_for(arch: &str) -> Result<Release> {
             arch: "i686",
             size: 30881261,
             archive_hash: "bf557daeccc5525d95b8a230c339d75554fb52d82d1e050e9a5202c92c02e09e",
+            archive_sha512: "ceb48a1f81484357cee1e52b36c43d900a291bf70332de7806d83062362e1e55bc6f68423c2181489862ee64526a6cd6e4c3fdd4ada321339f16634bb456ac3a",
             core_hash: "657400c756aa4e2868b9505f669527733ba872dff3b8877cee24d7772616c76b",
             cli_hash: "e1d6a617e4cb3b9bf77c9d32616dace5d5715fabcbcb0f5f9969a98f3626d69a",
             packet_hash: "49656c178b17198470ad6906e9ee0865f16f01c1dbbf11c613b55a07246a7918",
@@ -156,6 +159,7 @@ pub async fn prepare(
         return install_archive(root, &archive, &release);
     }
     let filename = format!("easytier-windows-{}-v{VERSION}.zip", release.arch);
+    job.log("EasyTier 组件自动测速，在官方直连及加速源中选择较快的可用来源".into());
     let spec = DownloadSpec {
         url: format!(
             "https://github.com/EasyTier/EasyTier/releases/download/v{VERSION}/{filename}"
@@ -179,11 +183,14 @@ pub(super) fn check_cancel(job: &Job, cancel: &CancellationToken) -> Result<()> 
 async fn download_archive(
     root: &Path,
     release: &Release,
-    spec: DownloadSpec,
+    mut spec: DownloadSpec,
     downloads: &Arc<DownloadManager>,
     job: &Job,
     cancel: &CancellationToken,
 ) -> Result<Binaries> {
+    // Reject a corrupt mirror before completing the download, so the download
+    // manager can try the next source. Installation still checks pinned SHA-256.
+    spec.sha512 = Some(release.archive_sha512.into());
     download_component(
         root,
         spec,
@@ -191,11 +198,13 @@ async fn download_archive(
         downloads,
         job,
         cancel,
+        0,
         |archive| install_archive(root, archive, release),
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)] // Shared transfer state and component-specific installation.
 pub(super) async fn download_component<T>(
     root: &Path,
     spec: DownloadSpec,
@@ -203,6 +212,7 @@ pub(super) async fn download_component<T>(
     downloads: &Arc<DownloadManager>,
     job: &Job,
     cancel: &CancellationToken,
+    step_offset: usize,
     install: impl FnOnce(&Path) -> Result<T>,
 ) -> Result<T> {
     // The workflow owns this directory; pause/retry keeps it alive, and all
@@ -210,7 +220,7 @@ pub(super) async fn download_component<T>(
     let work = tempfile::Builder::new()
         .prefix("component-")
         .tempdir_in(root)?;
-    job.step(1, "在下载中心查看进度、暂停或重试");
+    job.step(step_offset + 1, "在下载中心查看进度、暂停或重试");
     let archive = work.path().join(&spec.path);
     let id = downloads
         .enqueue_with_retention(
@@ -239,7 +249,7 @@ pub(super) async fn download_component<T>(
             }
         }
         check_cancel(job, cancel)?;
-        job.step(2, "校验官方归档并安装组件");
+        job.step(step_offset + 2, "校验官方文件并安装组件");
         install(&archive)
     }
     .await;

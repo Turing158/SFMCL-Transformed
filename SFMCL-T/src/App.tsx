@@ -42,6 +42,7 @@ import { SidebarProgress, useSidebarProgress } from "./SidebarProgress";
 import { HomeLandscape } from "./HomeLandscape";
 import { useHomeScrollPadding } from "./useHomeScrollPadding";
 import { handleWindowDrag } from "./windowDrag";
+import { useLauncherQuit } from "./useLauncherQuit";
 import "./home.css";
 const navigation = [
   { id: "home", name: pageNames.home, icon: House },
@@ -61,6 +62,7 @@ const pages = {
 };
 export default function App() {
   const app = useApp();
+  useLauncherQuit(app.reportError);
   const { workspace, pageKey } = useNavigationTransition(app.route);
   const [collapsed, setCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(

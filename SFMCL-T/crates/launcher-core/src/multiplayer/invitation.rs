@@ -19,6 +19,9 @@ pub struct Invitation {
     pub port: u16,
     pub server: String,
     pub game_version: String,
+    // API credentials are native session state, never part of a long invitation.
+    #[serde(skip)]
+    pub(super) official: Option<super::official::Network>,
 }
 
 #[derive(Clone, Serialize)]
@@ -82,6 +85,7 @@ impl Invitation {
             port,
             server: String::new(),
             game_version,
+            official: None,
         };
         invitation.validate_room()?;
         Ok(invitation)
@@ -97,9 +101,27 @@ impl Invitation {
     }
 
     pub fn host_ip(&self) -> String {
+        if let Some(network) = &self.official {
+            return network.host_ip.to_string();
+        }
         format!("10.{}.{}.1", self.subnet[0], self.subnet[1])
     }
+    pub(super) fn prefix(&self) -> String {
+        let ip = self.host_ip();
+        format!("{}.", ip.rsplit_once('.').unwrap().0)
+    }
+    pub(super) fn guest_ip(&self) -> String {
+        let host: std::net::Ipv4Addr = self.host_ip().parse().unwrap();
+        format!(
+            "{}{}",
+            self.prefix(),
+            if host.octets()[3] == 2 { 3 } else { 2 }
+        )
+    }
     pub fn network_name(&self) -> String {
+        if let Some(network) = &self.official {
+            return network.name.clone();
+        }
         format!("sfmcl-{}", self.room_id.simple())
     }
     pub fn preview(&self) -> InvitationPreview {
@@ -137,13 +159,16 @@ impl Invitation {
             if self.uses_tunnel() {
                 server.starts_with("wss://")
             } else {
-                server.starts_with("tcp://") || server.starts_with("udp://")
+                server.starts_with("tcp://")
+                    || server.starts_with("udp://")
+                    || server.starts_with("wss://")
             },
             "邀请码连接协议无效，请更新启动器或重新获取邀请"
         );
         Ok(())
     }
     pub fn encode(&self) -> Result<String> {
+        ensure!(self.official.is_none(), "官方房间请使用 8 位邀请码");
         self.validate()?;
         Ok(format!(
             "{}{}",
@@ -236,6 +261,26 @@ mod tests {
         assert_ne!(invite.room_id, next.room_id);
     }
     #[test]
+    fn shared_wss_invitation_roundtrips_with_default_and_custom_ports() {
+        for (server, expected) in [
+            ("  wss://node.example:443/  ", "wss://node.example"),
+            ("wss://node.example", "wss://node.example"),
+            ("wss://node.example:11011", "wss://node.example:11011"),
+            ("wss://[::1]:11011", "wss://[::1]:11011"),
+        ] {
+            let invite =
+                Invitation::new("共享房间".into(), 25565, server.into(), "1.21.4".into()).unwrap();
+            assert!(!invite.uses_tunnel());
+            let code = invite.encode().unwrap();
+            assert!(code.starts_with(PREFIX));
+            let decoded = Invitation::decode(&code).unwrap();
+            assert!(!decoded.uses_tunnel());
+            assert_eq!(decoded.server, expected);
+            assert_eq!(decoded.secret, invite.secret);
+            assert_eq!(decoded.preview().server, expected);
+        }
+    }
+    #[test]
     fn rejects_unsafe_inputs_without_echoing_secrets() {
         for node in [
             "file:///a",
@@ -244,6 +289,10 @@ mod tests {
             "tcp://host:0",
             "tcp://0.0.0.0:1",
             "http://host:123",
+            "ws://host:11011",
+            "wss://user:password@host",
+            "wss://host/?token=secret",
+            "wss://host:0",
         ] {
             assert!(validate_server(node).is_err());
         }

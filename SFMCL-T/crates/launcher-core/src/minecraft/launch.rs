@@ -104,6 +104,9 @@ impl Installer {
     ) -> Result<()> {
         job.step(0, "解析版本与兼容 Java");
         let version = versions::resolve(root, id)?;
+        if settings.offline_lan {
+            super::offline_lan::validate_version(&version)?;
+        }
         job.set_launch_context(LaunchContext {
             version_id: id.into(),
             game_version: version["inheritsFrom"]
@@ -114,6 +117,7 @@ impl Installer {
                 .into(),
             directory: settings.active_dir.clone(),
             player_name: player.name.clone(),
+            offline_lan: settings.offline_lan,
             running: false,
         });
         // Reject an unsupported or missing direct-entry target before downloads begin.
@@ -164,6 +168,11 @@ impl Installer {
             yggdrasil: player.auth_server.is_some(),
         };
         let mut args = build(root, id, &version, &settings, &identity, memory)?;
+        if settings.offline_lan {
+            let argument =
+                super::offline_lan::prepare(self, root, &version, &java.path, &job).await?;
+            args.insert(0, argument);
+        }
         if let Some(argument) = injector {
             // JVM agents must precede the main class; each argument is passed
             // directly to Command (never through a shell).

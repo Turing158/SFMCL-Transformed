@@ -1,16 +1,25 @@
 use sfmcl_t_core::minecraft::process::LaunchEvent;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
-static QUITTING: AtomicBool = AtomicBool::new(false);
+const IDLE: u8 = 0;
+const CONFIRMING: u8 = 1;
+const QUITTING: u8 = 2;
+static QUIT_STATE: AtomicU8 = AtomicU8::new(IDLE);
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Emitter, Manager,
 };
+
+#[derive(Clone, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum QuitEvent {
+    Confirm,
+    Error { message: String },
+}
 
 #[derive(Default)]
 pub struct LaunchWindows(Mutex<WindowState>);
@@ -50,37 +59,66 @@ pub fn show(app: &tauri::AppHandle) -> tauri::Result<()> {
 }
 
 pub fn quit(app: tauri::AppHandle) {
-    if QUITTING.swap(true, Ordering::AcqRel) {
+    if QUIT_STATE
+        .compare_exchange(IDLE, QUITTING, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
         return;
     }
     let runtime = app.state::<Arc<crate::commands::Runtime>>().inner().clone();
     if runtime.multiplayer.active() {
-        app.dialog()
-            .message("退出将断开当前联机。")
-            .title("退出启动器")
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "退出".into(),
-                "取消".into(),
-            ))
-            .show(move |confirmed| {
-                if confirmed {
-                    finish_quit(app, runtime);
-                } else {
-                    QUITTING.store(false, Ordering::Release);
-                }
-            });
+        QUIT_STATE.store(CONFIRMING, Ordering::Release);
+        if let Err(error) = notify_quit(&app, QuitEvent::Confirm) {
+            QUIT_STATE.store(IDLE, Ordering::Release);
+            eprintln!("Cannot request launcher quit confirmation: {error}");
+        }
     } else {
         finish_quit(app, runtime);
     }
 }
+
+fn notify_quit(app: &tauri::AppHandle, event: QuitEvent) -> tauri::Result<()> {
+    // Tray exits must restore the window before showing the in-app dialog.
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| tauri::Error::AssetNotFound("启动器主窗口".into()))?;
+    if !window.is_visible()? || window.is_minimized()? {
+        show(app)?;
+    }
+    window.emit("sfmcl-t-quit", event)
+}
+
+#[tauri::command]
+pub fn resolve_launcher_quit(window: tauri::WebviewWindow, confirmed: bool) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("此窗口不能操作启动器".into());
+    }
+    let next = if confirmed { QUITTING } else { IDLE };
+    // Ignore repeated responses, including while shutdown is already running.
+    if QUIT_STATE
+        .compare_exchange(CONFIRMING, next, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+        && confirmed
+    {
+        let app = window.app_handle().clone();
+        let runtime = app.state::<Arc<crate::commands::Runtime>>().inner().clone();
+        finish_quit(app, runtime);
+    }
+    Ok(())
+}
+
 fn finish_quit(app: tauri::AppHandle, runtime: Arc<crate::commands::Runtime>) {
     tauri::async_runtime::spawn(async move {
         if let Err(error) = runtime.multiplayer.shutdown().await {
-            app.dialog()
-                .message(error.to_string())
-                .title("联机尚未结束")
-                .show(|_| {});
-            QUITTING.store(false, Ordering::Release);
+            QUIT_STATE.store(IDLE, Ordering::Release);
+            if let Err(error) = notify_quit(
+                &app,
+                QuitEvent::Error {
+                    message: format!("联机尚未结束：{error}"),
+                },
+            ) {
+                eprintln!("Cannot report launcher quit failure: {error}");
+            }
             return;
         }
         if let Err(error) = runtime.downloads.pause_all().await {

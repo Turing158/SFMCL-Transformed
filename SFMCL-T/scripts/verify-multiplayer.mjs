@@ -23,6 +23,8 @@ await page.addInitScript(() => {
     sessionId: null,
     componentReady: false,
     componentVersion: "2.6.4",
+    tunnelReady: false,
+    tunnelVersion: "2026.10.7",
     componentJobId: null,
     role: null,
     name: "",
@@ -31,24 +33,34 @@ await page.addInitScript(() => {
     worldOpen: false,
     members: [],
     error: null,
+    service: null,
+    inviteCode: null,
   };
   const state = (window.__multiplayerTest = {
-    snapshot: { ...idle },
+    snapshot: { ...idle, componentReady: true },
     calls: [],
     copied: "",
     failStatus: true,
+    portOutcome: "reachable",
+    portPending: false,
+    failOperation: "",
     prepareRoom: false,
     pendingRoom: null,
+    pendingTunnel: false,
     preparationCount: 0,
   });
-  const beginPreparation = (room = null, archive = false) => {
+  const beginPreparation = (room = null, archive = false, tunnel = false) => {
     state.pendingRoom = room;
+    state.pendingTunnel = tunnel;
+    const previous = state.snapshot;
+    const downloadingTunnel = tunnel && (previous.componentReady || archive);
     const count = ++state.preparationCount;
     const jobId = `component-job-${count}`;
-    const downloadId = archive ? null : `component-download-${count}`;
+    const downloadId =
+      archive && !tunnel ? null : `component-download-${count}`;
     window.__pixelTest.tasks.jobs.unshift({
       id: jobId,
-      title: "准备联机组件 · EasyTier 2.6.4",
+      title: `准备联机组件 · EasyTier 2.6.4${tunnel ? " / Cloudflare Tunnel" : ""}`,
       status: "running",
       currentStep: 1,
       downloadId,
@@ -56,16 +68,29 @@ await page.addInitScript(() => {
         { name: "检查组件", status: "completed", detail: "" },
         { name: "获取组件", status: "running", detail: "" },
         { name: "校验并安装", status: "queued", detail: "" },
+        ...(tunnel
+          ? [
+              { name: "检查 Cloudflare Tunnel", status: "queued", detail: "" },
+              { name: "获取 Cloudflare Tunnel", status: "queued", detail: "" },
+              {
+                name: "校验并安装 Cloudflare Tunnel",
+                status: "queued",
+                detail: "",
+              },
+            ]
+          : []),
       ],
       log: [],
     });
     if (downloadId) {
       window.__pixelTest.tasks.downloads.unshift({
         id: downloadId,
-        title: "EasyTier 2.6.4 · 联机组件",
+        title: downloadingTunnel
+          ? "Cloudflare Tunnel 2026.10.7 · 联机入口"
+          : "EasyTier 2.6.4 · 联机组件",
         status: "running",
         downloaded: 14695974,
-        total: 32657720,
+        total: downloadingTunnel ? 55390512 : 32657720,
         unknownSize: false,
         completed: 0,
         failed: 0,
@@ -77,6 +102,8 @@ await page.addInitScript(() => {
     }
     state.snapshot = {
       ...idle,
+      componentReady: previous.componentReady,
+      tunnelReady: previous.tunnelReady,
       state: "preparing",
       sessionId: `prepare-${count}`,
       componentJobId: jobId,
@@ -87,6 +114,11 @@ await page.addInitScript(() => {
         : null,
       name: room ? "周末的生存世界" : "",
       gameVersion: room ? "1.21.4" : "",
+      service: room
+        ? room.operation.includes(".official.")
+          ? "official"
+          : "custom"
+        : null,
     };
   };
   state.finishPreparation = (status = "completed") => {
@@ -116,27 +148,36 @@ await page.addInitScript(() => {
     if (status === "completed" && room) {
       readyRoom(room);
     } else {
-      state.snapshot = { ...idle, componentReady: status === "completed" };
+      state.snapshot = {
+        ...idle,
+        componentReady: state.snapshot.componentReady || status === "completed",
+        tunnelReady:
+          state.snapshot.tunnelReady ||
+          (state.pendingTunnel && status === "completed"),
+      };
     }
+    state.pendingTunnel = false;
   };
   const readyRoom = (args) => {
     state.server = args.payload.server || "";
-    const hostContext =
-      args.operation === "multiplayer.create"
-        ? window.__pixelTest.tasks.jobs.find(
-            (job) => job.id === args.payload.launchId,
-          )?.launch
-        : undefined;
+    const hostContext = args.operation.endsWith("create")
+      ? window.__pixelTest.tasks.jobs.find(
+          (job) => job.id === args.payload.launchId,
+        )?.launch
+      : undefined;
     state.snapshot = {
       ...idle,
       state: "ready",
       sessionId: "room-session",
       componentReady: true,
+      tunnelReady: state.snapshot.tunnelReady,
       role: args.operation.endsWith("create") ? "host" : "guest",
       name: "周末的生存世界",
       gameVersion: hostContext?.gameVersion || "1.21.4",
       address: "127.0.0.1:51234",
       worldOpen: true,
+      service: args.operation.includes(".official.") ? "official" : "custom",
+      inviteCode: args.operation.includes(".official.") ? "A1B2C3D4" : null,
       members: [
         {
           id: "1",
@@ -195,18 +236,28 @@ await page.addInitScript(() => {
     if (!args.operation.startsWith("multiplayer."))
       return original(command, args);
     state.calls.push(args);
+    if (args.operation === state.failOperation) throw Error("联机操作失败");
     switch (args.operation) {
       case "multiplayer.status":
         if (state.failStatus) throw Error("unavailable");
         return structuredClone(state.snapshot);
       case "multiplayer.prepare":
-        beginPreparation(null, !!args.payload?.archive);
+        beginPreparation(null, !!args.payload?.archive, !!args.payload?.tunnel);
         break;
       case "multiplayer.leave":
-        state.snapshot = { ...idle, componentReady: true };
+        state.snapshot = {
+          ...idle,
+          componentReady: true,
+          tunnelReady: state.snapshot.tunnelReady,
+        };
         break;
       case "multiplayer.check-local-port":
-        return { reachable: true };
+        if (state.portPending)
+          await new Promise((resolve) => {
+            state.finishPortCheck = resolve;
+          });
+        if (state.portOutcome === "failure") throw Error("unavailable");
+        return { reachable: state.portOutcome === "reachable" };
       case "multiplayer.preview":
         if (!args.payload.invitation.startsWith("SFMCL2."))
           throw Error("邀请码无效");
@@ -215,13 +266,26 @@ await page.addInitScript(() => {
           gameVersion: "1.21.4",
           server: "wss://quiet-blue-bird.trycloudflare.com",
         };
+      case "multiplayer.official.preview":
+        if (state.previewPending)
+          await new Promise((resolve) => {
+            state.finishPreview = resolve;
+          });
+        return {
+          name: "官方生存房间",
+          gameVersion: "1.21.4",
+          server: "wss://relay.example.com",
+        };
       case "multiplayer.create":
-      case "multiplayer.join": {
+      case "multiplayer.join":
+      case "multiplayer.official.create":
+      case "multiplayer.official.join": {
         if (state.prepareRoom) beginPreparation(args);
         else readyRoom(args);
         break;
       }
       case "multiplayer.invitation":
+        if (state.snapshot.service === "official") return "A1B2C3D4";
         return state.server
           ? "SFMCL1.fixture-private-invitation"
           : "SFMCL2.fixture-private-invitation";
@@ -233,6 +297,17 @@ await page.addInitScript(() => {
 });
 const main = page.locator('main[data-page="multiplayer"]');
 const nav = page.getByRole("navigation", { name: "主导航" });
+const notification = (message, kind = "error") =>
+  page
+    .locator(`.notification-deck .toast.${kind}`)
+    .filter({ hasText: message });
+const statusCalls = () =>
+  page.evaluate(
+    () =>
+      window.__multiplayerTest.calls.filter(
+        (call) => call.operation === "multiplayer.status",
+      ).length,
+  );
 const go = (name) => nav.getByRole("button", { name, exact: true }).click();
 function pass(name) {
   checks.push(name);
@@ -245,11 +320,53 @@ try {
     (await nav.getByRole("button").allTextContents()).map((s) => s.trim()),
   ).toEqual(["开始游戏", "版本管理", "联机", "资源中心", "设置"]);
   await go("联机");
-  await expect(main.getByText("无法读取联机状态，请重试")).toBeVisible();
+  await expect(main.getByRole("region", { name: "当前游戏" })).toHaveCount(0);
+  const statusFailure = notification("无法读取联机状态，请重试");
+  await expect(statusFailure).toBeVisible();
+  await expect(main.getByRole("alert")).toHaveCount(0);
+  await statusFailure.hover();
+  const beforeStatusPolls = await statusCalls();
+  await expect
+    .poll(statusCalls, { timeout: 6500 })
+    .toBeGreaterThanOrEqual(beforeStatusPolls + 2);
+  await expect(statusFailure).toHaveCount(1);
   await page.evaluate(() => {
     window.__multiplayerTest.failStatus = false;
   });
   await main.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
+  await main.getByRole("tab", { name: "自定义", exact: true }).click();
+  await statusFailure.click();
+  await expect(
+    main.getByRole("button", { name: "校验组件", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    main.getByRole("button", { name: "准备组件", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    main.getByRole("button", { name: "导入组件", exact: true }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(() => window.__multiplayerTest.preparationCount),
+  ).toBe(0);
+  await main.screenshot({ path: `${evidence}/components-ready.png` });
+  await go("版本管理");
+  await go("联机");
+  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    window.__multiplayerTest.snapshot.componentReady = false;
+  });
+  await expect(main.getByText("需要准备组件", { exact: true })).toBeVisible();
+  await expect(
+    main.getByRole("button", { name: "准备组件", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    main.getByRole("button", { name: "导入组件", exact: true }),
+  ).toBeEnabled();
+  await main.screenshot({ path: `${evidence}/components-required.png` });
+  pass(
+    "启动自动读取已校验组件状态、无需手动准备、切页保持就绪、缺失时显示准备和导入入口",
+  );
   await main.getByLabel("房间名称", { exact: true }).fill("周末的生存世界");
   await main.getByRole("button", { name: "准备组件", exact: true }).click();
   await expect(main.getByRole("progressbar")).toHaveCount(0);
@@ -302,11 +419,15 @@ try {
   ).toBeVisible();
   await page.evaluate(() => window.__multiplayerTest.finishPreparation());
   await go("联机");
+  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
   await expect(
-    main.getByRole("button", { name: "校验组件", exact: true }),
-  ).toBeVisible();
+    main.getByRole("button", { name: "准备组件", exact: true }),
+  ).toHaveCount(0);
   await expect(main.getByLabel("房间名称", { exact: true })).toBeEnabled();
-  await main.getByRole("button", { name: "校验组件", exact: true }).click();
+  await page.evaluate(() => {
+    window.__multiplayerTest.snapshot.componentReady = false;
+  });
+  await main.getByRole("button", { name: "准备组件", exact: true }).click();
   await main.getByRole("button", { name: "查看下载", exact: true }).click();
   await downloads
     .getByRole("button", { name: `取消 ${jobTitle}`, exact: true })
@@ -359,20 +480,175 @@ try {
   );
   await main.getByLabel("游戏端口", { exact: true }).fill("0");
   await main.getByRole("button", { name: "检查端口" }).click();
-  await expect(main.getByText("请输入 1–65535 之间的整数端口")).toBeVisible();
+  const invalidPort = notification("请输入 1–65535 之间的整数端口");
+  await expect(invalidPort).toBeVisible();
+  await expect(main.getByText("请输入 1–65535 之间的整数端口")).toHaveCount(0);
+  await page.screenshot({
+    path: `${evidence}/port-validation-notification.png`,
+  });
+  await invalidPort.click();
+  await expect(invalidPort).toHaveCount(0);
+  await main.getByLabel("游戏端口", { exact: true }).fill("65536");
+  const beforeInvalidPort = await page.evaluate(
+    () => window.__multiplayerTest.calls.length,
+  );
+  await main.getByRole("button", { name: "创建房间", exact: true }).click();
+  await expect(invalidPort).toBeVisible();
+  expect(
+    await page.evaluate(
+      (beforeInvalidPort) =>
+        window.__multiplayerTest.calls
+          .slice(beforeInvalidPort)
+          .some((call) => call.operation === "multiplayer.create"),
+      beforeInvalidPort,
+    ),
+  ).toBe(false);
+  await invalidPort.click();
   await main.getByLabel("游戏端口", { exact: true }).fill("51234");
+  for (const [outcome, message] of [
+    ["closed", "端口未开放"],
+    ["failure", "检查失败，请重试"],
+  ]) {
+    await page.evaluate((outcome) => {
+      window.__multiplayerTest.portOutcome = outcome;
+    }, outcome);
+    await main.getByRole("button", { name: "检查端口" }).click();
+    await expect(notification(message)).toBeVisible();
+    await notification(message).click();
+  }
+  await page.evaluate(() => {
+    window.__multiplayerTest.portOutcome = "reachable";
+    window.__multiplayerTest.portPending = true;
+  });
   await main.getByRole("button", { name: "检查端口" }).click();
-  await expect(main.getByText("端口可连接", { exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "检查中…" })).toBeDisabled();
+  await go("版本管理");
+  await page.evaluate(() => {
+    window.__multiplayerTest.finishPortCheck();
+    window.__multiplayerTest.portPending = false;
+  });
+  await go("联机");
+  await expect(main.getByRole("button", { name: "检查端口" })).toBeEnabled();
+  await expect(notification("端口可连接", "success")).toHaveCount(0);
+  await main.getByRole("button", { name: "检查端口" }).click();
+  await expect(notification("端口可连接", "success")).toBeVisible();
+  await expect(main.getByText("端口可连接", { exact: true })).toHaveCount(0);
+  await notification("端口可连接", "success").click();
+  pass(
+    "端口校验、开放/未开放/失败均使用气泡提示，切页忽略过期结果，状态轮询错误不重复弹出",
+  );
   const connectionMode = main.getByRole("combobox", {
     name: "联机方式",
     exact: true,
   });
   const sharedNode = main.getByLabel("共享节点", { exact: true });
+  await expect(connectionMode).toContainText("共享EasyTier节点");
+  await expect(sharedNode).toHaveValue("");
+  expect(await sharedNode.evaluate((input) => input.required)).toBe(true);
+  await connectionMode.click();
+  await page
+    .getByRole("option", {
+      name: "Cloudflare Tunnel + 本机EasyTier",
+      exact: true,
+    })
+    .click();
   await expect(connectionMode).toContainText(
     "Cloudflare Tunnel + 本机EasyTier",
   );
   await expect(sharedNode).toHaveCount(0);
   await expect(main.locator("input")).toHaveCount(2);
+  const componentList = main.getByLabel("联机组件", { exact: true });
+  await expect(
+    componentList.getByRole("img", {
+      name: "EasyTier 2.6.4 · 已就绪",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    componentList.getByRole("img", {
+      name: "Cloudflare Tunnel 2026.10.7 · 待准备",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(main.getByText("需要准备组件", { exact: true })).toBeVisible();
+  await main.getByRole("button", { name: "准备组件", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__multiplayerTest.calls
+          .filter((call) => call.operation === "multiplayer.prepare")
+          .at(-1).payload.tunnel,
+    ),
+  ).toBe(true);
+  await expect(main.getByRole("region", { name: "当前房间" })).toHaveCount(0);
+  await main.getByRole("button", { name: "查看下载", exact: true }).click();
+  const tunnelJobTitle = "准备联机组件 · EasyTier 2.6.4 / Cloudflare Tunnel";
+  const tunnelDownloadTitle = "Cloudflare Tunnel 2026.10.7 · 联机入口";
+  await expect(
+    downloads.getByRole("button", {
+      name: `暂停 ${tunnelDownloadTitle}`,
+      exact: true,
+    }),
+  ).toBeVisible();
+  await downloads
+    .getByRole("button", { name: `取消 ${tunnelJobTitle}`, exact: true })
+    .click();
+  await go("联机");
+  await expect(main.getByText("需要准备组件", { exact: true })).toBeVisible();
+  await expect(
+    componentList.getByRole("img", {
+      name: "EasyTier 2.6.4 · 已就绪",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    componentList.getByRole("img", {
+      name: "Cloudflare Tunnel 2026.10.7 · 待准备",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await main.getByRole("button", { name: "准备组件", exact: true }).click();
+  await page.evaluate(() => window.__multiplayerTest.finishPreparation());
+  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
+  await expect(
+    componentList.getByRole("img", {
+      name: "Cloudflare Tunnel 2026.10.7 · 已就绪",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    main.getByRole("button", { name: "准备组件", exact: true }),
+  ).toHaveCount(0);
+  await page.evaluate(() => {
+    window.__multiplayerTest.snapshot.tunnelReady = false;
+  });
+  await expect(
+    main.getByRole("button", { name: "导入组件", exact: true }),
+  ).toBeVisible();
+  await main.getByRole("button", { name: "导入组件", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__multiplayerTest.calls
+          .filter((call) => call.operation === "multiplayer.prepare")
+          .at(-1).payload,
+    ),
+  ).toMatchObject({
+    tunnel: true,
+    archive: "C:/Fixtures/easytier-windows-x86_64-v2.6.4.zip",
+  });
+  await page.evaluate(() => window.__multiplayerTest.finishPreparation());
+  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
+  await main.getByRole("tab", { name: "加入房间", exact: true }).click();
+  await expect(componentList).not.toContainText("Cloudflare Tunnel");
+  await main.getByRole("tab", { name: "创建房间", exact: true }).click();
+  await expect(componentList).toContainText("Cloudflare Tunnel");
+  await main.getByRole("tab", { name: "官方", exact: true }).click();
+  await expect(componentList).not.toContainText("Cloudflare Tunnel");
+  await main.getByRole("tab", { name: "自定义", exact: true }).click();
+  pass(
+    "选择 Cloudflare 后显示独立组件状态、提前下载、取消重试、导入时获取隧道、就绪后隐藏准备入口，官方和加入模式按需显示",
+  );
   const connectionRow = main.locator(".multiplayer-connection-row");
   await expect
     .poll(async () => {
@@ -389,6 +665,13 @@ try {
   await main.screenshot({ path: `${evidence}/create-light.png` });
   await page.evaluate(() => {
     window.__multiplayerTest.prepareRoom = true;
+    window.__multiplayerTest.failOperation = "multiplayer.create";
+  });
+  await main.getByRole("button", { name: "创建房间", exact: true }).click();
+  await expect(notification("联机操作失败")).toBeVisible();
+  await notification("联机操作失败").click();
+  await page.evaluate(() => {
+    window.__multiplayerTest.failOperation = "";
   });
   await main.getByRole("button", { name: "创建房间", exact: true }).click();
   expect(
@@ -404,7 +687,7 @@ try {
   await expect(main.getByRole("progressbar")).toHaveCount(0);
   await expect(main.getByLabel("房间名称", { exact: true })).toBeDisabled();
   await expect(connectionMode).toBeDisabled();
-  await expect(main.getByRole("list", { name: "网络成员" })).toHaveCount(0);
+  await expect(main.getByRole("list", { name: "你的小伙伴" })).toHaveCount(0);
   await main.getByRole("button", { name: "查看下载", exact: true }).click();
   await expect(
     downloads.getByRole("button", {
@@ -418,8 +701,9 @@ try {
   });
   await go("联机");
   await expect(
-    main.getByRole("list", { name: "网络成员" }).getByRole("listitem"),
+    main.getByRole("list", { name: "你的小伙伴" }).getByRole("listitem"),
   ).toHaveCount(2);
+  await expect(main.locator(".multiplayer-service-tabs")).toBeHidden();
   await main.getByRole("button", { name: "复制邀请码", exact: true }).click();
   expect(await page.evaluate(() => window.__multiplayerTest.copied)).toBe(
     "SFMCL2.fixture-private-invitation",
@@ -429,6 +713,7 @@ try {
   await expect(main.getByRole("button", { name: "关闭房间" })).toBeVisible();
   await main.screenshot({ path: `${evidence}/room-light.png` });
   await main.getByRole("button", { name: "关闭房间" }).click();
+  await expect(main.getByRole("tablist", { name: "联机服务" })).toBeVisible();
   pass("端口验证、表单保留、创建房间、成员路由、复制邀请与关闭");
   await connectionMode.focus();
   await page.keyboard.press("End");
@@ -452,9 +737,10 @@ try {
   expect(await createCount()).toBe(beforeInvalidNode);
   await sharedNode.fill("   ");
   await main.getByRole("button", { name: "创建房间", exact: true }).click();
-  await expect(main.getByRole("alert")).toContainText(
-    "请输入 EasyTier 共享节点地址",
-  );
+  await expect(
+    notification("请输入 EasyTier 共享节点地址").first(),
+  ).toBeVisible();
+  await expect(main.getByRole("alert")).toHaveCount(0);
   expect(await createCount()).toBe(beforeInvalidNode);
   await sharedNode.fill("  tcp://node.example:11010  ");
   await go("版本管理");
@@ -507,6 +793,24 @@ try {
     "SFMCL1.fixture-private-invitation",
   );
   await main.getByRole("button", { name: "关闭房间" }).click();
+  await sharedNode.fill("  wss://node.example:11011  ");
+  await main.screenshot({ path: `${evidence}/shared-node-wss.png` });
+  await main.getByRole("button", { name: "创建房间", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__multiplayerTest.calls
+          .filter((call) => call.operation === "multiplayer.create")
+          .at(-1).payload.server,
+    ),
+  ).toBe("wss://node.example:11011");
+  await main.getByRole("button", { name: "复制邀请码", exact: true }).click();
+  expect(await page.evaluate(() => window.__multiplayerTest.copied)).toBe(
+    "SFMCL1.fixture-private-invitation",
+  );
+  await main.getByRole("button", { name: "关闭房间" }).click();
+  await expect(sharedNode).toHaveValue("  wss://node.example:11011  ");
+  await sharedNode.fill("  tcp://node.example:11010  ");
   await connectionMode.click();
   await page
     .getByRole("option", {
@@ -540,9 +844,8 @@ try {
     })
     .click();
   pass(
-    "联机方式键盘切换、输入框左侧展开与选择框收窄、共享节点必填、请求按模式提交、模式及地址保留、暗色与窄布局",
+    "联机方式键盘切换、输入框左侧展开与选择框收窄、共享节点必填、TCP/WSS 请求按模式提交、模式及地址保留、暗色与窄布局",
   );
-  const currentGame = main.getByRole("region", { name: "当前游戏" });
   await page.evaluate(() => {
     const fixture = window.__pixelTest;
     fixture.data.settings.activePlayer = "";
@@ -560,6 +863,7 @@ try {
           gameVersion: "1.20.1",
           directory: "C:/Other-Running-Game",
           playerName: "Steve",
+          offlineLan: false,
           running: false,
         },
       },
@@ -576,12 +880,8 @@ try {
   await go("版本管理");
   await go("联机");
   await expect(
-    currentGame.getByText("正在启动的游戏", { exact: true }),
-  ).toBeVisible();
-  await expect(currentGame.getByText("Steve", { exact: true })).toBeVisible();
-  await expect(
-    currentGame.getByText("1.20.1-Fabric", { exact: true }),
-  ).toBeVisible();
+    main.locator('.multiplayer-host-hint[role="status"]'),
+  ).toHaveText("游戏还在启动，请进入世界并对局域网开放后创建房间。");
   await expect(
     main.getByRole("button", { name: "创建房间", exact: true }),
   ).toBeDisabled();
@@ -589,14 +889,11 @@ try {
     window.__pixelTest.tasks.jobs[0].launch.running = true;
   });
   await expect(
-    currentGame.getByText("正在运行的游戏", { exact: true }),
-  ).toBeVisible();
+    main.locator('.multiplayer-host-hint[role="status"]'),
+  ).toHaveCount(0);
   await expect(
     main.getByRole("button", { name: "创建房间", exact: true }),
   ).toBeEnabled();
-  await expect(
-    currentGame.getByRole("button", { name: "选择角色", exact: true }),
-  ).toHaveCount(0);
   await main.getByRole("button", { name: "创建房间", exact: true }).click();
   expect(
     await page.evaluate(
@@ -628,6 +925,7 @@ try {
         versionId: "1.21.4",
         gameVersion: "1.21.4",
         playerName: "Alex",
+        offlineLan: true,
         running: false,
       },
     });
@@ -645,7 +943,13 @@ try {
     main.getByRole("button", { name: "创建房间", exact: true }),
   ).toBeDisabled();
   await main.getByRole("combobox", { name: "房主游戏", exact: true }).click();
+  await page.getByRole("option").filter({ hasText: "1.21.4" }).click();
+  await expect(
+    main.getByRole("combobox", { name: "房主游戏", exact: true }),
+  ).toContainText("1.21.4");
+  await main.getByRole("combobox", { name: "房主游戏", exact: true }).click();
   await page.getByRole("option").filter({ hasText: "1.20.1-Fabric" }).click();
+  await expect(main.getByText(/^当前游戏：/)).toHaveCount(0);
   await expect(
     main.getByRole("button", { name: "创建房间", exact: true }),
   ).toBeEnabled();
@@ -682,9 +986,8 @@ try {
   await go("版本管理");
   await go("联机");
   await expect(
-    currentGame.getByText("当前游戏", { exact: true }),
-  ).toBeVisible();
-  await expect(currentGame.getByText("Alex", { exact: true })).toBeVisible();
+    main.locator('.multiplayer-host-hint[role="status"]'),
+  ).toHaveCount(0);
   await expect(
     main.getByRole("combobox", { name: "房主游戏", exact: true }),
   ).toHaveCount(0);
@@ -696,7 +999,8 @@ try {
   await expect(main.getByRole("tab", { name: "加入房间" })).toBeFocused();
   await main.getByLabel("联机邀请码").fill("invalid");
   await main.getByRole("button", { name: "查看房间" }).click();
-  await expect(main.getByRole("alert")).toContainText("邀请码无效");
+  await expect(notification("邀请码无效")).toBeVisible();
+  await expect(main.getByRole("alert")).toHaveCount(0);
   await main.getByLabel("联机邀请码").fill("SFMCL2.fixture-private-invitation");
   await main.getByRole("button", { name: "查看房间" }).click();
   await expect(
@@ -712,6 +1016,7 @@ try {
   await main.getByRole("button", { name: "查看下载", exact: true }).click();
   await page.evaluate(() => window.__multiplayerTest.finishPreparation());
   await go("联机");
+  await expect(main.locator(".multiplayer-service-tabs")).toBeHidden();
   await main.getByRole("button", { name: "启动并连接" }).click();
   expect(
     await page.evaluate(
@@ -749,6 +1054,7 @@ try {
     ),
   ).toBe(true);
   await main.getByRole("button", { name: "离开房间" }).click();
+  await expect(main.getByRole("tablist", { name: "联机服务" })).toBeVisible();
   expect(
     await page.evaluate(() =>
       JSON.stringify(localStorage).includes("fixture-private-invitation"),
@@ -757,6 +1063,316 @@ try {
   await expect(main.getByLabel("联机邀请码")).toHaveValue("");
   pass(
     "邀请预览、非法输入、临时启动目标、世界关闭禁用、暗色与窄布局、凭据不持久化",
+  );
+  const official = main.getByRole("tab", { name: "官方", exact: true });
+  await page.evaluate(() => {
+    window.__multiplayerTest.prepareRoom = false;
+  });
+  const custom = main.getByRole("tab", { name: "自定义", exact: true });
+  await custom.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(official).toBeFocused();
+  await expect(official).toHaveAttribute("aria-selected", "true");
+  await expect(main.getByLabel("邀请码", { exact: true })).toBeVisible();
+  await main.getByLabel("邀请码", { exact: true }).fill("ABCD!234");
+  await expect(main.getByLabel("邀请码", { exact: true })).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  const queries = await page.evaluate(
+    () =>
+      window.__multiplayerTest.calls.filter(
+        (c) => c.operation === "multiplayer.official.preview",
+      ).length,
+  );
+  await main.getByRole("button", { name: "查看房间", exact: true }).click();
+  await expect(notification("请输入 8 位英文字母或数字邀请码")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__multiplayerTest.calls.filter(
+          (c) => c.operation === "multiplayer.official.preview",
+        ).length,
+    ),
+  ).toBe(queries);
+  await main.getByLabel("邀请码", { exact: true }).fill("ABC1234");
+  await main.getByRole("button", { name: "查看房间", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__multiplayerTest.calls.filter(
+          (c) => c.operation === "multiplayer.official.preview",
+        ).length,
+    ),
+  ).toBe(queries);
+  for (const code of ["12345678", "a1b2c3d4"]) {
+    await main.getByLabel("邀请码", { exact: true }).fill(code);
+    await expect(main.getByLabel("邀请码", { exact: true })).toHaveValue(
+      code.toUpperCase(),
+    );
+    await expect(main.getByLabel("邀请码", { exact: true })).toHaveAttribute(
+      "aria-invalid",
+      "false",
+    );
+    await main.getByRole("button", { name: "查看房间", exact: true }).click();
+    await expect(main.locator(".multiplayer-preview")).toBeVisible();
+    expect(
+      await page.evaluate(
+        () =>
+          window.__multiplayerTest.calls
+            .filter((c) => c.operation === "multiplayer.official.preview")
+            .at(-1).payload.invitation,
+      ),
+    ).toBe(code.toUpperCase());
+  }
+  await main.getByLabel("邀请码", { exact: true }).fill("abcdefgh");
+  await expect(main.getByLabel("邀请码", { exact: true })).toHaveValue(
+    "ABCDEFGH",
+  );
+  const cells = main.locator(".multiplayer-invite-cell");
+  await expect(cells).toHaveCount(8);
+  expect((await cells.allTextContents()).join("")).toBe("ABCDEFGH");
+  await expect(main.locator(".multiplayer-invite-divider")).toHaveText("-");
+  await cells.nth(2).click();
+  await page.keyboard.type("z");
+  await expect(main.getByLabel("邀请码", { exact: true })).toHaveValue(
+    "ABZDEFGH",
+  );
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Backspace");
+  await expect(main.getByLabel("邀请码", { exact: true })).toHaveValue(
+    "AZDEFGH",
+  );
+  await main.getByLabel("邀请码", { exact: true }).fill("");
+  await main.getByLabel("邀请码", { exact: true }).evaluate((input) => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/plain", "a1b2-c3d4");
+    input.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: clipboard,
+      }),
+    );
+  });
+  await expect(main.getByLabel("邀请码", { exact: true })).toHaveValue(
+    "A1B2C3D4",
+  );
+  await expect(main.getByLabel("邀请码", { exact: true })).toHaveAttribute(
+    "aria-invalid",
+    "false",
+  );
+  expect((await cells.allTextContents()).join("")).toBe("A1B2C3D4");
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((theme) => {
+      document.documentElement.dataset.theme = theme;
+    }, theme);
+    for (const width of [375, 768, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const geometry = await main
+        .locator(".multiplayer-invite-row")
+        .evaluate((row) => {
+          const parent = row.parentElement.getBoundingClientRect();
+          const bounds = row.getBoundingClientRect();
+          return {
+            centered: Math.abs(
+              (bounds.left + bounds.right) / 2 -
+                (parent.left + parent.right) / 2,
+            ),
+            fits: bounds.width <= parent.width + 1,
+            cells: [...row.querySelectorAll(".multiplayer-invite-cell")].map(
+              (cell) => {
+                const bounds = cell.getBoundingClientRect();
+                return { width: bounds.width, height: bounds.height };
+              },
+            ),
+          };
+        });
+      expect(geometry.centered).toBeLessThanOrEqual(1);
+      expect(geometry.fits).toBe(true);
+      geometry.cells.forEach((cell) =>
+        expect(Math.abs(cell.width - cell.height)).toBeLessThanOrEqual(1),
+      );
+      await main
+        .locator(".multiplayer-field")
+        .screenshot({ path: `${evidence}/invite-boxes-${theme}-${width}.png` });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  pass(
+    "字母数字邀请码校验、居中八个正方形与四格分隔、逐字修改退格、带分隔符混合码粘贴及明暗窄宽布局",
+  );
+  await page.evaluate(() => {
+    window.__multiplayerTest.previewPending = true;
+  });
+  await main.getByRole("button", { name: "查看房间", exact: true }).click();
+  await expect(
+    main.getByRole("button", { name: "查询中…", exact: true }),
+  ).toBeDisabled();
+  await main.getByLabel("邀请码", { exact: true }).fill("IJKLMNOP");
+  await custom.click();
+  await page.evaluate(() => {
+    window.__multiplayerTest.previewPending = false;
+    window.__multiplayerTest.finishPreview();
+  });
+  await expect(main.locator(".multiplayer-preview")).toHaveCount(0);
+  await official.click();
+  await expect(main.getByLabel("邀请码", { exact: true })).toHaveValue(
+    "IJKLMNOP",
+  );
+  await main.getByLabel("邀请码", { exact: true }).fill("a1b2c3d4");
+  await main.getByRole("button", { name: "查看房间", exact: true }).click();
+  await expect(main.getByText("官方生存房间", { exact: true })).toBeVisible();
+  await main.getByRole("button", { name: "加入房间", exact: true }).click();
+  await expect(main.getByRole("region", { name: "当前房间" })).toBeVisible();
+  await expect(main.locator(".multiplayer-service-tabs")).toBeHidden();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__multiplayerTest.calls
+          .filter((c) => c.operation === "multiplayer.official.join")
+          .at(-1).payload.invitation,
+    ),
+  ).toBe("A1B2C3D4");
+  await expect(main.getByLabel("官方房间邀请码")).toHaveCount(0);
+  await expect(main.locator(".multiplayer-invite-copy")).toHaveCount(0);
+  await main.getByRole("button", { name: "离开房间", exact: true }).click();
+  await expect(main.getByRole("tablist", { name: "联机服务" })).toBeVisible();
+  await main.getByRole("tab", { name: "创建房间", exact: true }).click();
+  await expect(
+    main.getByRole("combobox", { name: "联机方式", exact: true }),
+  ).toHaveCount(0);
+  await main.getByLabel("游戏端口", { exact: true }).fill("25565");
+  await main.getByRole("button", { name: "创建房间", exact: true }).click();
+  await expect(main.getByRole("region", { name: "当前房间" })).toBeVisible();
+  await expect(main.locator(".multiplayer-service-tabs")).toBeHidden();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__multiplayerTest.calls
+          .filter((c) => c.operation === "multiplayer.official.create")
+          .at(-1).payload.server,
+    ),
+  ).toBeUndefined();
+  await expect(main.getByLabel("官方房间邀请码")).toContainText("A1B2-C3D4");
+  await main
+    .getByRole("button", { name: "复制邀请码 A1B2-C3D4", exact: true })
+    .click();
+  expect(await page.evaluate(() => window.__multiplayerTest.copied)).toBe(
+    "A1B2-C3D4",
+  );
+  await main.getByRole("button", { name: "复制邀请码", exact: true }).click();
+  expect(await page.evaluate(() => window.__multiplayerTest.copied)).toBe(
+    "A1B2-C3D4",
+  );
+  await go("版本管理");
+  await go("联机");
+  await expect(main.getByLabel("官方房间邀请码")).toContainText("A1B2-C3D4");
+  await main.screenshot({ path: `${evidence}/official-room-dark.png` });
+  await main.getByRole("button", { name: "关闭房间", exact: true }).click();
+  await expect(main.getByRole("tablist", { name: "联机服务" })).toBeVisible();
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((theme) => {
+      document.documentElement.dataset.theme = theme;
+    }, theme);
+    for (const width of [375, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await custom.click();
+      await official.click();
+      await expect
+        .poll(
+          async () =>
+            (await official.boundingBox()).width -
+            (await custom.boundingBox()).width,
+        )
+        .toBeGreaterThan(5);
+      const fit = await main
+        .locator(".multiplayer-service-tabs")
+        .evaluate((el) => ({
+          fits: el.scrollWidth <= el.clientWidth + 1,
+          width: el.clientWidth,
+        }));
+      expect(fit.fits).toBe(true);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      ).toBe(true);
+      await main.screenshot({
+        path: `${evidence}/official-${theme}-${width}.png`,
+      });
+    }
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  expect(
+    await official.evaluate((el) => getComputedStyle(el).transitionDuration),
+  ).toContain("0.28s");
+  await custom.click();
+  await expect(custom).toHaveAttribute("aria-selected", "true");
+  const sampleTransition = async (name, nested = false) =>
+    page.evaluate(
+      async ({ name, nested }) => {
+        const root = document.querySelector('main[data-page="multiplayer"]');
+        const button = [...root.querySelectorAll('[role="tab"]')].find(
+          (tab) => tab.textContent.trim() === name,
+        );
+        button.click();
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const panel = root.querySelector(
+          nested
+            ? '.multiplayer-room > [role="tabpanel"]'
+            : ".multiplayer-service-panel",
+        );
+        const animation = panel
+          .getAnimations()
+          .find((animation) => animation.id === "sfmcl-t-resource-tab");
+        if (!animation) return null;
+        animation.pause();
+        animation.currentTime = 80;
+        const style = getComputedStyle(panel);
+        const result = {
+          opacity: Number(style.opacity),
+          x: new DOMMatrixReadOnly(style.transform).m41,
+          duration: animation.effect.getTiming().duration,
+        };
+        animation.finish();
+        return result;
+      },
+      { name, nested },
+    );
+  for (const [name, direction] of [
+    ["官方", -1],
+    ["自定义", 1],
+  ]) {
+    const frame = await sampleTransition(name);
+    expect(frame).not.toBeNull();
+    expect(frame.duration).toBe(240);
+    expect(frame.opacity).toBeGreaterThan(0.15);
+    expect(frame.opacity).toBeLessThan(1);
+    expect(frame.x * direction).toBeGreaterThan(0);
+  }
+  for (const [name, direction] of [
+    ["加入房间", 1],
+    ["创建房间", -1],
+  ]) {
+    const frame = await sampleTransition(name, true);
+    expect(frame).not.toBeNull();
+    expect(frame.duration).toBe(240);
+    expect(frame.opacity).toBeLessThan(1);
+    expect(frame.x * direction).toBeGreaterThan(0);
+  }
+  await expect(main.getByLabel("房间名称", { exact: true })).toHaveValue(
+    "周末的生存世界",
+  );
+  await expect
+    .poll(() =>
+      main
+        .locator(".multiplayer-service-panel")
+        .evaluate((panel) => panel.getAnimations().length),
+    )
+    .toBe(0);
+  pass(
+    "官方/自定义伸展 Tab、键盘切换、8 位校验、查询加载与陈旧响应、官方创建加入复制、切页保持、双主题四种宽度、两层内容切换动画及系统偏好下的完整动画",
   );
   expect(errors).toEqual([]);
   await writeFile(

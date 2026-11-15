@@ -177,6 +177,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::request,
             startup_window,
+            launch_window::resolve_launcher_quit,
             window_motion::minimize_window,
             window_motion::complete_window_transition,
             window_motion::finish_window_transition

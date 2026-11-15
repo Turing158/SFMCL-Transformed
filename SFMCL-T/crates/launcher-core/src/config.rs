@@ -41,6 +41,7 @@ pub struct Settings {
     pub jvm_args_enabled: bool,
     pub jvm_args: String,
     pub game_args: String,
+    pub offline_lan: bool,
     pub theme: String,
     pub accent: String,
     pub background_type: String,
@@ -108,6 +109,7 @@ impl Default for Settings {
             jvm_args_enabled: false,
             jvm_args: String::new(),
             game_args: String::new(),
+            offline_lan: true,
             theme: "light".into(),
             accent: "forest".into(),
             background_type: "none".into(),
@@ -120,7 +122,7 @@ impl Default for Settings {
             player3d_background_type: "current".into(),
             player3d_background: String::new(),
             player3d_action: "still".into(),
-            download_task_display: "off".into(),
+            download_task_display: "always".into(),
             minecraft_download_source: MinecraftDownloadSource::Auto,
             download_concurrency: 8,
             download_cache_dir: String::new(),
@@ -464,18 +466,18 @@ mod tests {
         }
     }
     #[test]
-    fn download_task_display_defaults_to_off_for_new_and_old_configs() {
-        assert_eq!(Settings::default().download_task_display, "off");
+    fn download_task_display_defaults_to_always_for_new_and_old_configs() {
+        assert_eq!(Settings::default().download_task_display, "always");
         for old_mode in ["always", "active", "auto"] {
             let settings: Settings =
                 serde_json::from_value(serde_json::json!({ "showDownloads": old_mode })).unwrap();
-            assert_eq!(settings.download_task_display, "off");
+            assert_eq!(settings.download_task_display, "always");
         }
         let legacy = import_legacy(
             &serde_json::json!({ "launcher": { "showDownloadBtn": true } }),
             Path::new("C:/Games"),
         );
-        assert_eq!(legacy.download_task_display, "off");
+        assert_eq!(legacy.download_task_display, "always");
     }
     #[test]
     fn download_task_display_persists_all_modes_and_rejects_invalid_values() {

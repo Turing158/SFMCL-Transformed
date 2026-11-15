@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, desktop } from "./api";
 import { usePageActive } from "./PageActivity";
+import { useApp } from "./store";
 
 export type MultiplayerSnapshot = {
   state:
@@ -14,6 +15,8 @@ export type MultiplayerSnapshot = {
   sessionId: string | null;
   componentReady: boolean;
   componentVersion: string;
+  tunnelReady: boolean;
+  tunnelVersion: string;
   componentJobId: string | null;
   role: "host" | "guest" | null;
   name: string;
@@ -29,6 +32,8 @@ export type MultiplayerSnapshot = {
     local: boolean;
   }[];
   error: string | null;
+  service?: "official" | "custom" | null;
+  inviteCode?: string | null;
 };
 type InvitationPreview = { name: string; gameVersion: string; server: string };
 const initial: MultiplayerSnapshot = {
@@ -36,6 +41,8 @@ const initial: MultiplayerSnapshot = {
   sessionId: null,
   componentReady: false,
   componentVersion: "2.6.4",
+  tunnelReady: false,
+  tunnelVersion: "2026.10.7",
   componentJobId: null,
   role: null,
   name: "",
@@ -48,42 +55,57 @@ const initial: MultiplayerSnapshot = {
 
 export function useMultiplayer() {
   const active = usePageActive();
+  const { notify, reportError } = useApp();
   const [mode, setMode] = useState<"create" | "join">("create");
+  const [service, setService] = useState<"official" | "custom">("official");
   const [roomName, setRoomName] = useState("");
   const [port, setPort] = useState("");
   const [connectionMode, setConnectionMode] = useState<"tunnel" | "shared">(
-    "tunnel",
+    "shared",
   );
   const [server, setServer] = useState("");
   const [hostLaunchId, setHostLaunchId] = useState("");
   // Credentials stay in memory; never persist or log the draft.
   const [invitation, setInvitation] = useState("");
+  const invitationDrafts = useRef({ official: "", custom: "" });
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
   const [snapshot, setSnapshot] = useState(initial);
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [inspecting, setInspecting] = useState(false);
   const [loading, setLoading] = useState(desktop);
-  const [check, setCheck] = useState("");
+  const [statusUnavailable, setStatusUnavailable] = useState(false);
+  const [checkingPort, setCheckingPort] = useState(false);
+  const statusErrorReported = useRef(false);
+  const reportedSessionError = useRef("");
   const pending = useRef(false);
   const generation = useRef(0);
   const previewGeneration = useRef(0);
   const portGeneration = useRef(0);
-  const refresh = useCallback(async () => {
-    if (!desktop) return;
-    const request = generation.current;
-    try {
-      const value = await api<MultiplayerSnapshot>("multiplayer.status");
-      if (request === generation.current) {
-        setSnapshot(value);
-        setLoading(false);
+  const refresh = useCallback(
+    async (manual = false) => {
+      if (!desktop) return;
+      const request = generation.current;
+      try {
+        const value = await api<MultiplayerSnapshot>("multiplayer.status");
+        if (request === generation.current) {
+          setSnapshot(value);
+          setLoading(false);
+          setStatusUnavailable(false);
+          statusErrorReported.current = false;
+        }
+      } catch {
+        if (request === generation.current) {
+          setStatusUnavailable(true);
+          setLoading(false);
+          if (manual || !statusErrorReported.current) {
+            reportError("无法读取联机状态，请重试");
+            statusErrorReported.current = true;
+          }
+        }
       }
-    } catch {
-      if (request === generation.current) {
-        setError("无法读取联机状态，请重试");
-        setLoading(false);
-      }
-    }
-  }, []);
+    },
+    [reportError],
+  );
   useEffect(() => {
     if (!active || !desktop) return;
     let cancelled = false;
@@ -97,31 +119,49 @@ export function useMultiplayer() {
       cancelled = true;
       clearTimeout(timer);
       generation.current++;
+      previewGeneration.current++;
+      portGeneration.current++;
+      setCheckingPort(false);
+      setInspecting(false);
     };
   }, [active, refresh]);
+  useEffect(() => {
+    if (!snapshot.error) {
+      reportedSessionError.current = "";
+      return;
+    }
+    const key = `${snapshot.sessionId ?? ""}:${snapshot.error}`;
+    if (active && key !== reportedSessionError.current) {
+      reportedSessionError.current = key;
+      reportError(snapshot.error);
+    }
+  }, [active, snapshot.error, snapshot.sessionId, reportError]);
   useEffect(() => {
     if (snapshot.role === "guest" && snapshot.state === "ready") {
       setInvitation("");
       setPreview(null);
+      invitationDrafts.current[service] = "";
     }
-  }, [snapshot.role, snapshot.state]);
+  }, [snapshot.role, snapshot.state, service]);
   async function action(operation: string, payload: unknown = {}) {
     if (pending.current) return;
     pending.current = true;
     setBusy(true);
-    setError("");
     generation.current++;
     try {
       const result = await api<MultiplayerSnapshot>(operation, payload);
       generation.current++;
       setSnapshot(result);
+      setStatusUnavailable(false);
+      statusErrorReported.current = false;
       if (operation === "multiplayer.leave") {
+        invitationDrafts.current[service] = "";
         setInvitation("");
         setPreview(null);
       }
       return result;
     } catch (cause) {
-      setError(String(cause));
+      reportError(String(cause));
     } finally {
       pending.current = false;
       setBusy(false);
@@ -129,48 +169,80 @@ export function useMultiplayer() {
   }
   function changeInvitation(value: string) {
     previewGeneration.current++;
+    setInspecting(false);
+    invitationDrafts.current[service] = value;
     setInvitation(value);
     setPreview(null);
-    setError("");
+  }
+  function changeService(value: "official" | "custom") {
+    previewGeneration.current++;
+    setInspecting(false);
+    invitationDrafts.current[service] = invitation;
+    setService(value);
+    setInvitation(invitationDrafts.current[value]);
+    setPreview(null);
   }
   function changePort(value: string) {
     portGeneration.current++;
     setPort(value);
-    setCheck("");
+    setCheckingPort(false);
   }
   async function inspect() {
-    const request = ++previewGeneration.current;
-    setError("");
-    try {
-      const value = await api<InvitationPreview>("multiplayer.preview", {
-        invitation,
-      });
-      if (request === previewGeneration.current) setPreview(value);
-    } catch (cause) {
-      if (request === previewGeneration.current) setError(String(cause));
-    }
-  }
-  async function checkPort() {
-    if (!/^\d{1,5}$/.test(port) || +port < 1 || +port > 65535) {
-      setCheck("请输入 1–65535 之间的整数端口");
+    if (inspecting) return;
+    if (service === "official" && !/^[a-z0-9]{8}$/i.test(invitation.trim())) {
+      reportError("请输入 8 位英文字母或数字邀请码");
       return;
     }
+    const request = ++previewGeneration.current;
+    setInspecting(true);
+    try {
+      const value = await api<InvitationPreview>(
+        service === "official"
+          ? "multiplayer.official.preview"
+          : "multiplayer.preview",
+        {
+          invitation,
+        },
+      );
+      if (request === previewGeneration.current) setPreview(value);
+    } catch (cause) {
+      if (request === previewGeneration.current) reportError(String(cause));
+    } finally {
+      if (request === previewGeneration.current) setInspecting(false);
+    }
+  }
+  function validatePort() {
+    if (!/^\d{1,5}$/.test(port) || +port < 1 || +port > 65535) {
+      reportError("请输入 1–65535 之间的整数端口");
+      return false;
+    }
+    return true;
+  }
+  async function checkPort() {
+    if (!validatePort()) return;
     const request = ++portGeneration.current;
-    setCheck("检查中…");
+    setCheckingPort(true);
     try {
       const result = await api<{ reachable: boolean }>(
         "multiplayer.check-local-port",
         { port: +port },
       );
-      if (request === portGeneration.current)
-        setCheck(result.reachable ? "端口可连接" : "端口未开放");
+      if (request === portGeneration.current) {
+        if (result.reachable) notify("端口可连接");
+        else reportError("端口未开放");
+      }
     } catch {
-      if (request === portGeneration.current) setCheck("检查失败，请重试");
+      if (request === portGeneration.current) reportError("检查失败，请重试");
+    } finally {
+      if (request === portGeneration.current) setCheckingPort(false);
     }
   }
   return {
     mode,
     setMode,
+    service,
+    changeService,
+    inspecting,
     roomName,
     setRoomName,
     port,
@@ -186,13 +258,13 @@ export function useMultiplayer() {
     preview,
     inspect,
     snapshot,
-    error,
-    setError,
+    statusUnavailable,
     loading,
     busy,
     action,
     refresh,
-    check,
+    checkingPort,
+    validatePort,
     checkPort,
   };
 }

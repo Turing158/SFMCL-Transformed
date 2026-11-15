@@ -3,6 +3,7 @@ mod components;
 mod engine;
 pub mod invitation;
 mod minecraft;
+mod official;
 #[cfg(windows)]
 mod owned_process;
 mod session;
@@ -95,6 +96,7 @@ mod tests {
             game_version: "1.20.1".into(),
             directory: "D:/RunningGame".into(),
             player_name: player.into(),
+            offline_lan: false,
             running: false,
         });
         job

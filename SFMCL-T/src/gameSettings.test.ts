@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   independentGroups,
+  gameSettingsFrom,
   resolveGameSettings,
   mergeJavaPaths,
   withJavaPaths,
@@ -45,6 +46,40 @@ const config: VersionSettings = {
 };
 
 describe("per-card game settings", () => {
+  it("defaults missing offline LAN settings to enabled and preserves a saved opt-out", () => {
+    const legacy: Partial<GameSettings> = { ...global };
+    delete legacy.offlineLan;
+    expect(gameSettingsFrom(legacy as GameSettings).offlineLan).toBe(true);
+    expect(gameSettingsFrom({ ...global, offlineLan: false }).offlineLan).toBe(
+      false,
+    );
+  });
+  it("inherits offline LAN unless advanced settings explicitly override it", () => {
+    const settings = { ...global, offlineLan: true };
+    const local = {
+      ...config,
+      independentGroups: {
+        java: false,
+        memory: false,
+        window: false,
+        advanced: false,
+      },
+      settings: { ...config.settings, offlineLan: false },
+    };
+    expect(resolveGameSettings(local, settings).offlineLan).toBe(true);
+    expect(
+      resolveGameSettings(
+        updateVersionSettingGroup(local, "advanced", true),
+        settings,
+      ).offlineLan,
+    ).toBe(false);
+    expect(
+      resolveGameSettings(
+        { ...local, useGlobal: true },
+        { ...global, offlineLan: false },
+      ).offlineLan,
+    ).toBe(false);
+  });
   it("switches merged window and launch cards together and preserves their saved overrides", () => {
     const version = {
       ...config,

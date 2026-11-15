@@ -181,7 +181,11 @@ export function GameSettingsFields({
     value: GameSettings[K],
   ) => setDraft((current) => ({ ...current, [key]: value }));
   const toggle = (
-    key: "autoMemory" | "isolation" | "fullscreen" | "jvmArgsEnabled",
+    key:
+      | "autoMemory"
+      | "isolation"
+      | "fullscreen"
+      | "jvmArgsEnabled",
     title: string,
     description: string,
   ) => (

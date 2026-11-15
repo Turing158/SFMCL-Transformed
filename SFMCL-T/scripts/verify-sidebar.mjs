@@ -46,8 +46,8 @@ const toggleRail = async () => {
 };
 const progress = sidebar.getByRole("progressbar");
 const tip = sidebar.locator(".sidebar-tip");
-const names = ["开始游戏", "版本管理", "资源中心", "设置"];
-const ids = ["home", "versions", "resources", "settings"];
+const names = ["开始游戏", "版本管理", "联机", "资源中心", "设置"];
+const ids = ["home", "versions", "multiplayer", "resources", "settings"];
 const settled = async () =>
   page.evaluate(() =>
     Promise.allSettled(
@@ -424,7 +424,7 @@ try {
     .getByRole("button")
     .evaluateAll((buttons) => buttons.map((b) => b.getAttribute("aria-label")));
   record(
-    "主导航保留四项，角色管理通过底部角色入口进入",
+    "主导航保留五项，角色管理通过底部角色入口进入",
     JSON.stringify(sourceIds) === JSON.stringify(ids) &&
       JSON.stringify(renderedNames) === JSON.stringify(names),
     { sourceIds, renderedNames },
@@ -529,7 +529,7 @@ try {
   );
 
   await ready("default");
-  await expect(sidebar.locator(".sidebar-downloads")).toHaveCount(0);
+  await expect(sidebar.locator(".sidebar-downloads")).toBeVisible();
   await expect(sidebar.locator(".sidebar-tip")).toHaveCount(0);
   extraChecks.push(
     "侧栏采用纯色背景；隐藏下载摘要时不再显示提示占位卡，角色入口仍固定在底部",
@@ -537,7 +537,7 @@ try {
   await expect(
     nav.getByRole("button", { name: "下载中心", exact: true }),
   ).toHaveCount(0);
-  await shot("default-hidden");
+  await shot("default-always");
   const display = page.getByRole("combobox", {
     name: "侧栏下载任务",
     exact: true,
@@ -561,7 +561,9 @@ try {
       .toBe(mode);
   };
   await nav.getByRole("button", { name: "设置", exact: true }).click();
-  await expect(display).toContainText("关闭");
+  await expect(display).toContainText("始终");
+  await setDisplay("off", "关闭");
+  await expect(sidebar.locator(".sidebar-downloads")).toHaveCount(0);
   await setDisplay("always", "始终");
   await expect(sidebar.locator(".sidebar-downloads")).toBeVisible();
   await expect(tip).toHaveCount(0);
@@ -608,7 +610,7 @@ try {
   await settled();
   await shot("download-settings");
   extraChecks.push(
-    "新旧配置默认隐藏；设置三选项可保存；下载时覆盖未结束的下载与步骤任务，全部结束后延迟收起，关闭时下载也不显示",
+    "新旧配置默认始终显示；设置三选项可保存；下载时覆盖未结束的下载与步骤任务，全部结束后延迟收起，关闭时下载也不显示",
   );
 
   await ready();
@@ -791,8 +793,7 @@ try {
         );
       }),
     ).toBe(true);
-    if (index >= 1 && index <= names.length)
-      await page.keyboard.press("Enter");
+    if (index >= 1 && index <= names.length) await page.keyboard.press("Enter");
   }
   // Compact buttons can keep the profile visible at 600px without scrolling.
   // Use a shorter viewport to exercise keyboard scrolling when it is needed.

@@ -142,6 +142,31 @@ fn read_service_key(path: &Path) -> Result<String> {
     Ok(key.trim().to_owned())
 }
 
+pub(crate) fn playtogether_api_url() -> Result<String> {
+    let base = directories::BaseDirs::new().context("无法定位用户凭据目录")?;
+    read_playtogether_api_url(
+        &base
+            .data_local_dir()
+            .join("SFMCL-T/service-credentials/playtogether.dat"),
+    )
+}
+
+fn read_playtogether_api_url(path: &Path) -> Result<String> {
+    #[derive(Deserialize)]
+    struct Configuration {
+        api_url: String,
+    }
+    let plaintext = read_service_key(path).map_err(|_| anyhow::anyhow!("无法读取官方联机配置"))?;
+    anyhow::ensure!(
+        !plaintext.is_empty(),
+        "此启动器尚未配置官方联机，请联系维护者"
+    );
+    let configuration: Configuration =
+        serde_json::from_str(&plaintext).map_err(|_| anyhow::anyhow!("官方联机配置无效"))?;
+    anyhow::ensure!(!configuration.api_url.trim().is_empty(), "官方联机配置无效");
+    Ok(configuration.api_url.trim().to_owned())
+}
+
 #[cfg(windows)]
 fn crypt(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>> {
     use windows_sys::Win32::{Foundation::LocalFree, Security::Cryptography::*};
@@ -205,6 +230,41 @@ fn unprotect(_: &[u8]) -> Result<Vec<u8>> {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn official_multiplayer_configuration_is_encrypted_and_reloadable() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("playtogether.dat");
+        assert!(read_playtogether_api_url(&path)
+            .unwrap_err()
+            .to_string()
+            .contains("尚未配置"));
+        let sample = serde_json::json!({
+            "api_url": "https://rooms.example.com",
+            "shared_node_urls": ["wss://relay.example.com"]
+        })
+        .to_string();
+        std::fs::write(&path, protect(sample.as_bytes()).unwrap()).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(!bytes
+            .windows(sample.len())
+            .any(|window| window == sample.as_bytes()));
+        assert_eq!(
+            read_playtogether_api_url(&path).unwrap(),
+            "https://rooms.example.com"
+        );
+        for invalid in [
+            r#"{"api_url":""}"#,
+            r#"{"api_url":false}"#,
+            "private-invalid-json",
+        ] {
+            std::fs::write(&path, protect(invalid.as_bytes()).unwrap()).unwrap();
+            let error = format!("{:#}", read_playtogether_api_url(&path).unwrap_err());
+            assert!(error.contains("配置无效") && !error.contains(invalid));
+        }
+        std::fs::write(&path, b"corrupted-configuration-file").unwrap();
+        assert!(read_playtogether_api_url(&path).is_err());
+    }
 
     #[test]
     fn service_credentials_are_encrypted_and_reloadable() {

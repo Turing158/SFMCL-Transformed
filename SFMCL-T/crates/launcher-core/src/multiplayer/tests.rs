@@ -27,6 +27,27 @@ fn automatic_room_needs_no_server_and_exposes_only_a_loopback_websocket() {
     );
 }
 
+#[test]
+fn shared_wss_node_is_used_as_a_peer_by_both_host_and_guest() {
+    let invite = invitation::Invitation::new(
+        "Shared WSS room".into(),
+        25565,
+        "wss://node.example:11011".into(),
+        "1.21.4".into(),
+    )
+    .unwrap();
+    assert!(!invite.uses_tunnel());
+    for host in [true, false] {
+        let config: toml::Value =
+            toml::from_str(&engine::config(&invite, host, "Player", 51234).unwrap()).unwrap();
+        assert_eq!(
+            config["peer"][0]["uri"].as_str(),
+            Some(invite.server.as_str())
+        );
+        assert!(config["listeners"].as_array().unwrap().is_empty());
+    }
+}
+
 /// Exercises the complete public WSS path with verified official executables,
 /// two room engines and a Minecraft status fixture. It does not claim that an
 /// actual player has entered a game or that cross-network latency was measured.
@@ -120,6 +141,53 @@ fn manager(root: &std::path::Path) -> std::sync::Arc<Multiplayer> {
     )
 }
 
+async fn assert_startup(root: &std::path::Path, ready: bool) {
+    let jobs = std::sync::Arc::new(crate::jobs::Jobs::default());
+    let downloads = crate::downloads::DownloadManager::open(&root.join("downloads"), 2).unwrap();
+    let manager = Multiplayer::new(root.into(), downloads.clone(), jobs.clone());
+    let snapshot = manager.snapshot();
+    assert_eq!(snapshot.state, "idle");
+    assert_eq!(snapshot.component_ready, ready);
+    assert_eq!(snapshot.tunnel_ready, tunnel::installed(root));
+    assert_eq!(snapshot.tunnel_version, tunnel::VERSION);
+    assert!(snapshot.session_id.is_none());
+    assert!(snapshot.component_job_id.is_none());
+    assert!(!manager.active());
+    assert!(jobs.snapshots().is_empty());
+    assert!(downloads.snapshots().await.is_empty());
+}
+
+#[tokio::test]
+async fn startup_without_verified_components_does_not_prepare_or_download() {
+    let work = tempfile::tempdir().unwrap();
+    assert_startup(work.path(), false).await;
+}
+
+#[cfg(windows)]
+#[tokio::test]
+#[ignore = "requires the official EasyTier Windows ZIP for the current architecture"]
+async fn startup_verifies_installed_components_after_restart() {
+    let work = tempfile::tempdir().unwrap();
+    let release = components::release().unwrap();
+    let archive = std::path::PathBuf::from(std::env::var_os("SFMCL_EASYTIER_ZIP").unwrap());
+    let files = components::install_archive(work.path(), &archive, &release).unwrap();
+    for _ in 0..2 {
+        assert_startup(work.path(), true).await;
+    }
+    for file in [
+        files.core.clone(),
+        files.cli.clone(),
+        files.core.with_file_name("Packet.dll"),
+    ] {
+        std::fs::remove_file(&file).unwrap();
+        assert_startup(work.path(), false).await;
+        std::fs::write(&file, b"invalid component").unwrap();
+        assert_startup(work.path(), false).await;
+        components::install_archive(work.path(), &archive, &release).unwrap();
+        assert_startup(work.path(), true).await;
+    }
+}
+
 async fn minecraft_fixture() -> (u16, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
         .await
@@ -181,10 +249,10 @@ async fn concurrent_sessions_cancellation_and_maintenance() {
     let temp = tempfile::tempdir().unwrap();
     let manager = manager(temp.path());
     manager.begin_maintenance().unwrap();
-    assert!(manager.prepare(None).is_err());
+    assert!(manager.prepare(None, false).is_err());
     manager.end_maintenance();
-    let first = manager.prepare(None).unwrap();
-    assert!(manager.prepare(None).is_err());
+    let first = manager.prepare(None, false).unwrap();
+    assert!(manager.prepare(None, true).is_err());
     assert!(manager.begin_maintenance().is_err());
     manager.leave(Some("stale-id")).await.unwrap();
     assert!(manager.active());
@@ -193,7 +261,73 @@ async fn concurrent_sessions_cancellation_and_maintenance() {
     assert!(!manager.active());
     assert_eq!(manager.snapshot().state, "idle");
     manager.shutdown().await.unwrap();
-    assert!(manager.prepare(None).is_err());
+    assert!(manager.prepare(None, false).is_err());
+}
+
+#[tokio::test]
+async fn manual_tunnel_preparation_has_its_own_steps_and_cancels_without_a_room() {
+    let work = tempfile::tempdir().unwrap();
+    let jobs = std::sync::Arc::new(crate::jobs::Jobs::default());
+    let downloads =
+        crate::downloads::DownloadManager::open(&work.path().join("downloads"), 1).unwrap();
+    let manager = Multiplayer::new(work.path().into(), downloads.clone(), jobs.clone());
+    let snapshot = manager.prepare(None, true).unwrap();
+    assert_eq!(snapshot.state, "preparing");
+    assert!(snapshot.role.is_none() && snapshot.service.is_none());
+    let job = jobs.snapshots().pop().unwrap();
+    assert!(job.title.contains("Cloudflare Tunnel"));
+    assert_eq!(job.steps.len(), 6);
+    assert_eq!(job.steps[4].name, "获取 Cloudflare Tunnel");
+    jobs.cancel(snapshot.component_job_id.as_deref().unwrap())
+        .unwrap();
+    manager.leave(snapshot.session_id.as_deref()).await.unwrap();
+    assert_eq!(manager.snapshot().state, "idle");
+    assert!(!manager.snapshot().tunnel_ready);
+    assert!(downloads.snapshots().await.is_empty());
+    assert!(!manager.active());
+}
+
+#[cfg(windows)]
+#[tokio::test]
+#[ignore = "requires the official EasyTier ZIP and cloudflared fixture or download access"]
+async fn manual_tunnel_preparation_finishes_before_creating_a_room() {
+    let work = tempfile::tempdir().unwrap();
+    let release = components::release().unwrap();
+    let archive = std::path::PathBuf::from(std::env::var_os("SFMCL_EASYTIER_ZIP").unwrap());
+    components::install_archive(work.path(), &archive, &release).unwrap();
+    let manager = manager(work.path());
+    assert!(manager.snapshot().component_ready);
+    assert!(!manager.snapshot().tunnel_ready);
+    if let Some(executable) = std::env::var_os("SFMCL_CLOUDFLARED_EXE") {
+        tunnel::install_for_test(work.path(), &std::path::PathBuf::from(executable)).unwrap();
+    }
+    let preparation = manager.prepare(None, true).unwrap();
+    let finished = tokio::time::timeout(Duration::from_secs(120), async {
+        while manager.active() {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+    })
+    .await;
+    if finished.is_err() {
+        manager
+            .leave(preparation.session_id.as_deref())
+            .await
+            .unwrap();
+    }
+    assert!(finished.is_ok(), "component preparation timed out");
+    let snapshot = manager.snapshot();
+    assert_eq!(snapshot.state, "idle", "{:?}", snapshot.error);
+    assert!(snapshot.component_ready && snapshot.tunnel_ready);
+    assert!(snapshot.role.is_none() && snapshot.session_id.is_none());
+    assert!(!std::fs::read_dir(work.path()).unwrap().any(|entry| entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with("component-")));
+    if tunnel::installed(work.path()) {
+        assert_eq!(snapshot.tunnel_version, tunnel::VERSION);
+        assert_startup(work.path(), true).await;
+    }
 }
 
 #[test]

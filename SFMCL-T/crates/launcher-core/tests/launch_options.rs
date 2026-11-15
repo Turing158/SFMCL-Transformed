@@ -27,16 +27,18 @@ fn make_world(directory: &Path, id: &str) {
 }
 
 #[test]
-fn all_launch_options_persist_and_old_configs_receive_safe_defaults() {
+fn all_launch_options_persist_and_old_configs_receive_current_defaults() {
     let old: Settings = serde_json::from_str("{}").unwrap();
     assert_eq!(old.launcher_action, "keep");
     assert_eq!(old.window_mode, "default");
     assert!(old.restore_launcher);
     assert!(!old.server_enabled && !old.quick_play_enabled);
+    assert!(old.offline_lan);
     assert_eq!(old.process_priority, "normal");
     let dir = tempfile::tempdir().unwrap();
     let store = ConfigStore::open(dir.path()).unwrap();
     let mut settings = store.get();
+    assert!(settings.offline_lan);
     settings.window_mode = "custom".into();
     settings.window_x = 120;
     settings.window_y = 80;
@@ -48,6 +50,7 @@ fn all_launch_options_persist_and_old_configs_receive_safe_defaults() {
     settings.server_port = 25566;
     settings.quick_play_world = "My World".into();
     settings.process_priority = "aboveNormal".into();
+    settings.offline_lan = false;
     store.save(settings.clone()).unwrap();
     assert_eq!(
         GameSettings::from(&ConfigStore::open(dir.path()).unwrap().get()),
@@ -60,6 +63,37 @@ fn all_launch_options_persist_and_old_configs_receive_safe_defaults() {
     let mut invalid = settings;
     invalid.quick_play_enabled = true;
     assert!(store.save(invalid).is_err());
+}
+
+#[test]
+fn offline_lan_follows_advanced_overrides_and_not_account_selection() {
+    let global = Settings {
+        offline_lan: true,
+        ..Default::default()
+    };
+    let mut config = VersionSettings {
+        use_global: false,
+        independent_groups: Some(GameSettingGroups::default()),
+        settings: GameSettings {
+            offline_lan: false,
+            ..Default::default()
+        },
+    };
+    assert!(config.resolve(&global).offline_lan);
+    config.independent_groups.as_mut().unwrap().advanced = true;
+    assert!(!config.resolve(&global).offline_lan);
+    config.settings.offline_lan = true;
+    assert!(config.resolve(&global).offline_lan);
+    config.use_global = true;
+    let global = Settings {
+        offline_lan: false,
+        ..global
+    };
+    assert!(!config.resolve(&global).offline_lan);
+    let old: GameSettings = serde_json::from_str("{}").unwrap();
+    assert!(old.offline_lan);
+    let saved: GameSettings = serde_json::from_value(json!({"offlineLan": false})).unwrap();
+    assert!(!saved.offline_lan);
 }
 
 #[test]

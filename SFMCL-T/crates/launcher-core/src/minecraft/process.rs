@@ -148,6 +148,7 @@ mod tests {
             game_version: "1.21.4".into(),
             directory: directory.path().to_string_lossy().into(),
             player_name: "Alex".into(),
+            offline_lan: false,
             running: false,
         });
         let (events, mut receiver) = tokio::sync::mpsc::unbounded_channel();

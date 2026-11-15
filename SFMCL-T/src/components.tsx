@@ -92,6 +92,7 @@ export function TabList({
   onValueChange,
   items,
   className = "",
+  disabled = false,
 }: {
   id: string;
   label: string;
@@ -99,6 +100,7 @@ export function TabList({
   onValueChange: (value: string) => void;
   items: { value: string; label: string; icon?: ReactNode; count?: number }[];
   className?: string;
+  disabled?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = useState<{
@@ -147,6 +149,7 @@ export function TabList({
   }, [value, items]);
 
   const focusTab = (index: number) => {
+    if (disabled) return;
     const item = items[index];
     if (!item) return;
     onValueChange(item.value);
@@ -206,6 +209,7 @@ export function TabList({
             key={item.value}
             type="button"
             role="tab"
+            disabled={disabled}
             id={`${id}-tab-${item.value}`}
             aria-controls={`${id}-panel`}
             aria-selected={value === item.value}

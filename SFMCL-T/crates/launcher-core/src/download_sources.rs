@@ -15,6 +15,68 @@ pub const TENCENT_MAVEN: &str = "https://mirrors.cloud.tencent.com/nexus/reposit
 pub const NEOFORGE_CDN: &str = "https://neoforged.forgecdn.net";
 pub const MC_MIRROR: &str = "https://us-west-01.mc-mirror.com";
 
+/// Shared by EasyTier and cloudflared; listed at https://easytier.cn/guide/download.html.
+pub const GITHUB_ACCELERATORS: [&str; 5] = [
+    "https://ghfast.top/",
+    "https://v6.gh-proxy.org/",
+    "https://hk.gh-proxy.org/",
+    "https://cdn.gh-proxy.org/",
+    "https://edgeone.gh-proxy.org/",
+];
+
+fn multiplayer_component(url: &str) -> Option<Url> {
+    let url = Url::parse(url).ok()?;
+    if url.scheme() != "https"
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+    let official = if url.host_str() == Some("github.com") {
+        url
+    } else if GITHUB_ACCELERATORS
+        .iter()
+        .any(|root| Url::parse(root).is_ok_and(|root| root.host_str() == url.host_str()))
+    {
+        Url::parse(url.path().strip_prefix('/')?).ok()?
+    } else {
+        return None;
+    };
+    if official.scheme() != "https"
+        || official.host_str() != Some("github.com")
+        || official.port_or_known_default() != Some(443)
+        || !official.username().is_empty()
+        || official.password().is_some()
+    {
+        return None;
+    }
+    let valid = if let Some(release) = official
+        .path()
+        .strip_prefix("/EasyTier/EasyTier/releases/download/v")
+    {
+        let (version, filename) = release.split_once('/')?;
+        semver::Version::parse(version).ok()?;
+        ["x86_64", "i686"]
+            .iter()
+            .any(|arch| filename == format!("easytier-windows-{arch}-v{version}.zip"))
+    } else if let Some(release) = official
+        .path()
+        .strip_prefix("/cloudflare/cloudflared/releases/download/")
+    {
+        let (version, filename) = release.split_once('/')?;
+        semver::Version::parse(version).ok()?;
+        ["amd64", "386"]
+            .iter()
+            .any(|arch| filename == format!("cloudflared-windows-{arch}.exe"))
+    } else {
+        false
+    };
+    valid.then_some(official)
+}
+
 fn mapped(url: &Url, root: &str, path: &str) -> String {
     let mut result = format!("{root}{path}");
     if let Some(query) = url.query() {
@@ -27,6 +89,15 @@ fn mapped(url: &Url, root: &str, path: &str) -> String {
 /// Ordered as official first, then mirrors. Only documented equivalent routes
 /// are rewritten; arbitrary URLs and CurseForge's mediafilez CDN stay intact.
 pub fn candidates(original: &str) -> Vec<String> {
+    if let Some(official) = multiplayer_component(original) {
+        let mut urls = vec![official.to_string()];
+        urls.extend(
+            GITHUB_ACCELERATORS
+                .iter()
+                .map(|root| format!("{root}{official}")),
+        );
+        return urls;
+    }
     let Ok(url) = Url::parse(original) else {
         return vec![original.into()];
     };
@@ -211,7 +282,16 @@ fn provider(url: &str) -> String {
         .take(segments)
         .collect::<Vec<_>>()
         .join("/");
-    let path = if matches!(url.host_str(), Some("bmclapi2.bangbang93.com")) {
+    let path = if let Some(official) = multiplayer_component(url.as_str()) {
+        // Each GitHub project gets its own measurements and failure history.
+        // Sharing addresses must not reuse EasyTier measurements for cloudflared.
+        official
+            .path()
+            .split('/')
+            .take(3)
+            .collect::<Vec<_>>()
+            .join("/")
+    } else if matches!(url.host_str(), Some("bmclapi2.bangbang93.com")) {
         path
     } else if url.host_str() == Some("mod.mcimirror.top") {
         url.path().split('/').take(2).collect::<Vec<_>>().join("/")
@@ -362,7 +442,14 @@ impl SourceSelector {
         let mut urls = urls.to_vec();
         let mut seen = std::collections::HashSet::new();
         urls.retain(|url| seen.insert(url.clone()));
-        match self.mode() {
+        // Multiplayer component downloads always use measured speed, independently
+        // of the Minecraft download preference, including retries/resumes.
+        let mode = if urls.iter().any(|url| multiplayer_component(url).is_some()) {
+            MinecraftDownloadSource::Auto
+        } else {
+            self.mode()
+        };
+        match mode {
             MinecraftDownloadSource::Official => return Ok(urls),
             MinecraftDownloadSource::Bmclapi => {
                 urls.sort_by_key(|url| !is_mirror(url));

@@ -66,7 +66,7 @@ const fallback: Settings = {
   homeCleanMode: false,
   homeNoticeLayout: "masonry",
   ...playerPreviewDefaults,
-  downloadTaskDisplay: "off",
+  downloadTaskDisplay: "always",
   minecraftDownloadSource: "auto",
   downloadConcurrency: 8,
   downloadCacheDir: "",
@@ -116,9 +116,11 @@ interface AppState {
   update: (op: string, p?: unknown, message?: string) => Promise<unknown>;
   save: (s: Settings) => Promise<void>;
   autoSaveSettings: (previous: Settings, next: Settings) => Promise<Settings>;
-  loadVersionSettings: (version: Version) => Promise<VersionSettings>;
+  loadVersionSettings: (
+    version: Pick<Version, "id" | "directory">,
+  ) => Promise<VersionSettings>;
   autoSaveVersionSettings: (
-    version: Version,
+    version: Pick<Version, "id" | "directory">,
     previous: VersionSettings,
     next: VersionSettings,
   ) => Promise<VersionSettings>;
@@ -137,7 +139,7 @@ export function Provider({ children }: { children: ReactNode }) {
     settings: fallback,
     players: [],
     dataDir: "",
-    version: "0.1.1",
+    version: "1.0.0",
   });
   const [versions, setVersions] = useState<Version[]>([]);
   const [versionsRevision, setVersionsRevision] = useState(0);
@@ -224,6 +226,8 @@ export function Provider({ children }: { children: ReactNode }) {
         ...playerPreviewDefaults,
         ...launchSettingDefaults,
         ...value.settings,
+        downloadTaskDisplay:
+          value.settings.downloadTaskDisplay ?? fallback.downloadTaskDisplay,
       };
       const [versions, favorites] = await Promise.all([
         value.settings.activeDir
@@ -479,7 +483,7 @@ export function Provider({ children }: { children: ReactNode }) {
     [autoSaveSettings, refresh],
   );
   const loadVersionSettings = useCallback(
-    async (version: Version) => {
+    async (version: Pick<Version, "id" | "directory">) => {
       await flushAutoSaves();
       return queueSettingsWrite(() =>
         api<VersionSettings>("versions.settings.get", {
@@ -491,7 +495,11 @@ export function Provider({ children }: { children: ReactNode }) {
     [queueSettingsWrite],
   );
   const autoSaveVersionSettings = useCallback(
-    (version: Version, previous: VersionSettings, next: VersionSettings) => {
+    (
+      version: Pick<Version, "id" | "directory">,
+      previous: VersionSettings,
+      next: VersionSettings,
+    ) => {
       const changes = changedValues(previous, next);
       const gameChanges = changedValues(previous.settings, next.settings);
       const write = queueSettingsWrite(async () => {

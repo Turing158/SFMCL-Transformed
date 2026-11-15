@@ -36,6 +36,7 @@ pub struct GameSettings {
     pub jvm_args_enabled: bool,
     pub jvm_args: String,
     pub game_args: String,
+    pub offline_lan: bool,
 }
 
 impl Default for GameSettings {
@@ -72,6 +73,7 @@ impl From<&Settings> for GameSettings {
             jvm_args_enabled: s.jvm_args_enabled,
             jvm_args: s.jvm_args.clone(),
             game_args: s.game_args.clone(),
+            offline_lan: s.offline_lan,
         }
     }
 }
@@ -150,6 +152,7 @@ impl GameSettings {
             jvm_args_enabled: self.jvm_args_enabled,
             jvm_args: self.jvm_args.clone(),
             game_args: self.game_args.clone(),
+            offline_lan: self.offline_lan,
             ..global.clone()
         }
     }
@@ -241,6 +244,7 @@ impl VersionSettings {
             effective.jvm_args_enabled = saved.jvm_args_enabled;
             effective.jvm_args = saved.jvm_args.clone();
             effective.game_args = saved.game_args.clone();
+            effective.offline_lan = saved.offline_lan;
         }
         if groups.position {
             effective.window_mode = saved.window_mode.clone();

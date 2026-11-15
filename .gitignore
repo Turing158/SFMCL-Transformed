@@ -16,6 +16,12 @@ curseforge.dat
 curseforge.dat.*
 littleskin.dat
 littleskin.dat.*
+playtogether.dat
+playtogether.dat.*
+multiplayer-private.json
+multiplayer-private.json.*
+multiplayer-nodes.json
+multiplayer-nodes.json.*
 *.tsbuildinfo
 /SFMCL-T/src-tauri/gen/
 

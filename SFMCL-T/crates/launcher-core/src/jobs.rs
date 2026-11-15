@@ -21,6 +21,8 @@ pub struct LaunchContext {
     pub game_version: String,
     pub directory: String,
     pub player_name: String,
+    #[serde(default)]
+    pub offline_lan: bool,
     pub running: bool,
 }
 

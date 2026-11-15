@@ -226,14 +226,19 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
     }
     match op {
         "multiplayer.status" => Ok(json!(r.multiplayer.snapshot())),
-        "multiplayer.prepare" => Ok(json!(r
-            .multiplayer
-            .prepare(p["archive"].as_str().map(PathBuf::from))?)),
+        "multiplayer.prepare" => Ok(json!(r.multiplayer.prepare(
+            p["archive"].as_str().map(PathBuf::from),
+            p["tunnel"].as_bool().unwrap_or(false),
+        )?)),
         "multiplayer.preview" => Ok(json!(
             sfmcl_t_core::multiplayer::invitation::Invitation::decode(text(&p, "invitation")?)?
                 .preview()
         )),
-        "multiplayer.create" => {
+        "multiplayer.official.preview" => Ok(json!(
+            sfmcl_t_core::multiplayer::Multiplayer::official_preview(text(&p, "invitation")?)
+                .await?
+        )),
+        "multiplayer.create" | "multiplayer.official.create" => {
             let request: sfmcl_t_core::multiplayer::CreateRequest = decode(p)?;
             let context =
                 sfmcl_t_core::multiplayer::host_launch(&r.jobs, request.launch_id.as_deref())?;
@@ -253,13 +258,20 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                     .context("请先选择游戏版本")?;
                 (version.version, player.name)
             };
+            if op == "multiplayer.official.create" {
+                return Ok(json!(
+                    r.multiplayer
+                        .create_official(request, game_version, player_name)
+                        .await?
+                ));
+            }
             Ok(json!(r.multiplayer.create(
                 request,
                 game_version,
                 player_name
             )?))
         }
-        "multiplayer.join" => {
+        "multiplayer.join" | "multiplayer.official.join" => {
             let settings = r.settings.get();
             let player = r
                 .accounts
@@ -267,6 +279,13 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                 .into_iter()
                 .find(|player| player.uuid == settings.active_player)
                 .context("请先选择角色")?;
+            if op == "multiplayer.official.join" {
+                return Ok(json!(
+                    r.multiplayer
+                        .join_official(text(&p, "invitation")?, player.name)
+                        .await?
+                ));
+            }
             Ok(json!(r
                 .multiplayer
                 .join(text(&p, "invitation")?, player.name)?))

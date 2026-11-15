@@ -19,7 +19,7 @@ pub fn config(invite: &Invitation, host: bool, name: &str, forward: u16) -> Resu
     let ip = if host {
         invite.host_ip()
     } else {
-        format!("10.{}.{}.2", invite.subnet[0], invite.subnet[1])
+        invite.guest_ip()
     };
     let rules = if host {
         vec![json!({"name":"minecraft", "enabled":true, "priority":1000,
@@ -42,6 +42,13 @@ pub fn config(invite: &Invitation, host: bool, name: &str, forward: u16) -> Resu
             {"name":"forward", "chain_type":3,"enabled":true,"default_action":2,"rules":rules}
         ]}}
     });
+    if let Some(network) = &invite.official {
+        config["peer"] = json!(network
+            .relays
+            .iter()
+            .map(|uri| json!({"uri":uri}))
+            .collect::<Vec<_>>());
+    }
     if !host {
         // Explicit stateful egress tracks return traffic through default-drop ingress.
         config["acl"]["acl_v1"]["chains"].as_array_mut().unwrap().push(json!({
@@ -163,7 +170,7 @@ impl Engine {
     pub async fn members(&self, invite: &Invitation) -> Result<(Vec<Member>, bool)> {
         let data = self.query("peer").await?;
         let peers = data.as_array().context("联机成员数据无效")?;
-        let prefix = format!("10.{}.{}.", invite.subnet[0], invite.subnet[1]);
+        let prefix = invite.prefix();
         let mut members = vec![];
         for peer in peers.iter().take(256) {
             let ip = peer["ipv4"].as_str().unwrap_or_default();

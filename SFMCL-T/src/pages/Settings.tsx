@@ -436,7 +436,7 @@ export function SettingsPage() {
                   侧栏下载任务
                   <Select
                     aria-label="侧栏下载任务"
-                    value={draft.downloadTaskDisplay || "off"}
+                    value={draft.downloadTaskDisplay || "always"}
                     onValueChange={(value) =>
                       change("downloadTaskDisplay", value)
                     }

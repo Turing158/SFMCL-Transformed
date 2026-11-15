@@ -37,6 +37,7 @@ export function pixelAppFixture({
     jvmArgsEnabled: false,
     jvmArgs: "",
     gameArgs: "",
+    offlineLan: true,
     theme: "light",
     accent: "forest",
     backgroundType: "none",
@@ -64,7 +65,7 @@ export function pixelAppFixture({
     ],
     dataDir: "C:/Pixel-Test",
     defaultDownloadCacheDir: "C:/Pixel-Test/downloads/cache",
-    version: "0.1.1",
+    version: "1.0.0",
   };
   const versions = ["1.21.4", "1.20.1-Fabric"].map((id) => ({
     id,
@@ -108,6 +109,7 @@ export function pixelAppFixture({
         "jvmArgsEnabled",
         "jvmArgs",
         "gameArgs",
+        "offlineLan",
       ].map((key) => [key, structuredClone(value[key])]),
     );
   const javaKey = (path) => path.replaceAll("\\", "/").toLowerCase();

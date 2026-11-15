@@ -236,7 +236,8 @@ impl Installer {
         job: &Job,
     ) -> Result<Vec<DownloadSpec>> {
         let source = self.settings.get().minecraft_download_source;
-        self.sources().register_minecraft(version);
+        let sources = self.sources();
+        sources.register_minecraft(version);
         let mut files: Vec<_> = versions::libraries(version)?
             .into_iter()
             .filter(|l| !l.file.url.is_empty())
@@ -268,16 +269,63 @@ impl Installer {
         }
         let asset = &version["assetIndex"];
         if let (Some(id), Some(url)) = (asset["id"].as_str(), asset["url"].as_str()) {
-            let path = format!("assets/indexes/{id}.json");
-            jobs::download_session(
-                &self.downloads,
-                job,
-                "资源索引".into(),
-                root.into(),
-                vec![spec(asset, path.clone(), source.url(url))],
-            )
-            .await?;
-            let index: Value = serde_json::from_slice(&std::fs::read(safe_join(root, path)?)?)?;
+            let file = spec(asset, format!("assets/indexes/{id}.json"), source.url(url));
+            let path = safe_join(root, &file.path)?;
+            for (hash, length) in [(&file.sha1, 40), (&file.sha512, 128)] {
+                if hash.as_ref().is_some_and(|hash| {
+                    hash.len() != length || !hash.bytes().all(|c| c.is_ascii_hexdigit())
+                }) {
+                    bail!("资源索引哈希无效");
+                }
+            }
+            let decode = |bytes: &[u8]| -> Result<Value> {
+                use sha1::Digest;
+                if file.size.is_some_and(|size| size != bytes.len() as u64) {
+                    bail!("资源索引长度校验失败");
+                }
+                if let Some(hash) = &file.sha1 {
+                    if !hash.eq_ignore_ascii_case(&hex::encode(sha1::Sha1::digest(bytes))) {
+                        bail!("资源索引 SHA-1 校验失败");
+                    }
+                }
+                if let Some(hash) = &file.sha512 {
+                    if !hash.eq_ignore_ascii_case(&hex::encode(sha2::Sha512::digest(bytes))) {
+                        bail!("资源索引 SHA-512 校验失败");
+                    }
+                }
+                let index: Value = serde_json::from_slice(bytes)?;
+                index["objects"]
+                    .as_object()
+                    .context("资源索引缺少 objects")?;
+                Ok(index)
+            };
+            if job.cancel.is_cancelled() {
+                bail!(job.cancellation_message());
+            }
+            // The index is metadata for resolving assets, so fetch/cache it
+            // within this step without creating a download-center task.
+            let index = match std::fs::read(&path)
+                .ok()
+                .and_then(|bytes| decode(&bytes).ok())
+            {
+                Some(index) => index,
+                None => {
+                    let result = sources
+                        .fetch(
+                            &self.client,
+                            &sources.candidates(url),
+                            &job.cancel,
+                            |bytes| Ok((decode(bytes)?, bytes.to_vec())),
+                        )
+                        .await;
+                    if job.cancel.is_cancelled() {
+                        bail!(job.cancellation_message());
+                    }
+                    let (index, bytes) = result?;
+                    atomic_write(&path, &bytes)?;
+                    index
+                }
+            };
             for object in index["objects"]
                 .as_object()
                 .context("资源索引缺少 objects")?

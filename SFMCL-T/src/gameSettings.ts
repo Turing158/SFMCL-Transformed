@@ -19,6 +19,7 @@ export const launchSettingDefaults = {
   quickPlayEnabled: false,
   quickPlayWorld: "",
   processPriority: "normal",
+  offlineLan: true,
 } as const satisfies Partial<GameSettings>;
 
 export const validServerHost = (value: string) => {
@@ -171,7 +172,7 @@ export const gameSettingFields = {
   java: ["javaPath", "javaPaths"],
   memory: ["autoMemory", "memoryMb", "isolation"],
   window: ["fullscreen", "width", "height", "windowTitle", "customInfo"],
-  advanced: ["jvmArgsEnabled", "jvmArgs", "gameArgs"],
+  advanced: ["jvmArgsEnabled", "jvmArgs", "gameArgs", "offlineLan"],
   position: ["windowMode", "windowMonitor", "windowX", "windowY"],
   launcher: ["launcherAction", "restoreLauncher"],
   server: ["serverEnabled", "serverHost", "serverPort"],
@@ -281,5 +282,6 @@ export function gameSettingsFrom(settings: GameSettings): GameSettings {
     jvmArgsEnabled: settings.jvmArgsEnabled,
     jvmArgs: settings.jvmArgs,
     gameArgs: settings.gameArgs,
+    offlineLan: settings.offlineLan ?? launchSettingDefaults.offlineLan,
   };
 }

@@ -6,6 +6,7 @@ pub mod java;
 pub mod launch;
 mod loader_sources;
 pub mod loaders;
+mod offline_lan;
 pub mod process;
 pub mod quick_play;
 pub mod version_settings;

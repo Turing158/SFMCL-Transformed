@@ -1,7 +1,7 @@
 {
   "name": "sfmcl-t",
   "description": "StarFall Minecraft Launcher-Transformed",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,9 @@
     "check:corners": "node scripts/generate-pixel-geometry.mjs --check && node --test scripts/pixel-geometry.test.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "npm run check:corners && tsc -b && vite build",
+    "build:offline-lan-agent": "node scripts/build-offline-lan-agent.mjs",
+    "test:offline-lan-agent": "node scripts/test-offline-lan-agent.mjs",
+    "test:offline-lan-ui": "node scripts/verify-offline-lan-ui.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "tauri": "tauri",
     "desktop": "..\\dev.cmd",

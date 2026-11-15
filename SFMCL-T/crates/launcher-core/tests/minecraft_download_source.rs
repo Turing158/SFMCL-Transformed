@@ -9,7 +9,10 @@ use sfmcl_t_core::{
     },
 };
 use sha1::{Digest, Sha1};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 
 #[test]
 fn download_source_defaults_persists_and_rejects_unknown_sources() {
@@ -95,10 +98,14 @@ async fn installation_and_repair_resolution_use_selected_source_and_preserve_has
     let hash = "abcdef0123456789abcdef0123456789abcdef01";
     let index = json!({"objects":{"test":{"hash":hash,"size":7}}}).to_string();
     let index_sha1 = hex::encode(Sha1::digest(index.as_bytes()));
+    let requests = Arc::new(AtomicUsize::new(0));
+    let index_requests = requests.clone();
+    let index_response = index.clone();
     let app = axum::Router::new().route(
         "/index.json",
         axum::routing::get(move || {
-            let index = index.clone();
+            index_requests.fetch_add(1, Ordering::SeqCst);
+            let index = index_response.clone();
             async move { index }
         }),
     );
@@ -118,17 +125,18 @@ async fn installation_and_repair_resolution_use_selected_source_and_preserve_has
         "downloads":{"client":{"url":"https://piston-data.mojang.com/v1/objects/hash/client.jar","sha1":hash,"size":7}},
         "libraries":[{"name":"org.example:lib:1","downloads":{"artifact":{"path":"org/example/lib/1/lib-1.jar","url":"https://libraries.minecraft.net/org/example/lib/1/lib-1.jar","sha1":hash,"size":7}}}],
         "logging":{"client":{"file":{"id":"client.xml","url":"https://launcher.mojang.com/v1/objects/hash/client.xml","sha1":hash,"size":7}}},
-        "assetIndex":{"id":"test","url":index_url,"sha1":index_sha1}
+        "assetIndex":{"id":"test","url":index_url,"sha1":index_sha1.to_uppercase(),"sha512":hex::encode(sha2::Sha512::digest(index.as_bytes())),"size":index.len()}
     });
     let original = version.clone();
-    for source in [
-        MinecraftDownloadSource::Bmclapi,
-        MinecraftDownloadSource::Official,
+    for (source, kind) in [
+        (MinecraftDownloadSource::Bmclapi, JobKind::Install),
+        (MinecraftDownloadSource::Official, JobKind::Repair),
+        (MinecraftDownloadSource::Auto, JobKind::Launch),
     ] {
         settings
             .update(|settings| settings.minecraft_download_source = source)
             .unwrap();
-        let job = jobs.create(JobKind::Repair, "resolve test".into(), &["resolve"]);
+        let job = jobs.create(kind, "resolve test".into(), &["resolve"]);
         let files = installer
             .resolve_files(&temp.path().join("game"), &version, &job)
             .await
@@ -146,6 +154,162 @@ async fn installation_and_repair_resolution_use_selected_source_and_preserve_has
             assert_eq!(file.size, Some(7));
         }
         assert_eq!(version, original);
+        assert!(job.snapshot().download_id.is_none());
+        assert!(installer.downloads.snapshots().await.is_empty());
+        assert_eq!(
+            std::fs::read_dir(temp.path().join("downloads"))
+                .unwrap()
+                .count(),
+            0
+        );
+        assert_eq!(
+            std::fs::read(temp.path().join("game/assets/indexes/test.json")).unwrap(),
+            index.as_bytes()
+        );
     }
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
     server.abort();
+    let _ = server.await;
+}
+
+#[tokio::test]
+async fn asset_index_refetches_invalid_cache_and_falls_back_without_download_records() {
+    let temp = tempfile::tempdir().unwrap();
+    let index = json!({"objects":{}}).to_string();
+    let response = index.clone();
+    let app = axum::Router::new()
+        .route("/bad.json", axum::routing::get(|| async { "corrupt" }))
+        .route(
+            "/index.json",
+            axum::routing::get(move || {
+                let response = response.clone();
+                async move { response }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let settings = Arc::new(ConfigStore::open(&temp.path().join("config")).unwrap());
+    settings
+        .update(|s| s.minecraft_download_source = MinecraftDownloadSource::Official)
+        .unwrap();
+    let installer = Installer {
+        downloads: DownloadManager::open(&temp.path().join("downloads"), 2).unwrap(),
+        jobs: Arc::new(Jobs::default()),
+        client: reqwest::Client::new(),
+        settings,
+    };
+    let root = temp.path().join("game");
+    let cache = root.join("assets/indexes/test.json");
+    std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    std::fs::write(&cache, b"old corrupt cache").unwrap();
+    let url = format!("{base}/index.json");
+    installer
+        .sources()
+        .register(&url, vec![format!("{base}/bad.json"), url.clone()]);
+    let version = json!({
+        "id":"test",
+        "assetIndex":{"id":"test","url":url,"sha1":hex::encode(Sha1::digest(index.as_bytes())),"size":index.len()}
+    });
+    let job = installer
+        .jobs
+        .create(JobKind::Repair, "resolve test".into(), &["resolve"]);
+    assert!(installer
+        .resolve_files(&root, &version, &job)
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(std::fs::read(&cache).unwrap(), index.as_bytes());
+
+    // Invalid network metadata must fail without replacing the installed index.
+    for (key, value, expected) in [
+        ("sha1", json!("0".repeat(40)), "SHA-1"),
+        ("sha512", json!("0".repeat(128)), "SHA-512"),
+        ("size", json!(index.len() + 1), "长度校验失败"),
+    ] {
+        let mut invalid = version.clone();
+        invalid["assetIndex"][key] = value;
+        let error = installer
+            .resolve_files(&root, &invalid, &job)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains(expected), "{error:#}");
+        assert_eq!(std::fs::read(&cache).unwrap(), index.as_bytes());
+    }
+    assert!(job.snapshot().download_id.is_none());
+    assert!(installer.downloads.snapshots().await.is_empty());
+    assert_eq!(
+        std::fs::read_dir(temp.path().join("downloads"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        std::fs::read_dir(cache.parent().unwrap()).unwrap().count(),
+        1
+    );
+    server.abort();
+    let _ = server.await;
+}
+
+#[tokio::test]
+async fn cancelling_asset_index_requests_reports_the_workflow_without_download_tasks() {
+    let temp = tempfile::tempdir().unwrap();
+    let started = Arc::new(tokio::sync::Notify::new());
+    let request_started = started.clone();
+    let app = axum::Router::new().route(
+        "/index.json",
+        axum::routing::get(move || {
+            request_started.notify_one();
+            std::future::pending::<String>()
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/index.json", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let installer = Arc::new(Installer {
+        downloads: DownloadManager::open(&temp.path().join("downloads"), 2).unwrap(),
+        jobs: Arc::new(Jobs::default()),
+        client: reqwest::Client::new(),
+        settings: Arc::new(ConfigStore::open(&temp.path().join("config")).unwrap()),
+    });
+    for (kind, expected) in [
+        (JobKind::Install, "安装已取消"),
+        (JobKind::Repair, "修复已取消"),
+        (JobKind::Launch, "启动已取消"),
+    ] {
+        let job = installer
+            .jobs
+            .create(kind, "resolve test".into(), &["resolve"]);
+        let resolver = installer.clone();
+        let resolving_job = job.clone();
+        let root = temp.path().join("game");
+        let version = json!({"id":"test","assetIndex":{"id":"test","url":url}});
+        let resolving = tokio::spawn(async move {
+            resolver
+                .resolve_files(&root, &version, &resolving_job)
+                .await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(3), started.notified())
+            .await
+            .unwrap();
+        assert!(installer.downloads.snapshots().await.is_empty());
+        assert!(job.snapshot().download_id.is_none());
+        job.cancel.cancel();
+        let error = tokio::time::timeout(std::time::Duration::from_secs(3), resolving)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.to_string(), expected);
+        assert!(!temp.path().join("game/assets/indexes/test.json").exists());
+    }
+    assert_eq!(
+        std::fs::read_dir(temp.path().join("downloads"))
+            .unwrap()
+            .count(),
+        0
+    );
+    server.abort();
+    let _ = server.await;
 }
