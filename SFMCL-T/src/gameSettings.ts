@@ -19,7 +19,7 @@ export const launchSettingDefaults = {
   quickPlayEnabled: false,
   quickPlayWorld: "",
   processPriority: "normal",
-  offlineLan: true,
+  offlineLan: false,
 } as const satisfies Partial<GameSettings>;
 
 export const validServerHost = (value: string) => {

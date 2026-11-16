@@ -101,6 +101,11 @@ impl Runtime {
             .sources()
             .set_mode(settings.get().minecraft_download_source);
         let jobs = Arc::new(Jobs::default());
+        #[cfg(windows)]
+        for game in sfmcl_t_core::minecraft::detached::recover(&directory, &settings.get(), &jobs)?
+        {
+            tauri::async_runtime::spawn(game.watch());
+        }
         let accounts = Accounts::open(&directory, vault.clone(), settings.clone(), jobs.clone())?;
         let installer = Arc::new(Installer {
             downloads: downloads.clone(),
@@ -536,13 +541,12 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             let id = text(&p, "id")?;
             let settings = r.settings.get();
             let directory = p["directory"].as_str().unwrap_or(&settings.active_dir);
-            let root = settings.registered_game_root(Path::new(directory))?;
-            versions::resolve(&root, id)?;
-            r.settings.update(|s| {
-                s.active_dir = directory.into();
-                s.active_version = id.into();
-            })?;
-            Ok(json!(true))
+            Ok(json!(versions::select(
+                &r.settings,
+                Path::new(directory),
+                id,
+                r.multiplayer.snapshot().has_room(),
+            )?))
         }
         "versions.favorite" => {
             let favorite = p["favorite"].as_bool().context("缺少收藏状态")?;

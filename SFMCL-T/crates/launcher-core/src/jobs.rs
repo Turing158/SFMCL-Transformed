@@ -63,6 +63,14 @@ impl Job {
             .unwrap_or_else(|e| e.into_inner())
             .clone()
     }
+    pub(crate) fn sync_launch(&self, snapshot: JobSnapshot) {
+        if matches!(self.kind, JobKind::Launch) && snapshot.id == self.snapshot().id {
+            if snapshot.status == Status::Cancelled {
+                self.cancel.cancel();
+            }
+            self.update(|current| *current = snapshot);
+        }
+    }
     fn update(&self, change: impl FnOnce(&mut JobSnapshot)) {
         change(&mut self.snapshot.lock().unwrap_or_else(|e| e.into_inner()));
     }
@@ -139,6 +147,19 @@ pub struct Jobs {
     jobs: Mutex<Vec<Arc<Job>>>,
 }
 impl Jobs {
+    pub(crate) fn restore_launch(&self, snapshot: JobSnapshot) -> Arc<Job> {
+        let mut jobs = self.jobs.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(job) = jobs.iter().find(|job| job.snapshot().id == snapshot.id) {
+            return job.clone();
+        }
+        let job = Arc::new(Job {
+            kind: JobKind::Launch,
+            cancel: CancellationToken::new(),
+            snapshot: Mutex::new(snapshot),
+        });
+        jobs.push(job.clone());
+        job
+    }
     pub fn create(&self, kind: JobKind, title: String, steps: &[&str]) -> Arc<Job> {
         let job = Arc::new(Job {
             kind,

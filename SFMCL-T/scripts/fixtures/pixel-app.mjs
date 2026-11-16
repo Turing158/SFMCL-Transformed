@@ -37,7 +37,7 @@ export function pixelAppFixture({
     jvmArgsEnabled: false,
     jvmArgs: "",
     gameArgs: "",
-    offlineLan: true,
+    offlineLan: false,
     theme: "light",
     accent: "forest",
     backgroundType: "none",
@@ -65,7 +65,7 @@ export function pixelAppFixture({
     ],
     dataDir: "C:/Pixel-Test",
     defaultDownloadCacheDir: "C:/Pixel-Test/downloads/cache",
-    version: "1.0.0",
+    version: "1.0.1",
   };
   const versions = ["1.21.4", "1.20.1-Fabric"].map((id) => ({
     id,
@@ -318,10 +318,56 @@ export function pixelAppFixture({
           persist();
           return structuredClone(target.javaPaths);
         }
-        case "versions.select":
+        case "versions.detail": {
+          const version = versions.find((version) => version.id === payload.id);
+          const names = {
+            Fabric: "net.fabricmc:fabric-loader:0.16.9",
+            Forge: "net.minecraftforge:forge:1.21.4",
+            NeoForge: "net.neoforged:neoforge:21.4",
+            Quilt: "org.quiltmc:quilt-loader:0.26.0",
+            OptiFine: "optifine:OptiFine:1.21.4",
+            LiteLoader: "com.mumfrey:liteloader:1.12.2",
+          };
+          return {
+            id: payload.id,
+            clientVersion: version?.version ?? payload.id,
+            libraries:
+              version && names[version.loader]
+                ? [{ name: names[version.loader] }]
+                : [],
+          };
+        }
+        case "versions.select": {
+          const family = (loader) =>
+            !loader || loader === "OptiFine" ? "Vanilla" : loader;
+          const previous = family(
+            versions.find(
+              (version) => version.id === data.settings.activeVersion,
+            )?.loader,
+          );
+          const next = family(
+            versions.find((version) => version.id === payload.id)?.loader,
+          );
+          const room = window.__pixelTest.multiplayerStatus;
+          const inRoom =
+            room?.sessionId && room.role && room.state !== "preparing";
+          if (!inRoom && previous !== next) {
+            const config = versionSettings[payload.id];
+            if (
+              config &&
+              !config.useGlobal &&
+              (config.independentGroups?.advanced ?? true)
+            ) {
+              config.settings.offlineLan = false;
+            } else {
+              data.settings.offlineLan = false;
+            }
+          }
           if (payload.directory) data.settings.activeDir = payload.directory;
           data.settings.activeVersion = payload.id;
-          return;
+          persist();
+          return structuredClone(data.settings);
+        }
         case "versions.favorite":
           versions.find((version) => version.id === payload.id).favorite =
             payload.favorite;

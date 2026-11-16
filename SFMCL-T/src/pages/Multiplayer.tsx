@@ -84,14 +84,25 @@ export function Multiplayer() {
   const serviceContent = useTabContentTransition(official ? 0 : 1, !inSession);
   const roomContent = useTabContentTransition(hosting ? 0 : 1, !inSession);
   const usingSharedNode = !official && mp.connectionMode === "shared";
+  const hostVersion =
+    hostContext &&
+    app.versions.find(
+      (item) =>
+        item.id === hostContext.versionId &&
+        (item.directory ?? settings.activeDir) === hostContext.directory,
+    );
   const offlineLanTarget = usingHostGame
     ? hostContext && {
         id: hostContext.versionId,
         directory: hostContext.directory,
+        loader: hostVersion?.loader,
+        version: hostContext.gameVersion,
       }
     : version && {
         id: version.id,
         directory: version.directory ?? settings.activeDir,
+        loader: version.loader,
+        version: version.version,
       };
   async function copy(kind: "invitation" | "address") {
     await app.run(

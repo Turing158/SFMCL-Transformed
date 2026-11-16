@@ -8,9 +8,16 @@ Remove temporary output, optionally pruning compiler and test caches.
 .\clean-target.ps1
 .EXAMPLE
 .\clean-target.ps1 -PruneBuildCache -WhatIf
+.EXAMPLE
+.\clean-target.ps1 -PruneBuildCache -TestArtifactPaths .\SFMCL-T\target\tmp\recorded-test-run
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low')]
-param([switch]$PruneBuildCache)
+param(
+    [switch]$PruneBuildCache,
+    # Explicitly recorded, finished test scratch directories; no age requirement.
+    # Only direct children of target/tmp are accepted, never build profiles.
+    [string[]]$TestArtifactPaths = @()
+)
 
 $ErrorActionPreference = 'Stop'
 $workspaceRoot = Join-Path $PSScriptRoot 'SFMCL-T'
@@ -181,6 +188,14 @@ try {
         }
     }
 
+    foreach ($recordedPath in $TestArtifactPaths) {
+        $recorded = [IO.Path]::GetFullPath($recordedPath)
+        if (-not (Split-Path -Parent $recorded).Equals($temporaryRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Recorded test artifacts must be direct children of target/tmp: $recorded"
+        }
+        Add-CleanupPath -Path $recorded
+    }
+
     # Validate the entire deletion set before removing anything.
     $plannedBytes = [long]0
     foreach ($entry in $cleanup) {
@@ -197,7 +212,7 @@ try {
     }
     # A desktop app may keep running after Cargo finishes building. Preserve it,
     # and refuse pruning if a selected test/example program is still executing.
-    if ($PruneBuildCache -and $cleanup.Count -gt 0) {
+    if (($PruneBuildCache -or $TestArtifactPaths.Count -gt 0) -and $cleanup.Count -gt 0) {
         foreach ($process in Get-CimInstance Win32_Process) {
             if (-not $process.ExecutablePath -or
                 -not $process.ExecutablePath.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }

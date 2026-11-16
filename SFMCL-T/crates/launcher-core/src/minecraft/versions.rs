@@ -1,5 +1,5 @@
 use crate::{
-    config::Settings,
+    config::{ConfigStore, Settings},
     downloads::DownloadSpec,
     paths::{atomic_write, safe_join, valid_name},
 };
@@ -25,6 +25,65 @@ pub struct VersionInfo {
     #[serde(default)]
     pub favorite: bool,
     pub error: Option<String>,
+}
+
+pub fn loader(version: &Value) -> &'static str {
+    let libraries = version["libraries"].to_string().to_lowercase();
+    if libraries.contains("neoforged") {
+        "NeoForge"
+    } else if libraries.contains("minecraftforge") {
+        "Forge"
+    } else if libraries.contains("quiltmc") {
+        "Quilt"
+    } else if libraries.contains("fabricmc") {
+        "Fabric"
+    } else if libraries.contains("optifine") {
+        "OptiFine"
+    } else if libraries.contains("liteloader") {
+        "LiteLoader"
+    } else {
+        "Vanilla"
+    }
+}
+
+fn offline_lan_loader(version: &Value) -> &'static str {
+    match loader(version) {
+        "OptiFine" => "Vanilla",
+        other => other,
+    }
+}
+
+/// Keep the built-in offline LAN option scoped to the selected game's loader.
+pub fn select(store: &ConfigStore, directory: &Path, id: &str, in_room: bool) -> Result<Settings> {
+    let settings = store.get();
+    let root = settings.registered_game_root(directory)?;
+    let next = resolve(&root, id)?;
+    let next_loader = offline_lan_loader(&next);
+    let previous_loader = settings
+        .active_game_root()
+        .ok()
+        .and_then(|root| resolve(&root, &settings.active_version).ok())
+        .map(|version| offline_lan_loader(&version));
+    let reset = !in_room && previous_loader.is_some_and(|previous| previous != next_loader);
+    let mut reset_global = false;
+    if reset {
+        let mut config = super::version_settings::load(&root, id, &settings)?;
+        if config.groups().advanced {
+            if config.settings.offline_lan {
+                config.settings.offline_lan = false;
+                super::version_settings::save(&root, id, &config)?;
+            }
+        } else {
+            reset_global = true;
+        }
+    }
+    store.update(|settings| {
+        settings.active_dir = directory.to_string_lossy().into_owned();
+        settings.active_version = id.into();
+        if reset_global {
+            settings.offline_lan = false;
+        }
+    })
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -332,23 +391,7 @@ pub fn scan(root: &Path) -> Result<Vec<VersionInfo>> {
                     .into();
                 info.kind = value["type"].as_str().unwrap_or("release").into();
                 info.java_major = required_java(&value);
-                let names = value["libraries"].to_string().to_lowercase();
-                info.loader = if names.contains("neoforged") {
-                    "NeoForge"
-                } else if names.contains("minecraftforge") {
-                    "Forge"
-                } else if names.contains("quiltmc") {
-                    "Quilt"
-                } else if names.contains("fabricmc") {
-                    "Fabric"
-                } else if names.contains("optifine") {
-                    "OptiFine"
-                } else if names.contains("liteloader") {
-                    "LiteLoader"
-                } else {
-                    "Vanilla"
-                }
-                .into();
+                info.loader = loader(&value).into();
                 let icon = entry.path().join("icon.png");
                 if icon.exists() {
                     info.icon = icon.to_string_lossy().into_owned();

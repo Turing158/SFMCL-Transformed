@@ -46,10 +46,13 @@ const config: VersionSettings = {
 };
 
 describe("per-card game settings", () => {
-  it("defaults missing offline LAN settings to enabled and preserves a saved opt-out", () => {
+  it("defaults missing offline LAN settings to disabled and preserves saved choices", () => {
     const legacy: Partial<GameSettings> = { ...global };
     delete legacy.offlineLan;
-    expect(gameSettingsFrom(legacy as GameSettings).offlineLan).toBe(true);
+    expect(gameSettingsFrom(legacy as GameSettings).offlineLan).toBe(false);
+    expect(gameSettingsFrom({ ...global, offlineLan: true }).offlineLan).toBe(
+      true,
+    );
     expect(gameSettingsFrom({ ...global, offlineLan: false }).offlineLan).toBe(
       false,
     );

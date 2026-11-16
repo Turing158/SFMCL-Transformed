@@ -5,7 +5,9 @@ import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { launchDockFixture } from "./fixtures/launch-dock.mjs";
 
 const url = process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/";
-const evidence = runtimePath("evidence/launch-dock-project");
+const evidence =
+  process.env.SFMCL_T_LAUNCH_DOCK_EVIDENCE ||
+  runtimePath("evidence/launch-dock-project");
 await mkdir(evidence, { recursive: true });
 const browser = await chromium.launch({
   ...(process.platform === "win32" ? { channel: "msedge" } : {}),
@@ -21,6 +23,20 @@ await page.addInitScript({
 });
 const dock = page.locator(".launch-dock");
 const primary = dock.locator(".launch-primary");
+const versionLayout = () =>
+  dock
+    .locator(".launch-version")
+    .evaluate((node) =>
+      Array.from(
+        node.querySelectorAll(".resource-icon, h3, .launch-version-tags"),
+        (element) => [
+          element.offsetLeft,
+          element.offsetTop,
+          element.offsetWidth,
+          element.offsetHeight,
+        ],
+      ),
+    );
 const change = dock.locator(".launch-switch");
 const picker = page.getByRole("dialog", { name: "选择游戏版本", exact: true });
 const viewport = picker.locator(".launch-version-viewport");
@@ -100,6 +116,11 @@ const dragCard = async (distance, release = true) => {
 try {
   await ready();
   await state("ready");
+  await expect(
+    dock.locator(".overline, .launch-progress, .launch-status-detail"),
+  ).toHaveCount(0);
+  await expect(primary).toHaveAccessibleName("开始游戏");
+  await expect(primary).toHaveAttribute("data-tooltip", "准备就绪");
   await expect(page.locator("main .launch-card")).toHaveCount(0);
   await expect(page.locator(".workspace-footer")).toHaveCount(0);
   await shot("desktop-light");
@@ -184,20 +205,62 @@ try {
     window.__pixelTest.holdLaunch = true;
     window.__pixelTest.delays.launch = 300;
   });
+  const beforeLaunchVersionLayout = await versionLayout();
   await primary.click();
   await expect(primary).toBeDisabled();
   await primary.evaluate((button) => button.click());
   await expect.poll(() => count("launch")).toBe(1);
   await expect(dock.getByRole("status")).toContainText("正在读取启动进度");
+  await expect(primary).toHaveAttribute("data-indeterminate", "true");
+  await expect(primary.getByRole("progressbar")).not.toHaveAttribute(
+    "aria-valuenow",
+  );
+  const waitingFrames = await primary.evaluate(async (button) => {
+    const frames = [];
+    const start = performance.now();
+    await new Promise((resolve) => {
+      const sample = (time) => {
+        frames.push(
+          parseFloat(
+            getComputedStyle(button).getPropertyValue(
+              "--launch-button-progress",
+            ),
+          ),
+        );
+        if (time - start < 1800) requestAnimationFrame(sample);
+        else resolve();
+      };
+      requestAnimationFrame(sample);
+    });
+    return frames;
+  });
+  await writeFile(
+    `${evidence}/waiting-frames.json`,
+    JSON.stringify(waitingFrames),
+  );
+  expect(waitingFrames.every((value) => value === 0)).toBe(true);
   await primary.evaluate((button) => button.click());
   expect(await count("launch")).toBe(1);
   await page.evaluate(() => window.__pixelTest.publishLaunch());
   await state("preparing");
+  expect(await versionLayout()).toEqual(beforeLaunchVersionLayout);
   await expect(change).toHaveText("取消启动");
   await expect(change).toBeEnabled();
-  await expect(dock.getByRole("progressbar")).toBeVisible();
+  await expect(primary.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "0",
+  );
+  await expect(primary).toHaveAccessibleName("正在启动 0%");
+  await expect(primary).not.toHaveAttribute("data-indeterminate");
   await change.click();
   await state("ready");
+  expect(
+    await primary.evaluate((button) =>
+      parseFloat(
+        getComputedStyle(button).getPropertyValue("--launch-button-progress"),
+      ),
+    ),
+  ).toBe(0);
   expect(await count("jobs.cancel")).toBe(1);
   checks.push(
     "Start is guarded before the request and between job creation and polling; cancellation targets the returned job",
@@ -205,15 +268,160 @@ try {
 
   await primary.click();
   await expect(change).toBeEnabled();
-  await page.evaluate(() => window.__pixelTest.downloadState("paused"));
+  await expect(primary).toHaveAccessibleName("正在启动 0%");
+  await page.evaluate(() => window.__pixelTest.advanceLaunch(2));
+  await expect(primary).toHaveAccessibleName("正在启动 50%");
+  await expect(primary.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "50",
+  );
+  await expect
+    .poll(() =>
+      primary.evaluate((button) =>
+        getComputedStyle(button)
+          .getPropertyValue("--launch-button-progress")
+          .trim(),
+      ),
+    )
+    .toBe("50%");
+  const split = await primary.evaluate((button) => {
+    const surface = button
+      .querySelector(".launch-button-surface")
+      .getBoundingClientRect();
+    const base = button.querySelector(".launch-button-base > span");
+    const fill = button.querySelector(".launch-button-fill-label");
+    const boundary = surface.left + surface.width / 2;
+    const text = base.firstChild;
+    let splitCharacter = "";
+    for (let index = 0; index < text.length; index++) {
+      const range = document.createRange();
+      range.setStart(text, index);
+      range.setEnd(text, index + 1);
+      const bounds = range.getBoundingClientRect();
+      if (bounds.left < boundary && bounds.right > boundary)
+        splitCharacter = text.textContent[index];
+    }
+    return {
+      splitCharacter,
+      textOffset: Math.abs(
+        base.getBoundingClientRect().left - fill.getBoundingClientRect().left,
+      ),
+      baseColor: getComputedStyle(base).color,
+      fillColor: getComputedStyle(fill).color,
+      width: button.offsetWidth,
+      height: button.offsetHeight,
+    };
+  });
+  expect(split.splitCharacter.trim()).not.toBe("");
+  expect(split.textOffset).toBeLessThan(0.1);
+  expect(split.baseColor).not.toBe(split.fillColor);
+  expect(split.width).toBe(156);
+  expect(split.height).toBe(46);
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(
+      (theme) => (document.documentElement.dataset.theme = theme),
+      theme,
+    );
+    await primary.screenshot({
+      path: `${evidence}/button-half-${theme}.png`,
+      animations: "disabled",
+    });
+    await shot(`launch-half-${theme}`);
+  }
+  await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
+  const progressFrames = await primary.evaluate(async (button) => {
+    window.__pixelTest.advanceLaunch(3);
+    const frames = [];
+    const start = performance.now();
+    let arrivedAt = 0;
+    await new Promise((resolve) => {
+      const sample = (time) => {
+        frames.push(
+          parseFloat(
+            getComputedStyle(button).getPropertyValue(
+              "--launch-button-progress",
+            ),
+          ),
+        );
+        if (!arrivedAt && frames.at(-1) === 75) arrivedAt = time;
+        if (time - start < 3000 && (!arrivedAt || time - arrivedAt < 100))
+          requestAnimationFrame(sample);
+        else resolve();
+      };
+      requestAnimationFrame(sample);
+    });
+    return frames;
+  });
+  await expect(primary).toHaveAccessibleName("正在启动 75%");
+  await writeFile(
+    `${evidence}/progress-frames.json`,
+    JSON.stringify(progressFrames),
+  );
+  expect(progressFrames.some((value) => value > 50 && value < 75)).toBe(true);
+  expect(progressFrames.at(-1)).toBe(75);
+  expect(
+    progressFrames.every(
+      (value, index) =>
+        index === 0 || value >= progressFrames[index - 1] - 0.01,
+    ),
+  ).toBe(true);
+  checks.push(
+    "Button fill follows real progress smoothly, splits individual glyphs at the same boundary in both themes, retains its size and exposes one accessible label",
+  );
+  const pausedProgressFrames = await primary.evaluate(async (button) => {
+    window.__pixelTest.downloadState("paused");
+    const frames = [];
+    const start = performance.now();
+    let pausedAt = 0;
+    await new Promise((resolve) => {
+      const sample = (time) => {
+        frames.push(
+          parseFloat(
+            getComputedStyle(button).getPropertyValue(
+              "--launch-button-progress",
+            ),
+          ),
+        );
+        if (!pausedAt && button.getAttribute("aria-label") === "继续启动")
+          pausedAt = time;
+        if (time - start < 3000 && (!pausedAt || time - pausedAt < 300))
+          requestAnimationFrame(sample);
+        else resolve();
+      };
+      requestAnimationFrame(sample);
+    });
+    return frames;
+  });
+  await writeFile(
+    `${evidence}/paused-progress-frames.json`,
+    JSON.stringify(pausedProgressFrames),
+  );
+  expect(pausedProgressFrames.every((value) => value === 75)).toBe(true);
   await state("paused");
   await expect(primary).toHaveText("继续启动");
+  await expect(primary.locator(".launch-button-base > svg")).toHaveClass(
+    /lucide-pause/,
+  );
+  await expect(primary.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "75",
+  );
+  await expect(primary).toHaveAttribute("data-tooltip", /下载已暂停/);
+  await primary.screenshot({
+    path: `${evidence}/button-paused.png`,
+    animations: "disabled",
+  });
   await primary.click();
   await state("preparing");
   expect(await count("launch")).toBe(2);
   await page.evaluate(() => window.__pixelTest.downloadState("failed"));
   await state("download-error");
   await expect(primary).toHaveText("重试下载");
+  await expect(primary).toHaveAttribute("data-tooltip", /资源服务器连接中断/);
+  await primary.screenshot({
+    path: `${evidence}/button-download-error.png`,
+    animations: "disabled",
+  });
   await expect(dock.getByRole("status")).toContainText("资源服务器连接中断");
   await primary.click();
   await state("preparing");
@@ -225,7 +433,23 @@ try {
 
   await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
   await state("running");
+  expect(await versionLayout()).toEqual(beforeLaunchVersionLayout);
   await expect(primary).toHaveText("结束游戏");
+  await expect(primary.getByRole("progressbar")).toHaveCount(0);
+  await expect(primary).toHaveAttribute("data-tooltip", /游戏已启动/);
+  await primary.screenshot({
+    path: `${evidence}/button-running.png`,
+    animations: "disabled",
+  });
+  await expect
+    .poll(() =>
+      primary.evaluate((button) =>
+        getComputedStyle(button)
+          .getPropertyValue("--launch-button-progress")
+          .trim(),
+      ),
+    )
+    .toBe("100%");
   await expect(change).toHaveText("继续启动");
   const firstGame = await page.evaluate(
     () => window.__pixelTest.latestLaunch.id,
@@ -455,6 +679,7 @@ try {
         (value) => (document.documentElement.dataset.theme = value),
         theme,
       );
+      await expect(dock).not.toHaveAttribute("data-disclosure-animating");
       await page.locator(".workspace-footer-region").evaluate(async (node) => {
         await new Promise((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(resolve)),
@@ -728,11 +953,19 @@ try {
       if (width === 1440 || width === 375)
         await shot(`${width === 1440 ? "desktop" : "mobile"}-${theme}`);
       await change.click();
+      await picker.evaluate((node) =>
+        Promise.allSettled(
+          node.getAnimations().map((animation) => animation.finished),
+        ),
+      );
       const bounds = await picker.boundingBox();
+      const trigger = await change.boundingBox();
       expect(bounds.x).toBeGreaterThanOrEqual(0);
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
       expect(bounds.y).toBeGreaterThanOrEqual(40);
-      expect(bounds.y + bounds.height).toBeLessThan(before.y);
+      expect(Math.abs(trigger.y - bounds.y - bounds.height - 6)).toBeLessThan(
+        0.5,
+      );
       await page.keyboard.press("Escape");
       layouts.push({ width, theme, dockHeight: before.height });
     }
@@ -747,8 +980,12 @@ try {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await change.click();
   expect(
-    await picker.evaluate((element) => getComputedStyle(element).animationName),
-  ).toBe("launch-picker-enter");
+    await picker.evaluate((element) =>
+      element
+        .getAnimations()
+        .some((animation) => animation.id === "sfmcl-t-version-picker"),
+    ),
+  ).toBe(true);
   await page.keyboard.press("Escape");
   checks.push(
     "Collapsed sidebar alignment, animations remain enabled with reduced-motion preference (D2), and error-free rendering",

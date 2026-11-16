@@ -38,6 +38,12 @@ pub struct Snapshot {
     pub service: Option<&'static str>,
     pub invite_code: Option<String>,
 }
+impl Snapshot {
+    pub fn has_room(&self) -> bool {
+        self.session_id.is_some() && self.role.is_some() && self.state != "preparing"
+    }
+}
+
 impl Default for Snapshot {
     fn default() -> Self {
         Self {

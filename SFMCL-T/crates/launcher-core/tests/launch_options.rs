@@ -33,12 +33,12 @@ fn all_launch_options_persist_and_old_configs_receive_current_defaults() {
     assert_eq!(old.window_mode, "default");
     assert!(old.restore_launcher);
     assert!(!old.server_enabled && !old.quick_play_enabled);
-    assert!(old.offline_lan);
+    assert!(!old.offline_lan);
     assert_eq!(old.process_priority, "normal");
     let dir = tempfile::tempdir().unwrap();
     let store = ConfigStore::open(dir.path()).unwrap();
     let mut settings = store.get();
-    assert!(settings.offline_lan);
+    assert!(!settings.offline_lan);
     settings.window_mode = "custom".into();
     settings.window_x = 120;
     settings.window_y = 80;
@@ -50,7 +50,7 @@ fn all_launch_options_persist_and_old_configs_receive_current_defaults() {
     settings.server_port = 25566;
     settings.quick_play_world = "My World".into();
     settings.process_priority = "aboveNormal".into();
-    settings.offline_lan = false;
+    settings.offline_lan = true;
     store.save(settings.clone()).unwrap();
     assert_eq!(
         GameSettings::from(&ConfigStore::open(dir.path()).unwrap().get()),
@@ -91,7 +91,9 @@ fn offline_lan_follows_advanced_overrides_and_not_account_selection() {
     };
     assert!(!config.resolve(&global).offline_lan);
     let old: GameSettings = serde_json::from_str("{}").unwrap();
-    assert!(old.offline_lan);
+    assert!(!old.offline_lan);
+    let saved: GameSettings = serde_json::from_value(json!({"offlineLan": true})).unwrap();
+    assert!(saved.offline_lan);
     let saved: GameSettings = serde_json::from_value(json!({"offlineLan": false})).unwrap();
     assert!(!saved.offline_lan);
 }

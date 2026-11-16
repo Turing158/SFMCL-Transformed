@@ -1,7 +1,7 @@
 {
   "name": "sfmcl-t",
   "description": "StarFall Minecraft Launcher-Transformed",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -58,6 +58,7 @@
     "test:install-components": "node scripts/verify-install-components.mjs",
     "test:resource-motion": "node scripts/verify-resource-motion.mjs",
     "test:launch-dock": "node scripts/verify-launch-dock.mjs",
+    "test:version-picker": "node scripts/verify-version-picker.mjs",
     "test:local-data": "node scripts/verify-local-data.mjs",
     "test:local-data-desktop": "node scripts/verify-local-data-desktop.mjs",
     "test:footer-motion": "node scripts/verify-footer-motion.mjs",

@@ -139,7 +139,7 @@ export function Provider({ children }: { children: ReactNode }) {
     settings: fallback,
     players: [],
     dataDir: "",
-    version: "1.0.0",
+    version: "1.0.1",
   });
   const [versions, setVersions] = useState<Version[]>([]);
   const [versionsRevision, setVersionsRevision] = useState(0);
@@ -319,9 +319,13 @@ export function Provider({ children }: { children: ReactNode }) {
             directory === settings.activeDir
               ? null
               : await api<Version[]>("versions.list", { directory });
-          await api("versions.select", { id: version.id, directory });
+          const selected = await api<Settings>("versions.select", {
+            id: version.id,
+            directory,
+          });
           settingsRef.current = {
             ...settingsRef.current,
+            ...selected,
             activeDir: directory,
             activeVersion: version.id,
           };
@@ -329,6 +333,7 @@ export function Provider({ children }: { children: ReactNode }) {
             ...current,
             settings: {
               ...current.settings,
+              ...selected,
               activeDir: directory,
               activeVersion: version.id,
             },

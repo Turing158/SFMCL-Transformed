@@ -2,7 +2,7 @@ use super::{
     arguments::{build, Identity},
     installer::Installer,
     java,
-    process::{run_java_with_settings, LaunchEvents},
+    process::LaunchEvents,
     version_settings, versions,
 };
 use crate::{
@@ -279,7 +279,20 @@ impl Installer {
             target.validate().await?;
         }
         job.step(4, "Minecraft 正在运行，可在此查看日志或结束游戏");
-        run_java_with_settings(
+        #[cfg(windows)]
+        super::detached::run_game(
+            self.settings.directory(),
+            &java.path,
+            &args,
+            &directory,
+            job,
+            &[player.access_token],
+            &settings,
+            options.events,
+        )
+        .await?;
+        #[cfg(not(windows))]
+        super::process::run_java_with_settings(
             &java.path,
             &args,
             &directory,

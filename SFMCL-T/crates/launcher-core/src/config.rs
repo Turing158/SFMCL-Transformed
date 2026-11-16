@@ -116,7 +116,7 @@ impl Default for Settings {
             jvm_args_enabled: false,
             jvm_args: String::new(),
             game_args: String::new(),
-            offline_lan: true,
+            offline_lan: false,
             theme: "light".into(),
             accent: "forest".into(),
             background_type: "none".into(),
@@ -225,6 +225,11 @@ pub struct ConfigStore {
     settings: Mutex<Settings>,
 }
 impl ConfigStore {
+    pub fn directory(&self) -> &Path {
+        self.path
+            .parent()
+            .expect("settings always have a parent directory")
+    }
     pub fn open(dir: &Path) -> Result<Self> {
         let path = dir.join("settings.json");
         let mut settings: Settings = if path.exists() {

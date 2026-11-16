@@ -173,7 +173,9 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
 pub fn event(app: &tauri::AppHandle, id: &str, event: LaunchEvent) -> tauri::Result<()> {
     let state = app.state::<LaunchWindows>();
     match event {
-        LaunchEvent::Started { action, restore } => {
+        LaunchEvent::Started {
+            action, restore, ..
+        } => {
             if action == "keep" {
                 return Ok(());
             }

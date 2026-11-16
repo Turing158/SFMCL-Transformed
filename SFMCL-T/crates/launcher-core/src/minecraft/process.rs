@@ -4,13 +4,17 @@ use std::{path::Path, process::Stdio, sync::Arc};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 pub enum LaunchEvent {
-    Started { action: String, restore: bool },
+    Started {
+        action: String,
+        restore: bool,
+        pid: u32,
+    },
     Exited,
 }
 pub type LaunchEvents = tokio::sync::mpsc::UnboundedSender<LaunchEvent>;
-struct ExitEvent {
-    events: Option<LaunchEvents>,
-    job: Arc<Job>,
+pub(super) struct ExitEvent {
+    pub(super) events: Option<LaunchEvents>,
+    pub(super) job: Arc<Job>,
 }
 impl Drop for ExitEvent {
     fn drop(&mut self) {
@@ -103,6 +107,7 @@ pub async fn run_java_with_settings(
         let _ = events.send(LaunchEvent::Started {
             action: settings.launcher_action.clone(),
             restore: settings.restore_launcher,
+            pid,
         });
     }
     let mut window = super::window::Controller::new(settings, directory, job.clone());
@@ -204,7 +209,7 @@ mod tests {
             .await;
             assert_eq!(result.is_ok(), code == 0);
             assert!(
-                matches!(receiver.recv().await,Some(LaunchEvent::Started { action,restore:true }) if action=="tray")
+                matches!(receiver.recv().await,Some(LaunchEvent::Started { action,restore:true,.. }) if action=="tray")
             );
             assert!(matches!(receiver.recv().await, Some(LaunchEvent::Exited)));
             assert!(receiver.recv().await.is_none());

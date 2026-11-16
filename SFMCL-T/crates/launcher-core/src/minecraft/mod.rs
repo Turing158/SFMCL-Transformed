@@ -1,5 +1,7 @@
 pub mod arguments;
 mod authlib_injector;
+#[cfg(windows)]
+pub mod detached;
 pub mod download_source;
 pub mod installer;
 pub mod java;

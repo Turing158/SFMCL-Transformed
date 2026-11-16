@@ -680,6 +680,28 @@
   min-height: 36px;
   height: 36px;
 }
+.modal.multiplayer-offline-lan-guide {
+  width: min(620px, calc(100vw - 32px));
+}
+.multiplayer-offline-lan-steps {
+  display: grid;
+  gap: 18px;
+  margin: 22px 0;
+  padding-left: 22px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.multiplayer-offline-lan-steps li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+.multiplayer-offline-lan-steps p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.multiplayer-offline-lan-guide .dialog-actions {
+  flex-wrap: wrap;
+}
 @container multiplayer (max-width: 720px) {
   .multiplayer-notice {
     flex-wrap: wrap;

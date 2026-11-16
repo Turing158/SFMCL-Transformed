@@ -16,14 +16,12 @@ import type {
 import {
   Box,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
-  CircleAlert,
   FolderOpen,
-  Info,
   LoaderCircle,
   Play,
+  Pause,
   Plus,
   RotateCw,
   Search,
@@ -40,8 +38,8 @@ import { versionPayload } from "./versionActions";
 import { gameDirectoryName, gameDirectoryPath } from "./gameDirectories";
 import { useApp } from "./store";
 import { FooterText } from "./FooterText";
-import { FooterStatusIcon } from "./FooterStatusIcon";
 import { useLaunchDisclosure } from "./useLaunchDisclosure";
+import { useVersionPickerPopup } from "./useVersionPickerPopup";
 import type { Tasks, Version } from "./types";
 import "./launch-dock.css";
 
@@ -131,7 +129,12 @@ export function LaunchDock({
     (item) => item.uuid === settings.activePlayer,
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPresent, setPickerPresent] = useState(false);
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [progressSnapshot, setProgressSnapshot] = useState({
+    jobId: "",
+    progress: 0,
+  });
   const [actionError, setActionError] = useState<{
     context: string;
     message: string;
@@ -238,6 +241,7 @@ export function LaunchDock({
   useLayoutEffect(() => {
     if (!active) {
       closePicker(false);
+      setPickerPresent(false);
       return;
     }
     if (focusWhenReady.current && !pickerOpen && !app.busy && !selecting) {
@@ -415,19 +419,33 @@ export function LaunchDock({
   const failure =
     !!localError || ["failed", "download-error", "invalid"].includes(mode);
   const spinning = ["preparing", "cancelling"].includes(mode);
-  const statusKind = failure
-    ? "error"
-    : spinning
-      ? "busy"
-      : warning
-        ? "warning"
-        : "ready";
-  const StatusIcon = {
-    error: CircleAlert,
-    busy: LoaderCircle,
-    warning: Info,
-    ready: CheckCircle2,
-  }[statusKind];
+  const showProgress = locked && mode !== "running";
+  const indeterminate =
+    mode === "preparing" && (!task.active || task.progress === undefined);
+  const progressJobId = task.active ? task.job!.id : "";
+  const reportedProgress = task.active
+    ? mode === "running"
+      ? 100
+      : Math.max(0, Math.min(100, task.progress ?? 0))
+    : 0;
+  const activeProgress =
+    progressSnapshot.jobId === progressJobId
+      ? Math.max(progressSnapshot.progress, reportedProgress)
+      : reportedProgress;
+  // Recalculated download totals can lower a report without undoing completed work.
+  // Retain this job's highest value and reset before rendering another job.
+  if (
+    progressSnapshot.jobId !== progressJobId ||
+    progressSnapshot.progress !== activeProgress
+  ) {
+    setProgressSnapshot({ jobId: progressJobId, progress: activeProgress });
+  }
+  const buttonProgress = task.active
+    ? activeProgress
+    : mode === "ready" || mode === "preparing"
+      ? 0
+      : 100;
+  const buttonDetail = [message, task.stepLabel].filter(Boolean).join(" · ");
   const PrimaryIcon =
     mode === "running"
       ? Square
@@ -439,25 +457,31 @@ export function LaunchDock({
             ? FolderOpen
             : ["failed", "download-error"].includes(mode)
               ? RotateCw
-              : Play;
+              : mode === "paused"
+                ? Pause
+                : Play;
   const primaryText =
     mode === "running"
       ? "结束游戏"
       : mode === "cancelling"
         ? "正在结束"
         : mode === "preparing"
-          ? "正在启动"
-          : mode === "no-player"
-            ? "选择角色"
-            : mode === "invalid"
-              ? "管理版本"
-              : mode === "failed"
-                ? "重试启动"
-                : mode === "download-error"
-                  ? "重试下载"
-                  : mode === "paused"
-                    ? "继续启动"
-                    : "开始游戏";
+          ? indeterminate
+            ? "正在启动"
+            : `正在启动 ${Math.round(buttonProgress)}%`
+          : mode === "empty"
+            ? "选择版本"
+            : mode === "no-player"
+              ? "选择角色"
+              : mode === "invalid"
+                ? "管理版本"
+                : mode === "failed"
+                  ? "重试启动"
+                  : mode === "download-error"
+                    ? "重试下载"
+                    : mode === "paused"
+                      ? "继续启动"
+                      : "开始游戏";
 
   async function request(kind: PendingAction["kind"]) {
     if (requestInFlight.current || app.busy || pending) return;
@@ -584,6 +608,7 @@ export function LaunchDock({
     if (locked || app.busy || requestInFlight.current) return;
     if (localError) app.clearError();
     setSelectionError("");
+    setPickerPresent(true);
     setPickerOpen((open) => !open);
   };
   const selectVersion = async (item: Version) => {
@@ -678,37 +703,12 @@ export function LaunchDock({
                 {processesExpanded ? "收起" : "展开"}
               </span>
             </button>
-            {locked && mode !== "running" && (
-              <div
-                className={`launch-progress ${pending && !task.active ? "indeterminate" : ""}`}
-                role="progressbar"
-                aria-label="游戏启动步骤进度"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={
-                  pending && !task.active ? undefined : task.progress
-                }
-                aria-valuetext={message}
-                style={
-                  {
-                    "--launch-progress": (task.progress || 0) / 100,
-                  } as CSSProperties
-                }
-              >
-                <span />
-              </div>
-            )}
             <div className="launch-version">
               <ResourceImage
                 path={versionIcon(version)}
                 alt={version?.loader || "Minecraft"}
               />
               <div className="launch-version-copy">
-                {task.active && (
-                  <span className="overline">
-                    {mode === "running" ? "正在运行的版本" : "正在启动的版本"}
-                  </span>
-                )}
                 <div className="launch-version-title">
                   <h3
                     data-tooltip={
@@ -765,18 +765,56 @@ export function LaunchDock({
               <LaunchButton
                 primary
                 className="launch-primary"
+                aria-label={primaryText}
                 aria-describedby={statusId}
                 aria-busy={spinning}
+                data-tooltip={buttonDetail}
+                data-indeterminate={indeterminate || undefined}
+                data-progress-active={task.active || undefined}
+                style={
+                  {
+                    "--launch-button-progress": `${buttonProgress}%`,
+                  } as CSSProperties
+                }
                 disabled={busy || mode === "empty" || spinning}
                 onClick={primaryAction}
               >
-                <PrimaryIcon
-                  size={17}
-                  className={spinning ? "spin" : undefined}
-                  fill={PrimaryIcon === Play ? "currentColor" : "none"}
-                />
-                {primaryText}
+                <span className="launch-button-surface" aria-hidden="true">
+                  <span className="launch-button-layer launch-button-base">
+                    <PrimaryIcon
+                      size={17}
+                      className={spinning ? "spin" : undefined}
+                      fill={PrimaryIcon === Play ? "currentColor" : "none"}
+                    />
+                    <span>{primaryText}</span>
+                  </span>
+                  <span className="launch-button-layer launch-button-fill">
+                    <PrimaryIcon
+                      size={17}
+                      className={spinning ? "spin" : undefined}
+                      fill={PrimaryIcon === Play ? "currentColor" : "none"}
+                    />
+                    <span
+                      className="launch-button-fill-label"
+                      data-label={primaryText}
+                    />
+                  </span>
+                </span>
+                {showProgress && (
+                  <span
+                    className="sr-only"
+                    role="progressbar"
+                    aria-label="游戏启动步骤进度"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={indeterminate ? undefined : buttonProgress}
+                    aria-valuetext={buttonDetail}
+                  />
+                )}
               </LaunchButton>
+              <span id={statusId} className="sr-only" role="status">
+                {buttonDetail}
+              </span>
             </div>
           </div>
           {processes.length > 0 && (
@@ -870,26 +908,6 @@ export function LaunchDock({
       </div>
       {active && (
         <div className="launch-status">
-          <div className="launch-status-detail">
-            <FooterStatusIcon iconKey={statusKind}>
-              <StatusIcon size={12} className={spinning ? "spin" : undefined} />
-            </FooterStatusIcon>
-            <FooterText
-              slot="message"
-              text={message}
-              id={statusId}
-              className="launch-status-message"
-              role="status"
-              data-tooltip={message}
-            />
-            {task.stepLabel && (
-              <FooterText
-                slot="step"
-                text={task.stepLabel}
-                className="launch-status-caption"
-              />
-            )}
-          </div>
           {player && (
             <span className="launch-status-player" data-tooltip={playerCaption}>
               <UserRound size={12} aria-hidden="true" />
@@ -898,10 +916,12 @@ export function LaunchDock({
           )}
         </div>
       )}
-      {active && pickerOpen && (
+      {active && pickerPresent && (
         <VersionPicker
           id={pickerId}
           actions={actions}
+          open={pickerOpen}
+          onExited={() => setPickerPresent(false)}
           disabled={busy}
           error={selectionError}
           onClose={closePicker}
@@ -919,6 +939,8 @@ export function LaunchDock({
 function VersionPicker({
   id,
   actions,
+  open,
+  onExited,
   disabled,
   error,
   onClose,
@@ -927,6 +949,8 @@ function VersionPicker({
 }: {
   id: string;
   actions: RefObject<HTMLDivElement | null>;
+  open: boolean;
+  onExited: () => void;
   disabled: boolean;
   error: string;
   onClose: (restoreFocus?: boolean) => void;
@@ -965,6 +989,7 @@ function VersionPicker({
     versions.find((item) => !item.error && selected(item))?.path ||
     versions.find((item) => !item.error)?.path;
   const versionKeys = versions.map((item) => item.path).join("\n");
+  useVersionPickerPopup(panel, actions, open, onExited);
 
   useLayoutEffect(() => {
     const element = list.current;
@@ -994,10 +1019,11 @@ function VersionPicker({
   }, [versionKeys]);
 
   useLayoutEffect(() => {
+    if (!open) return;
     panel.current
       ?.querySelector<HTMLInputElement>("input")
       ?.focus({ preventScroll: true });
-  }, []);
+  }, [open]);
 
   useEffect(() => () => actionFeedback.current?.cancel(), []);
 
@@ -1024,6 +1050,7 @@ function VersionPicker({
   }
 
   useEffect(() => {
+    if (!open) return;
     const outside = (event: Event) => {
       if (!(event.target instanceof Node)) return;
       const trigger = actions.current?.querySelector(".launch-switch");
@@ -1039,7 +1066,7 @@ function VersionPicker({
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("focusin", outside);
     };
-  }, [actions, onClose]);
+  }, [actions, onClose, open]);
 
   function keyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (event.defaultPrevented || event.nativeEvent.isComposing) return;
@@ -1085,6 +1112,10 @@ function VersionPicker({
       ref={panel}
       id={id}
       className="launch-version-picker panel has-surface"
+      popover={"showPopover" in HTMLElement.prototype ? "manual" : undefined}
+      data-state={open ? "open" : "closed"}
+      inert={!open}
+      aria-hidden={!open || undefined}
       role="dialog"
       aria-modal="false"
       aria-labelledby={`${id}-title`}

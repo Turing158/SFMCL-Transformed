@@ -1193,7 +1193,6 @@
 .project-file-pagination {
   margin-top: 14px;
   gap: clamp(6px, 2vw, 18px);
-  background: var(--panel);
 }
 .project-file-toolbar {
   display: flex;

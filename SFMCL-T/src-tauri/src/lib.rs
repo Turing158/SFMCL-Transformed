@@ -98,6 +98,10 @@ fn with_bundled_webview2(mut context: tauri::Context<tauri::Wry>) -> tauri::Cont
 }
 
 pub fn run() {
+    #[cfg(windows)]
+    if sfmcl_t_core::minecraft::detached::run_helper() {
+        return;
+    }
     if local_data::run_helper() {
         return;
     }

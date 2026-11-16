@@ -10,7 +10,7 @@ StarFall Minecraft Launcher-Transformed · 基于 Rust、Tauri 2 和 React 的 M
 
 <p>
   <img src="https://img.shields.io/badge/平台-Windows%20x64%20%2F%20x86-0078D4?style=flat-square" alt="Windows x64 / x86" />
-  <img src="https://img.shields.io/badge/版本-1.0.0-4C8BF5?style=flat-square" alt="版本 1.0.0" />
+  <img src="https://img.shields.io/badge/版本-1.0.1-4C8BF5?style=flat-square" alt="版本 1.0.1" />
   <img src="https://img.shields.io/badge/核心-Rust-DEA584?style=flat-square" alt="Rust 核心" />
   <img src="https://img.shields.io/badge/界面-Tauri%202%20%2B%20React-24C8D8?style=flat-square" alt="Tauri 2 + React" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-2EA043?style=flat-square" alt="MIT License" /></a>
@@ -48,7 +48,9 @@ SFMCL-T 是 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-
 
 「自定义」保留完整长邀请码，默认使用「共享EasyTier节点」，左侧输入框可填写 TCP / UDP / WSS 节点，WSS 未填写端口时默认使用 443；也可切换为「Cloudflare Tunnel + 本机EasyTier」。即使填入官方中继地址，这一路径仍使用原有长邀请码。两种模式均采用免虚拟网卡代理，组件按需下载、校验。使用方式与验证范围见 [联机说明](docs/multiplayer.md)。
 
-房主需要允许离线好友进入时，在「联机」页面「创建房间」按钮这一行的最右侧打开「离线联机」。开关读取房主游戏对应的设置：该版本使用独立高级启动参数时保存到版本，否则保存到全局设置。更改后重启 Minecraft，再进入存档并对局域网开放；仅切换启动器角色或重开网络房间不会改变正在运行的游戏。好友应使用不同角色名。此功能通过启动器内置的 Java Agent 仅覆盖原版单人内置服务器的在线认证，不安装 Minecraft 模组、不修改客户端 JAR，也不改变连接外部服务器时的账号认证。默认开启；已有配置中明确关闭的选择会保留。关闭后重启游戏恢复原有认证。当前验证覆盖原版 26.3 的真实登录握手；混淆版本按官方客户端映射定位，缺少官方映射的旧版及 Fabric / Forge / Quilt / NeoForge 加载器暂不支持开启该选项，会明确报错而不会静默失效。
+房主需要允许离线好友进入时，在「联机」页面「创建房间」按钮这一行的最右侧打开「离线联机」。开关读取房主游戏对应的设置：该版本使用独立高级启动参数时保存到版本，否则保存到全局设置。更改后重启 Minecraft，再进入存档并对局域网开放；仅切换启动器角色或重开网络房间不会改变正在运行的游戏。好友应使用不同角色名。此功能通过启动器内置的 Java Agent 仅覆盖原版单人内置服务器的在线认证，不安装 Minecraft 模组、不修改客户端 JAR，也不改变连接外部服务器时的账号认证。考虑不同加载器的兼容性，默认关闭；已有配置中明确保存的开关选择会保留。关闭后重启游戏恢复原有认证。当前验证覆盖原版 26.3 的真实登录握手；混淆版本按官方客户端映射定位，缺少官方映射的旧版及 Fabric / Forge / Quilt / NeoForge 加载器暂不支持开启该选项，会明确报错而不会静默失效。
+
+尚未创建房间时，切换到不同加载器会自动关闭新版本对应的离线联机设置；已有房间时保留当前选择，单独安装 OptiFine 不视为加载器变化。Forge、NeoForge、Fabric、Quilt 等加载器下，「离线联机」显示为教程按钮，点击后查看 LAN World Plug-n-Play 的安装步骤，并从联机页的子页面进入模组详情；下载列表按当前 Minecraft 版本和加载器筛选。模组需要安装在房主游戏中，再重启游戏，在「对局域网开放」中将「正版验证」设为「禁用」后创建房间。
 
 Agent 源码位于 `SFMCL-T/java/offline-lan`，编译结果内嵌于启动器，用户只需要游戏 JRE。维护者设置 `SFMCL_T_AGENT_JDK` 为 JDK 17+ 路径后运行 `npm run build:offline-lan-agent`（生成 Java 8 字节码）和 `npm run test:offline-lan-agent`；可设置 `SFMCL_T_LAN_TEST_VERSION` 为本机原版 26.x 的版本 JSON 路径，验证真实 Minecraft 的离线握手及独立服务端仍要求在线认证。
 
@@ -90,6 +92,8 @@ LittleSkin登录默认开放，可在「角色管理 → 登录 → LittleSkin�
 | 较新的 Minecraft 版本 | 根据游戏版本元数据选择，通常需要 Java 21 等环境。 |
 
 启动器会探测 Java 的实际版本与架构，并在自动选择时结合游戏要求匹配环境。
+
+Windows 下，游戏由独立的 `MinecraftHost` 后台进程管理，不再挂在启动器主进程的直接进程树中。退出启动器后游戏继续运行；重新打开启动器会识别仍在运行的游戏，并恢复日志查看和结束游戏操作。窗口标题、窗口位置记忆及运行期间的版本删除保护由后台保持。启动器提供的联机会话仍会在退出启动器时结束，正在使用该会话的游戏可能断线。
 
 ## 版本与游戏设置
 
@@ -313,7 +317,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File SFMCL-T/scripts/import-curse
 | `installer` | `SFMCL-T_v<版本>_<架构>_installer.exe` | NSIS 安装包；检测系统 WebView2，缺少时可下载安装。 |
 | `single` | `SFMCL-T_v<版本>_<架构>.exe` | 前端嵌入 EXE，使用系统 WebView2；默认通过 UPX 压缩。 |
 
-版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v1.0.0_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
+版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v1.0.1_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
 
 也可调用 `build.ps1 -Mode <模式> -Architecture <架构>`，或在 `SFMCL-T/` 内运行 `npm run package`、`npm run package:x86`、`npm run package:x64`。`npm run package:installer -- -Architecture x86` 和 `npm run package:single -- -Architecture x86` 可分别生成 x86 安装版和单文件版。
 

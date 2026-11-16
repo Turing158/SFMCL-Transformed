@@ -213,7 +213,6 @@
   flex-shrink: 0;
   margin-top: auto;
   padding: 14px 8px;
-  background: var(--panel);
   border-top: 1px solid var(--line);
 }
 .download-file-pagination .page-indicator {

@@ -81,6 +81,24 @@ mod tests {
     use super::*;
     use tokio::net::TcpListener;
 
+    #[test]
+    fn component_preparation_does_not_count_as_a_created_room() {
+        let mut snapshot = Snapshot {
+            state: "preparing".into(),
+            session_id: Some("component-job".into()),
+            ..Default::default()
+        };
+        assert!(!snapshot.has_room());
+        snapshot.role = Some("host".into());
+        assert!(!snapshot.has_room());
+        snapshot.state = "waiting".into();
+        assert!(snapshot.has_room());
+        snapshot.role = Some("guest".into());
+        assert!(snapshot.has_room());
+        snapshot.session_id = None;
+        assert!(!snapshot.has_room());
+    }
+
     fn launch(
         jobs: &crate::jobs::Jobs,
         version: &str,
