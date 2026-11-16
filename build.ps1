@@ -67,36 +67,41 @@ try {
         $cxxVariable = 'CXXFLAGS_' + $target.Replace('-', '_')
         $previousCxxFlags[$cxxVariable] = [Environment]::GetEnvironmentVariable($cxxVariable, 'Process')
         [Environment]::SetEnvironmentVariable($cxxVariable, ($previousCxxFlags[$cxxVariable] + ' /MT').Trim(), 'Process')
-        # Compile once per architecture, then reuse the executable for both package types.
-        Write-Host "Building Windows $architectureName ($target)..."
-        Invoke-Checked -File 'node.exe' -Arguments @($cli, 'build', '--no-bundle', '--ci', '--target', $target, '--', '--locked')
-        if (-not (Test-Path -LiteralPath $binary)) { throw "Missing build output: $binary" }
-        Assert-StandaloneExecutable -Path $binary -Architecture $architectureName
+        foreach ($packageMode in $modes) {
+            # Only the single-file build defaults games to the executable's folder.
+            $buildArguments = @($cli, 'build', '--no-bundle', '--ci', '--target', $target)
+            if ($packageMode -eq 'single') { $buildArguments += @('--features', 'single-file') }
+            $buildArguments += @('--', '--locked')
+            Write-Host "Building Windows $architectureName $packageMode ($target)..."
+            Invoke-Checked -File 'node.exe' -Arguments $buildArguments
+            if (-not (Test-Path -LiteralPath $binary)) { throw "Missing build output: $binary" }
+            Assert-StandaloneExecutable -Path $binary -Architecture $architectureName
 
-        if ('single' -in $modes) {
-            $destination = Join-Path $output "${name}.exe"
-            $single = Join-Path $scratch "${name}.exe"
-            if ($NoExeCompression) {
-                Copy-Item -LiteralPath $binary -Destination $single
-            } else {
-                Compress-SingleExecutable -Source $binary -Destination $single -CacheRoot $toolCache
+            if ($packageMode -eq 'single') {
+                $destination = Join-Path $output "${name}.exe"
+                $single = Join-Path $scratch "${name}.exe"
+                if ($NoExeCompression) {
+                    Copy-Item -LiteralPath $binary -Destination $single
+                } else {
+                    Compress-SingleExecutable -Source $binary -Destination $single -CacheRoot $toolCache
+                }
+                if ((Get-ExecutableArchitecture -Path $single) -ne $architectureName) {
+                    throw "Single executable has the wrong architecture: $single"
+                }
+                Move-Item -LiteralPath $single -Destination $destination -Force
+                $artifacts += $destination
+                Write-Host "Single executable: $destination"
             }
-            if ((Get-ExecutableArchitecture -Path $single) -ne $architectureName) {
-                throw "Single executable has the wrong architecture: $single"
-            }
-            Move-Item -LiteralPath $single -Destination $destination -Force
-            $artifacts += $destination
-            Write-Host "Single executable: $destination"
-        }
 
-        if ('installer' -in $modes) {
-            Invoke-Checked -File 'node.exe' -Arguments @($cli, 'bundle', '--bundles', 'nsis', '--ci', '--target', $target)
-            # Tauri's internal bundle filename uses the raw version; release filenames add v.
-            $setup = Join-Path $binaryDirectory "bundle\nsis\$($config.productName)_$($config.version)_$architectureName-setup.exe"
-            if (-not (Test-Path -LiteralPath $setup)) { throw "NSIS did not produce the expected installer: $setup" }
-            $destination = Join-Path $output "${name}_installer.exe"
-            Copy-Item -LiteralPath $setup -Destination $destination -Force
-            $artifacts += $destination
+            if ($packageMode -eq 'installer') {
+                Invoke-Checked -File 'node.exe' -Arguments @($cli, 'bundle', '--bundles', 'nsis', '--ci', '--target', $target)
+                # Tauri's internal bundle filename uses the raw version; release filenames add v.
+                $setup = Join-Path $binaryDirectory "bundle\nsis\$($config.productName)_$($config.version)_$architectureName-setup.exe"
+                if (-not (Test-Path -LiteralPath $setup)) { throw "NSIS did not produce the expected installer: $setup" }
+                $destination = Join-Path $output "${name}_installer.exe"
+                Copy-Item -LiteralPath $setup -Destination $destination -Force
+                $artifacts += $destination
+            }
         }
     }
 

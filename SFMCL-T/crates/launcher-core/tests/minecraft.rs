@@ -87,6 +87,46 @@ fn maven_classifiers_extensions_and_native_selection() {
         assert!(libraries[1].native);
     }
 }
+
+#[cfg(windows)]
+#[test]
+fn repeated_native_extraction_reuses_in_use_files_and_repairs_corruption() {
+    use std::{io::Write, os::windows::fs::OpenOptionsExt};
+
+    let temp = tempfile::tempdir().unwrap();
+    let archive = temp.path().join("native.jar");
+    let mut zip = zip::ZipWriter::new(fs::File::create(&archive).unwrap());
+    zip.start_file("test.dll", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(b"verified native contents").unwrap();
+    zip.finish().unwrap();
+    let libraries = [versions::Library {
+        file: sfmcl_t_core::downloads::DownloadSpec {
+            url: "https://example.org/native.jar".into(),
+            path: "native.jar".into(),
+            sha1: None,
+            sha512: None,
+            size: None,
+        },
+        native: true,
+        excludes: vec![],
+    }];
+    let natives = versions::extract_natives(temp.path(), "test", &libraries).unwrap();
+    let native = natives.join("test.dll");
+    // Permit reads but deny replacement, as with a DLL loaded by the first game.
+    let in_use = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(&native)
+        .unwrap();
+    assert!(sfmcl_t_core::paths::atomic_write(&native, b"replacement").is_err());
+    versions::extract_natives(temp.path(), "test", &libraries).unwrap();
+    drop(in_use);
+    fs::write(&native, b"corrupted").unwrap();
+    versions::extract_natives(temp.path(), "test", &libraries).unwrap();
+    assert_eq!(fs::read(native).unwrap(), b"verified native contents");
+    assert_eq!(fs::read_dir(natives).unwrap().count(), 1);
+}
 #[test]
 fn launch_arguments_keep_spaces_and_legacy_backslashes_without_shell() {
     let temp = tempfile::tempdir().unwrap();

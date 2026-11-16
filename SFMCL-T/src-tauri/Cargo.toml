@@ -9,6 +9,9 @@ license.workspace = true
 name = "sfmcl_t_app"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+single-file = ["sfmcl-t-core/single-file"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

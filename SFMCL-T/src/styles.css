@@ -594,7 +594,10 @@ pre {
 }
 .workspace-footer-region
   :is(
+    .launch-dock-card,
     .launch-dock-main,
+    .launch-process-toggle,
+    .launch-processes,
     .launch-version-picker,
     .launch-status,
     .workspace-footer
@@ -1460,7 +1463,7 @@ pre {
   gap: 12px;
 }
 .job-card {
-  padding: 13px 18px;
+  padding: 7px 18px;
 }
 .job-header {
   display: flex;
@@ -2422,7 +2425,7 @@ button.resource-row:hover {
     width: 16px;
   }
   .job-card {
-    padding: 11px;
+    padding: 7px 11px;
   }
   .job-header {
     gap: 7px;

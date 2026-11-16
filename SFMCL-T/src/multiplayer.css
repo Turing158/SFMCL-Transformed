@@ -24,6 +24,11 @@
 .multiplayer-page :is(button, input) {
   min-height: 44px;
 }
+.multiplayer-page .button:not(.multiplayer-port-row > .button) {
+  min-height: 36px;
+  height: 36px;
+  padding-block: 5px;
+}
 .multiplayer-page button {
   cursor: pointer;
   transition:
@@ -315,10 +320,17 @@
   animation: multiplayer-invite-caret 1s step-end infinite;
 }
 .multiplayer-invite-divider {
+  display: grid;
+  place-items: center;
   flex: 0 0 16px;
-  text-align: center;
   color: var(--multiplayer-muted);
-  font: 700 20px / 1 monospace;
+  font-size: 0;
+}
+.multiplayer-invite-divider::before {
+  content: "";
+  width: 10px;
+  height: 2px;
+  background: currentColor;
 }
 .multiplayer-invite-boxes[data-disabled="true"] {
   opacity: 0.48;
@@ -644,12 +656,6 @@
 }
 .multiplayer-leave-action {
   margin-left: auto;
-}
-.multiplayer-page .multiplayer-room-action,
-.multiplayer-page .multiplayer-session-actions > .button {
-  min-height: 36px;
-  height: 36px;
-  padding-block: 5px;
 }
 .multiplayer-offline-lan {
   display: flex;

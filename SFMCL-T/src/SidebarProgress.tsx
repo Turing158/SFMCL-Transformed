@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PixelFrame } from "./components";
 import type { Download, Job, Status, Tasks } from "./types";
+import { getJobPresentation } from "./jobPresentation";
 
 type ProgressInfo = {
   kind: "download" | "job";
   id: string;
   title: string;
   status: Status;
+  label?: string;
   value?: number;
 };
 
@@ -31,13 +33,15 @@ function downloadInfo(task: Download): ProgressInfo {
 }
 
 function jobInfo(task: Job): ProgressInfo {
+  const presentation = getJobPresentation(task);
   return {
     kind: "job",
     id: task.id,
     title: task.title,
-    status: task.status,
+    status: presentation.status,
+    label: presentation.label,
     value:
-      task.status === "completed"
+      presentation.status === "completed"
         ? 100
         : task.steps.length > 0
           ? percent(
@@ -52,7 +56,9 @@ function currentProgress(tasks: Tasks) {
   for (const status of ["running", "pausing", "queued", "paused"] as const) {
     const download = tasks.downloads.find((task) => task.status === status);
     if (download) return downloadInfo(download);
-    const job = tasks.jobs.find((task) => task.status === status);
+    const job = tasks.jobs.find(
+      (task) => getJobPresentation(task).status === status,
+    );
     if (job) return jobInfo(job);
   }
   return undefined;

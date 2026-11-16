@@ -243,8 +243,96 @@ try {
     .poll(() => page.evaluate(() => window.__pixelTest.latestLaunch.title))
     .toBe("启动 1.20.1-Fabric");
   await expect(favorite("1.20.1-Fabric")).toBeDisabled();
+  const firstGame = await page.evaluate(
+    () => window.__pixelTest.latestLaunch.id,
+  );
+  await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
+  await expect(list.locator("button:disabled")).toHaveCount(0);
+  await favorite("1.21.4").click();
+  await expect(favorite("1.21.4")).toHaveAttribute("aria-pressed", "true");
+  const dock = page.locator(".launch-dock");
+  await expect(dock).toHaveAttribute("data-state", "ready");
+  await expect(dock.locator(".launch-dock-main")).not.toHaveAttribute(
+    "data-job-id",
+  );
+  await expect(dock.locator(`[data-job-id="${firstGame}"]`)).toHaveCount(1);
+  await expect(dock.locator(".launch-version h3")).toHaveText("1.21.4");
+  expect(await count("launch")).toBe(1);
+  await favorite("1.21.4").click();
+  await expect.poll(() => count("launch")).toBe(2);
+  await expect
+    .poll(() => page.evaluate(() => window.__pixelTest.latestLaunch.id))
+    .not.toBe(firstGame);
+  await expect(list.locator("button:disabled")).toHaveCount(3);
+  const secondGame = await page.evaluate(
+    () => window.__pixelTest.latestLaunch.id,
+  );
+  await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
+  await expect(favorite("1.21.4")).toBeEnabled();
+  await favorite("1.21.4").click();
+  await expect.poll(() => count("launch")).toBe(3);
+  await expect
+    .poll(() => page.evaluate(() => window.__pixelTest.latestLaunch.id))
+    .not.toBe(secondGame);
+  await expect(list.locator("button:disabled")).toHaveCount(3);
+  expect(
+    await page.evaluate(
+      (ids) =>
+        window.__pixelTest.tasks.jobs
+          .filter((job) => ids.includes(job.id))
+          .every((job) => job.status === "running" && job.launch.running),
+      [firstGame, secondGame],
+    ),
+  ).toBe(true);
+  expect(await count("jobs.cancel")).toBe(0);
   checks.push(
-    "First click selects, next click launches once, active launch locks shortcuts, current page is preserved",
+    "Shortcuts are disabled during preparation and enabled while games run; selecting another version and relaunching the same version preserve existing games and the current page",
+  );
+
+  await ready("cross");
+  await favorite("1.21.4", "C:/Pixel-Test/Minecraft").click();
+  await expect.poll(() => count("launch")).toBe(1);
+  const directoryGame = await page.evaluate(
+    () => window.__pixelTest.latestLaunch.id,
+  );
+  const startedAt = await page.evaluate(
+    () => window.__pixelTest.latestLaunch.createdAt,
+  );
+  await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
+  await expect(dock).toHaveAttribute("data-state", "running");
+  const originalIcon = await dock
+    .locator(".launch-version > .resource-icon")
+    .getAttribute("src");
+  await favorite("1.21.4", "D:/Other-Minecraft").click();
+  await expect(dock).toHaveAttribute("data-state", "ready");
+  await expect(
+    dock.getByRole("button", { name: "开始游戏", exact: true }),
+  ).toBeEnabled();
+  const directoryCard = dock.locator(
+    `.launch-process-card[data-job-id="${directoryGame}"]`,
+  );
+  await expect(directoryCard.locator(".resource-icon")).toHaveAttribute(
+    "src",
+    originalIcon,
+  );
+  await expect(directoryCard.locator("time")).toHaveAttribute(
+    "datetime",
+    new Date(startedAt * 1000).toISOString(),
+  );
+  expect(await count("launch")).toBe(1);
+  expect(await count("jobs.cancel")).toBe(0);
+  await dock.locator(".launch-process-toggle").click();
+  await directoryCard.locator(".launch-process-restore").click();
+  await expect(dock.locator(".launch-dock-main")).toHaveAttribute(
+    "data-job-id",
+    directoryGame,
+  );
+  expect(
+    await page.evaluate(() => window.__pixelTest.data.settings.activeDir),
+  ).toBe("D:/Other-Minecraft");
+  await expect(dock).toHaveAttribute("data-state", "running");
+  checks.push(
+    "External version and directory changes automatically collapse running games, retain icons and start times, and show the new selection; an explicitly restored old game stays in the main controls",
   );
 
   for (const scenario of ["", "slow"]) {

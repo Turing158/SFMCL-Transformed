@@ -10,12 +10,14 @@ import type {
   ComponentProps,
   CSSProperties,
   KeyboardEvent,
+  PointerEvent as ReactPointerEvent,
   RefObject,
 } from "react";
 import {
   Box,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronUp,
   CircleAlert,
   FolderOpen,
@@ -39,6 +41,7 @@ import { gameDirectoryName, gameDirectoryPath } from "./gameDirectories";
 import { useApp } from "./store";
 import { FooterText } from "./FooterText";
 import { FooterStatusIcon } from "./FooterStatusIcon";
+import { useLaunchDisclosure } from "./useLaunchDisclosure";
 import type { Tasks, Version } from "./types";
 import "./launch-dock.css";
 
@@ -47,6 +50,17 @@ type PendingAction = {
   jobId?: string;
   requested: boolean;
   snapshot: Tasks;
+};
+
+type CardDrag = {
+  element: HTMLDivElement;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  expanded: boolean;
+  height: number;
+  startHeight: number;
+  moving: boolean;
 };
 
 function LaunchButton({
@@ -94,7 +108,24 @@ export function LaunchDock({
 }) {
   const app = useApp();
   const settings = app.data.settings;
-  const task = getLaunchTask(app.tasks, settings.activeVersion);
+  const [collapsedGames, setCollapsedGames] = useState<
+    Record<string, { icon: string; startedAt: number }>
+  >({});
+  const [processesOpen, setProcessesOpen] = useState(false);
+  const [dragHeight, setDragHeight] = useState<number | null>(null);
+  const cardDrag = useRef<CardDrag | null>(null);
+  const suppressDragClick = useRef(false);
+  const [stoppingGames, setStoppingGames] = useState<string[]>([]);
+  const stopRequests = useRef(new Set<string>());
+  const task = getLaunchTask(
+    app.tasks,
+    settings.activeVersion,
+    Object.keys(collapsedGames),
+  );
+  const processes = app.tasks.jobs.filter(
+    (job) => collapsedGames[job.id] && isActiveLaunch(job, app.tasks.downloads),
+  );
+  const processesExpanded = processesOpen && processes.length > 0;
   const version = app.versions.find((item) => item.id === task.versionId);
   const player = app.data.players.find(
     (item) => item.uuid === settings.activePlayer,
@@ -108,6 +139,13 @@ export function LaunchDock({
   const [selecting, setSelecting] = useState(false);
   const [selectionError, setSelectionError] = useState("");
   const dock = useRef<HTMLElement>(null);
+  const disclosure = useLaunchDisclosure({
+    host: dock,
+    expanded: processesExpanded,
+    dragHeight,
+    active,
+    count: processes.length,
+  });
   const actions = useRef<HTMLDivElement>(null);
   const requestInFlight = useRef(false);
   const focusWhenReady = useRef(false);
@@ -115,10 +153,76 @@ export function LaunchDock({
   tasksRef.current = app.tasks;
   const pickerId = useId();
   const statusId = useId();
+  const processesId = useId();
   const context = `${settings.activeDir}\n${settings.activeVersion}\n${settings.activePlayer}`;
   const localError =
     actionError?.context === context ? actionError.message : "";
   const locked = task.active || !!pending;
+  const versionSelection = `${settings.activeDir}\n${settings.activeVersion}`;
+  const previousSelection = useRef({
+    key: versionSelection,
+    versions: app.versions,
+    runningJobIds: [] as string[],
+  });
+
+  useLayoutEffect(() => {
+    const previous = previousSelection.current;
+    const running = app.tasks.jobs.filter(
+      (job) =>
+        !collapsedGames[job.id] &&
+        isActiveLaunch(job, app.tasks.downloads) &&
+        (job.launch?.running ??
+          job.steps[job.currentStep]?.name === "游戏运行"),
+    );
+    previousSelection.current = {
+      key: versionSelection,
+      versions: app.versions,
+      runningJobIds: running.map((job) => job.id),
+    };
+    if (previous.key === versionSelection) return;
+    const games = running.filter((job) =>
+      previous.runningJobIds.includes(job.id),
+    );
+    if (!games.length) return;
+    // Keep the old directory's icons when a selection refresh replaces versions.
+    setCollapsedGames((current) => {
+      const next = { ...current };
+      for (const job of games) {
+        const id = job.launch?.versionId ?? job.title.slice("启动 ".length);
+        next[job.id] = {
+          icon:
+            versionIcon(previous.versions.find((item) => item.id === id)) ||
+            "/assets/DefaultGameIcon/Minecraft.png",
+          startedAt: job.createdAt ? job.createdAt * 1000 : Date.now(),
+        };
+      }
+      return next;
+    });
+    setProcessesOpen(false);
+  }, [versionSelection, app.tasks, app.versions, collapsedGames]);
+
+  useEffect(() => {
+    for (const id of stopRequests.current) {
+      if (
+        !app.tasks.jobs.some(
+          (job) => job.id === id && isActiveLaunch(job, app.tasks.downloads),
+        )
+      ) {
+        stopRequests.current.delete(id);
+        setStoppingGames((current) => current.filter((item) => item !== id));
+      }
+    }
+    setCollapsedGames((current) => {
+      const entries = Object.entries(current).filter(([id]) =>
+        app.tasks.jobs.some(
+          (job) => job.id === id && isActiveLaunch(job, app.tasks.downloads),
+        ),
+      );
+      return entries.length === Object.keys(current).length
+        ? current
+        : Object.fromEntries(entries);
+    });
+  }, [app.tasks]);
 
   const closePicker = useCallback((restoreFocus = true) => {
     setPickerOpen(false);
@@ -165,6 +269,102 @@ export function LaunchDock({
   useEffect(() => {
     if (locked) closePicker(false);
   }, [locked, closePicker]);
+
+  useEffect(() => {
+    if (active && processes.length > 0) return;
+    const drag = cardDrag.current;
+    cardDrag.current = null;
+    setDragHeight(null);
+    if (drag?.element.hasPointerCapture(drag.pointerId)) {
+      drag.element.releasePointerCapture(drag.pointerId);
+    }
+  }, [active, processes.length]);
+
+  function startCardDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    suppressDragClick.current = false;
+    if (
+      !active ||
+      !processes.length ||
+      cardDrag.current ||
+      !event.isPrimary ||
+      event.button !== 0 ||
+      (event.target instanceof Element &&
+        event.target.closest(
+          "button, a, input, textarea, select, [role='button'], [contenteditable]",
+        ))
+    )
+      return;
+    const clip = dock.current?.querySelector<HTMLElement>(
+      ".launch-processes-clip",
+    );
+    if (!clip) return;
+    // Measure the content's capped natural height without painting it open.
+    const hidden = clip.hidden;
+    const startHeight = disclosure.freeze();
+    clip.hidden = false;
+    const height =
+      (clip.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0;
+    clip.hidden = hidden;
+    if (!height) return;
+    cardDrag.current = {
+      element: event.currentTarget,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      expanded: processesExpanded,
+      height,
+      startHeight,
+      moving: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveCardDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = cardDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const distance = drag.startY - event.clientY;
+    if (!drag.moving) {
+      if (
+        Math.abs(distance) < 6 ||
+        Math.abs(event.clientX - drag.startX) > Math.abs(distance)
+      )
+        return;
+      drag.moving = true;
+      closePicker(false);
+    }
+    event.preventDefault();
+    setDragHeight(
+      Math.max(0, Math.min(drag.height, drag.startHeight + distance)),
+    );
+  }
+
+  function finishCardDrag(
+    event: ReactPointerEvent<HTMLDivElement>,
+    cancelled = false,
+  ) {
+    const drag = cardDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    cardDrag.current = null;
+    setDragHeight(null);
+    if (drag.element.hasPointerCapture(drag.pointerId)) {
+      drag.element.releasePointerCapture(drag.pointerId);
+    }
+    if (!drag.moving) {
+      disclosure.resume();
+      return;
+    }
+    suppressDragClick.current = !cancelled;
+    const distance = drag.startY - event.clientY;
+    const threshold = Math.min(32, drag.height / 3);
+    setProcessesOpen(
+      cancelled
+        ? drag.expanded
+        : drag.expanded
+          ? distance > -threshold
+          : distance >= threshold,
+    );
+  }
 
   useEffect(() => {
     if (!pending?.requested || !pending.jobId) return;
@@ -313,6 +513,72 @@ export function LaunchDock({
     else void request("launch");
   }
 
+  function collapseGame() {
+    if (mode !== "running" || !task.job || busy) return;
+    const job = task.job;
+    setCollapsedGames((current) => ({
+      ...current,
+      [job.id]: {
+        icon: versionIcon(version) || "/assets/DefaultGameIcon/Minecraft.png",
+        startedAt: job.createdAt ? job.createdAt * 1000 : Date.now(),
+      },
+    }));
+    setProcessesOpen(false);
+  }
+
+  function restoreGame(id: string) {
+    const job = tasksRef.current.jobs.find((item) => item.id === id);
+    if (
+      busy ||
+      requestInFlight.current ||
+      stopRequests.current.has(id) ||
+      !collapsedGames[id] ||
+      !job ||
+      !isActiveLaunch(job, tasksRef.current.downloads) ||
+      (task.active && mode !== "running")
+    )
+      return;
+    closePicker(false);
+    setActionError(null);
+    setCollapsedGames((current) => {
+      const next = { ...current };
+      if (task.active && task.job && task.job.id !== id) {
+        next[task.job.id] = {
+          icon: versionIcon(version) || "/assets/DefaultGameIcon/Minecraft.png",
+          startedAt: task.job.createdAt
+            ? task.job.createdAt * 1000
+            : Date.now(),
+        };
+      }
+      delete next[id];
+      return next;
+    });
+    setProcessesOpen(false);
+    actions.current
+      ?.querySelector<HTMLButtonElement>(".launch-primary")
+      ?.focus({ preventScroll: true });
+  }
+
+  async function stopGame(id: string) {
+    const job = tasksRef.current.jobs.find((item) => item.id === id);
+    if (!job || !isActiveLaunch(job, tasksRef.current.downloads)) return;
+    if (stopRequests.current.has(id) || app.busy || pending) return;
+    stopRequests.current.add(id);
+    setStoppingGames((current) => [...current, id]);
+    let cancelled = false;
+    try {
+      await app.run(async () => {
+        await api("jobs.cancel", { id });
+        cancelled = true;
+      });
+    } finally {
+      if (!cancelled) {
+        stopRequests.current.delete(id);
+        setStoppingGames((current) => current.filter((item) => item !== id));
+      }
+    }
+  }
+
   const canCancel = locked && mode !== "running";
   const showPicker = () => {
     if (locked || app.busy || requestInFlight.current) return;
@@ -366,113 +632,240 @@ export function LaunchDock({
       data-state={mode}
       data-error={failure || undefined}
       data-warning={warning || undefined}
+      data-has-processes={processes.length > 0 || undefined}
+      data-processes-expanded={processesExpanded || undefined}
+      data-dragging={dragHeight !== null || undefined}
     >
       <div className="launch-dock-shadow">
-        <div className="launch-dock-main">
-          {locked && mode !== "running" && (
-            <div
-              className={`launch-progress ${pending && !task.active ? "indeterminate" : ""}`}
-              role="progressbar"
-              aria-label="游戏启动步骤进度"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={
-                pending && !task.active ? undefined : task.progress
-              }
-              aria-valuetext={message}
-              style={
-                {
-                  "--launch-progress": (task.progress || 0) / 100,
-                } as CSSProperties
-              }
-            >
-              <span />
-            </div>
-          )}
-          <div className="launch-version">
-            <ResourceImage
-              path={versionIcon(version)}
-              alt={version?.loader || "Minecraft"}
-            />
-            <div className="launch-version-copy">
-              {task.active && (
-                <span className="overline">
-                  {mode === "running" ? "正在运行的版本" : "正在启动的版本"}
-                </span>
-              )}
-              <div className="launch-version-title">
-                <h3
-                  data-tooltip={
-                    (task.active ? task.versionId : version?.id) ||
-                    "选择你的第一个版本"
-                  }
-                >
-                  {(task.active ? task.versionId : version?.id) ||
-                    "选择你的第一个版本"}
-                </h3>
-              </div>
-              {version ? (
-                <div className="launch-version-tags">
-                  <Badge className="launch-loader">
-                    {version.loader === "Vanilla" ? "原版" : version.loader}
-                  </Badge>
-                  <Badge className="launch-java">
-                    Java {version.javaMajor}
-                  </Badge>
-                </div>
-              ) : (
-                <p>
-                  {task.active
-                    ? "在下载中心查看这次游戏的进度与日志"
-                    : "添加已有游戏，或安装一个全新的世界。"}
-                </p>
-              )}
-            </div>
-          </div>
-          <div ref={actions} className="launch-actions">
-            <LaunchButton
-              className="launch-switch"
-              aria-haspopup={!locked ? "dialog" : undefined}
-              aria-expanded={!locked ? pickerOpen : undefined}
-              aria-controls={!locked ? pickerId : undefined}
-              disabled={busy}
+        <div className="launch-dock-card">
+          <div
+            className="launch-dock-main"
+            data-job-id={task.active ? task.job?.id : undefined}
+            onPointerDown={startCardDrag}
+            onPointerMove={moveCardDrag}
+            onPointerUp={(event) => finishCardDrag(event)}
+            onPointerCancel={(event) => finishCardDrag(event, true)}
+            onLostPointerCapture={(event) => finishCardDrag(event, true)}
+            onDragStart={(event) => {
+              if (processes.length) event.preventDefault();
+            }}
+            onClickCapture={(event) => {
+              if (!suppressDragClick.current || event.detail === 0) return;
+              suppressDragClick.current = false;
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <button
+              type="button"
+              className="launch-process-toggle"
+              aria-expanded={processesExpanded}
+              aria-controls={processesId}
+              aria-hidden={!processes.length}
+              disabled={!processes.length}
+              inert={!processes.length}
               onClick={() => {
-                if (mode === "running") app.setPage("downloads");
-                else if (canCancel) void request("cancel");
-                else showPicker();
+                closePicker(false);
+                setProcessesOpen((open) => !open);
               }}
             >
-              {mode === "running"
-                ? "查看日志"
-                : canCancel
-                  ? "取消启动"
-                  : version
-                    ? "切换版本"
-                    : "选择版本"}
-              {canCancel ? (
-                <X size={16} />
-              ) : mode === "running" ? (
-                <FolderOpen size={16} />
-              ) : (
-                <ChevronUp size={16} />
-              )}
-            </LaunchButton>
-            <LaunchButton
-              primary
-              className="launch-primary"
-              aria-describedby={statusId}
-              aria-busy={spinning}
-              disabled={busy || mode === "empty" || spinning}
-              onClick={primaryAction}
-            >
-              <PrimaryIcon
-                size={17}
-                className={spinning ? "spin" : undefined}
-                fill={PrimaryIcon === Play ? "currentColor" : "none"}
+              <span className="launch-process-toggle-content">
+                {processesExpanded ? (
+                  <ChevronDown size={14} aria-hidden="true" />
+                ) : (
+                  <ChevronUp size={14} aria-hidden="true" />
+                )}
+                {processesExpanded ? "收起" : "展开"}
+              </span>
+            </button>
+            {locked && mode !== "running" && (
+              <div
+                className={`launch-progress ${pending && !task.active ? "indeterminate" : ""}`}
+                role="progressbar"
+                aria-label="游戏启动步骤进度"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={
+                  pending && !task.active ? undefined : task.progress
+                }
+                aria-valuetext={message}
+                style={
+                  {
+                    "--launch-progress": (task.progress || 0) / 100,
+                  } as CSSProperties
+                }
+              >
+                <span />
+              </div>
+            )}
+            <div className="launch-version">
+              <ResourceImage
+                path={versionIcon(version)}
+                alt={version?.loader || "Minecraft"}
               />
-              {primaryText}
-            </LaunchButton>
+              <div className="launch-version-copy">
+                {task.active && (
+                  <span className="overline">
+                    {mode === "running" ? "正在运行的版本" : "正在启动的版本"}
+                  </span>
+                )}
+                <div className="launch-version-title">
+                  <h3
+                    data-tooltip={
+                      (task.active ? task.versionId : version?.id) ||
+                      "选择你的第一个版本"
+                    }
+                  >
+                    {(task.active ? task.versionId : version?.id) ||
+                      "选择你的第一个版本"}
+                  </h3>
+                </div>
+                {version ? (
+                  <div className="launch-version-tags">
+                    <Badge className="launch-loader">
+                      {version.loader === "Vanilla" ? "原版" : version.loader}
+                    </Badge>
+                    <Badge className="launch-java">
+                      Java {version.javaMajor}
+                    </Badge>
+                  </div>
+                ) : (
+                  !task.active && <p>添加已有游戏，或安装一个全新的世界。</p>
+                )}
+              </div>
+            </div>
+            <div ref={actions} className="launch-actions">
+              <LaunchButton
+                className="launch-switch"
+                aria-haspopup={!locked ? "dialog" : undefined}
+                aria-expanded={!locked ? pickerOpen : undefined}
+                aria-controls={!locked ? pickerId : undefined}
+                disabled={busy}
+                onClick={() => {
+                  if (mode === "running") collapseGame();
+                  else if (canCancel) void request("cancel");
+                  else showPicker();
+                }}
+              >
+                {mode === "running"
+                  ? "继续启动"
+                  : canCancel
+                    ? "取消启动"
+                    : version
+                      ? "切换版本"
+                      : "选择版本"}
+                {canCancel ? (
+                  <X size={16} />
+                ) : mode === "running" ? (
+                  <Plus size={16} />
+                ) : (
+                  <ChevronUp size={16} />
+                )}
+              </LaunchButton>
+              <LaunchButton
+                primary
+                className="launch-primary"
+                aria-describedby={statusId}
+                aria-busy={spinning}
+                disabled={busy || mode === "empty" || spinning}
+                onClick={primaryAction}
+              >
+                <PrimaryIcon
+                  size={17}
+                  className={spinning ? "spin" : undefined}
+                  fill={PrimaryIcon === Play ? "currentColor" : "none"}
+                />
+                {primaryText}
+              </LaunchButton>
+            </div>
           </div>
+          {processes.length > 0 && (
+            <div ref={disclosure.clip} className="launch-processes-clip">
+              <section
+                id={processesId}
+                className="launch-processes"
+                aria-label="收起的游戏进程"
+                inert={!processesExpanded || dragHeight !== null}
+              >
+                <div
+                  className="launch-process-grid"
+                  role="list"
+                  aria-label="运行中的游戏"
+                >
+                  {processes.map((job) => {
+                    const name =
+                      job.launch?.versionId ?? job.title.slice("启动 ".length);
+                    const stopping = stoppingGames.includes(job.id);
+                    const startedAt = new Date(
+                      collapsedGames[job.id].startedAt,
+                    );
+                    const time = startedAt.toLocaleString("zh-CN", {
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: false,
+                    });
+                    return (
+                      <article
+                        key={job.id}
+                        className="launch-process-card has-surface"
+                        role="listitem"
+                        data-job-id={job.id}
+                      >
+                        <PixelFrame />
+                        <button
+                          type="button"
+                          className="launch-process-restore"
+                          aria-label={`查看运行中的游戏 ${name}`}
+                          disabled={
+                            busy ||
+                            stopping ||
+                            (task.active && mode !== "running")
+                          }
+                          onClick={() => restoreGame(job.id)}
+                        >
+                          <ResourceImage
+                            path={collapsedGames[job.id].icon}
+                            alt="Minecraft"
+                          />
+                          <div className="launch-process-copy">
+                            <strong data-tooltip={name}>{name}</strong>
+                            <time
+                              dateTime={startedAt.toISOString()}
+                              data-tooltip={`启动时间：${time}`}
+                            >
+                              启动于 {time}
+                            </time>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button launch-process-stop"
+                          aria-label={`结束游戏 ${name}`}
+                          aria-busy={stopping}
+                          data-tooltip={stopping ? "正在结束游戏" : "结束游戏"}
+                          disabled={busy || stopping}
+                          onClick={() => void stopGame(job.id)}
+                        >
+                          {stopping ? (
+                            <LoaderCircle
+                              size={16}
+                              className="spin"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Square size={16} aria-hidden="true" />
+                          )}
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       </div>
       {active && (

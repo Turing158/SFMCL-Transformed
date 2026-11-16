@@ -6,10 +6,11 @@ use axum::{
     Router,
 };
 use sfmcl_t_core::downloads::{
-    prepare_cache_directory, DownloadManager, DownloadRetention, DownloadSnapshot, DownloadSpec,
-    Status,
+    prepare_cache_directory, verify_file, DownloadManager, DownloadRetention, DownloadSnapshot,
+    DownloadSpec, Status,
 };
 use sfmcl_t_core::jobs::{self, JobKind, Jobs};
+use sfmcl_t_core::minecraft::download_source::MinecraftDownloadSource;
 use sha1::{Digest, Sha1};
 use std::{
     convert::Infallible,
@@ -902,4 +903,255 @@ async fn clear_only_removes_owned_cache_files_and_unavailable_cache_rejects_new_
         .is_err());
     assert!(manager.snapshots().await.is_empty());
     assert_eq!(std::fs::read(unavailable).unwrap(), b"keep this too");
+}
+
+#[tokio::test]
+async fn verified_local_files_skip_source_probes_and_network_attempts() {
+    let server = TestServer::start().await;
+    let temp = tempfile::tempdir().unwrap();
+    let manager = DownloadManager::open(&temp.path().join("state"), 2).unwrap();
+    let mut specs = vec![];
+    for index in 0..3 {
+        let mut spec = server.spec("normal", &format!("local-{index}.jar"));
+        if index != 0 {
+            spec.sha512 =
+                Some(hex::encode(sha2::Sha512::digest(&server.state.payload)).to_uppercase());
+        }
+        if index == 1 {
+            spec.sha1 = None;
+        }
+        std::fs::write(temp.path().join(&spec.path), &server.state.payload).unwrap();
+        manager.sources().register(
+            &spec.url,
+            vec![spec.url.clone(), spec.url.replace("127.0.0.1", "localhost")],
+        );
+        specs.push(spec);
+    }
+    let id = manager
+        .enqueue_with_retention(
+            "local launch check".into(),
+            temp.path().into(),
+            specs,
+            DownloadRetention::Session,
+        )
+        .await
+        .unwrap();
+    complete(&manager, &id).await;
+    let snapshot = manager.snapshot(&id).await.unwrap();
+    assert_eq!(snapshot.completed(), 3);
+    assert_eq!(snapshot.downloaded(), 3 * server.state.payload.len() as u64);
+    assert!(snapshot.files.iter().all(|file| file.attempts == 0));
+    assert_eq!(server.state.requests.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn corrupt_local_files_still_fall_back_and_are_repaired() {
+    let server = TestServer::start().await;
+    let temp = tempfile::tempdir().unwrap();
+    let manager = DownloadManager::open(&temp.path().join("state"), 2).unwrap();
+    manager
+        .sources()
+        .set_mode(MinecraftDownloadSource::Official);
+    let mut corrupt = server.state.payload.clone();
+    corrupt[0] ^= 1;
+    let mut specs = vec![];
+    for index in 0..2 {
+        let mut spec = server.spec("corrupt", &format!("repair-{index}.jar"));
+        if index == 1 {
+            spec.sha1 = None;
+            spec.sha512 = Some(hex::encode(sha2::Sha512::digest(&server.state.payload)));
+        }
+        std::fs::write(temp.path().join(&spec.path), &corrupt).unwrap();
+        manager.sources().register(
+            &spec.url,
+            vec![
+                spec.url.clone(),
+                server.spec("normal", "replacement.jar").url,
+            ],
+        );
+        specs.push(spec);
+    }
+    let id = manager
+        .enqueue("repair local files".into(), temp.path().into(), specs)
+        .await
+        .unwrap();
+    complete(&manager, &id).await;
+    let snapshot = manager.snapshot(&id).await.unwrap();
+    assert!(snapshot.files.iter().all(|file| file.attempts == 2));
+    for file in snapshot.files {
+        assert_eq!(
+            std::fs::read(temp.path().join(file.spec.path)).unwrap(),
+            server.state.payload
+        );
+    }
+}
+
+#[tokio::test]
+async fn unhashed_existing_files_are_downloaded_without_trusting_their_size() {
+    let server = TestServer::start().await;
+    let temp = tempfile::tempdir().unwrap();
+    let manager = DownloadManager::open(&temp.path().join("state"), 1).unwrap();
+    let mut spec = server.spec("normal", "unhashed.jar");
+    spec.sha1 = None;
+    std::fs::write(
+        temp.path().join(&spec.path),
+        vec![0; server.state.payload.len()],
+    )
+    .unwrap();
+    let id = manager
+        .enqueue(
+            "unhashed replacement".into(),
+            temp.path().into(),
+            vec![spec],
+        )
+        .await
+        .unwrap();
+    complete(&manager, &id).await;
+    assert_eq!(server.state.requests.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        std::fs::read(temp.path().join("unhashed.jar")).unwrap(),
+        server.state.payload
+    );
+}
+
+#[tokio::test]
+async fn local_verification_checks_size_hashes_and_cancellation() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("large.jar");
+    // More than one verification buffer, with a mismatch near the end.
+    let payload = vec![73; 2 * 1024 * 1024 + 17];
+    std::fs::write(&path, &payload).unwrap();
+    let spec = DownloadSpec {
+        url: "https://example.invalid/large.jar".into(),
+        path: "large.jar".into(),
+        size: Some(payload.len() as u64),
+        sha1: Some(hex::encode(Sha1::digest(&payload)).to_uppercase()),
+        sha512: Some(hex::encode(sha2::Sha512::digest(&payload)).to_uppercase()),
+    };
+    let cancel = CancellationToken::new();
+    verify_file(&path, &spec, &cancel).await.unwrap();
+    let mut wrong_size = spec.clone();
+    wrong_size.size = Some(payload.len() as u64 + 1);
+    assert!(verify_file(&path, &wrong_size, &cancel)
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("长度"));
+    let mut corrupt = payload;
+    *corrupt.last_mut().unwrap() ^= 1;
+    std::fs::write(&path, corrupt).unwrap();
+    for sha512_only in [false, true] {
+        let mut expected = spec.clone();
+        if sha512_only {
+            expected.sha1 = None;
+        }
+        assert!(verify_file(&path, &expected, &cancel)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains(if sha512_only { "SHA-512" } else { "SHA-1" }));
+    }
+    cancel.cancel();
+    assert!(verify_file(&path, &spec, &cancel)
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("暂停或取消"));
+
+    temp.close().unwrap();
+}
+
+#[test]
+fn cancelled_verification_waits_for_its_queued_worker() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("queued.jar");
+        let payload = b"unchanged file";
+        std::fs::write(&path, payload).unwrap();
+        let spec = DownloadSpec {
+            url: "https://example.invalid/queued.jar".into(),
+            path: "queued.jar".into(),
+            size: Some(payload.len() as u64),
+            sha1: Some(hex::encode(Sha1::digest(payload))),
+            sha512: None,
+        };
+        // Hold the only blocking worker so cancellation cannot race a fast disk.
+        let (started, ready) = tokio::sync::oneshot::channel();
+        let (release, gate) = std::sync::mpsc::channel();
+        let blocker = tokio::task::spawn_blocking(move || {
+            started.send(()).unwrap();
+            gate.recv().unwrap();
+        });
+        ready.await.unwrap();
+        let cancel = CancellationToken::new();
+        let mut checking = Box::pin(verify_file(&path, &spec, &cancel));
+        assert!(futures_util::poll!(checking.as_mut()).is_pending());
+        cancel.cancel();
+        // Release before asserting so a failed check also drains the worker.
+        let after_cancel = futures_util::poll!(checking.as_mut());
+        release.send(()).unwrap();
+        blocker.await.unwrap();
+        assert!(after_cancel.is_pending());
+        assert!(checking
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("暂停或取消"));
+        assert_eq!(std::fs::read(path).unwrap(), payload);
+        temp.close().unwrap();
+    });
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "manual local-file verification benchmark; run with --ignored --nocapture"]
+async fn benchmark_local_verification() {
+    use futures_util::{stream, StreamExt, TryStreamExt};
+    use std::time::Instant;
+
+    let temp = tempfile::tempdir().unwrap();
+    for (name, count, size) in [("small", 1024, 4096), ("large", 4, 16 * 1024 * 1024)] {
+        let payload = vec![73; size];
+        let hash = hex::encode(Sha1::digest(&payload));
+        let mut files = vec![];
+        for index in 0..count {
+            let path = temp.path().join(format!("{name}-{index}.bin"));
+            std::fs::write(&path, &payload).unwrap();
+            files.push((
+                path,
+                DownloadSpec {
+                    url: "https://example.invalid/benchmark".into(),
+                    path: format!("{name}-{index}.bin"),
+                    size: Some(size as u64),
+                    sha1: Some(hash.clone()),
+                    sha512: None,
+                },
+            ));
+        }
+        let cancel = CancellationToken::new();
+        let mut measurements = vec![];
+        // Warm the file cache once; report the median of three measured runs.
+        for round in 0..4 {
+            let start = Instant::now();
+            stream::iter(&files)
+                .map(|(path, spec)| verify_file(path, spec, &cancel))
+                .buffer_unordered(8)
+                .try_collect::<Vec<_>>()
+                .await
+                .unwrap();
+            if round != 0 {
+                measurements.push(start.elapsed());
+            }
+        }
+        measurements.sort();
+        eprintln!(
+            "{name}: {count} files, {} bytes, median {:?}",
+            count * size,
+            measurements[1]
+        );
+    }
 }

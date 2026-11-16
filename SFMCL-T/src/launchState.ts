@@ -36,7 +36,10 @@ export function getHostLaunches(tasks: Tasks): Job[] {
   );
 }
 
-export function getHostLaunch(games: Job[], selectedId: string): Job | undefined {
+export function getHostLaunch(
+  games: Job[],
+  selectedId: string,
+): Job | undefined {
   const selected = games.find((job) => job.id === selectedId);
   if (selected) return selected;
   const running = games.filter((job) => job.launch?.running);
@@ -50,10 +53,13 @@ export function getHostLaunch(games: Job[], selectedId: string): Job | undefined
 export function getLaunchTask(
   tasks: Tasks,
   selectedVersion: string,
+  collapsedJobIds: readonly string[] = [],
 ): LaunchTask {
   // The backend returns newest jobs first. A running instance takes precedence
   // if the user changes the selected version from another page.
-  const jobs = tasks.jobs.filter((job) => job.title.startsWith("启动 "));
+  const jobs = tasks.jobs.filter(
+    (job) => job.title.startsWith("启动 ") && !collapsedJobIds.includes(job.id),
+  );
   const job =
     jobs.find((item) => isActiveLaunch(item, tasks.downloads)) ||
     jobs.find((item) => item.title === `启动 ${selectedVersion}`);

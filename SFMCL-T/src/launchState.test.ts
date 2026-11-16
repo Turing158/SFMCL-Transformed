@@ -77,6 +77,51 @@ describe("launch task state", () => {
     });
   });
 
+  it("releases the dock while collapsed games keep running", () => {
+    const running = launch({ currentStep: 4 });
+    const result = getLaunchTask(tasks(running), "1.20.1", [running.id]);
+    expect(result).toMatchObject({
+      phase: "idle",
+      active: false,
+      versionId: "1.20.1",
+    });
+    expect(result.job).toBeUndefined();
+    expect(isActiveLaunch(running, [])).toBe(true);
+  });
+
+  it("tracks a new launch independently of collapsed processes", () => {
+    const collapsed = launch({ currentStep: 4 });
+    const next = launch({ id: "launch-2", title: "启动 1.20.1" });
+    expect(
+      getLaunchTask({ jobs: [collapsed, next], downloads: [] }, "1.20.1", [
+        collapsed.id,
+      ]),
+    ).toMatchObject({ job: next, active: true, phase: "preparing" });
+  });
+
+  it("allows another attempt of the same version after its process is collapsed", () => {
+    const first = launch({ currentStep: 4 });
+    const second = launch({ id: "launch-2" });
+    expect(getLaunchTask(tasks(first), "1.21.4", [first.id])).toMatchObject({
+      phase: "idle",
+      active: false,
+      versionId: "1.21.4",
+    });
+    expect(
+      getLaunchTask({ jobs: [second, first], downloads: [] }, "1.21.4", [
+        first.id,
+      ]),
+    ).toMatchObject({ job: second, active: true, phase: "preparing" });
+    expect(
+      getLaunchTask({ jobs: [second, first], downloads: [] }, "1.21.4", [
+        first.id,
+        second.id,
+      ]),
+    ).toMatchObject({ phase: "idle", active: false });
+    expect(isActiveLaunch(first, [])).toBe(true);
+    expect(isActiveLaunch(second, [])).toBe(true);
+  });
+
   it.each(["queued", "running", "pausing", "paused"] as const)(
     "keeps %s launches locked",
     (status) => {

@@ -28,7 +28,8 @@ await page.addInitScript(() => {
       animation.pause();
       animation.currentTime = 0;
     }
-    if (options?.id === "sfmcl-t-download-press") window.__presses.push(animation);
+    if (options?.id === "sfmcl-t-download-press")
+      window.__presses.push(animation);
     return animation;
   };
 });
@@ -349,6 +350,81 @@ try {
     await page.screenshot({ path: `${evidence}/files-dark-${width}.png` });
     await closeModal("escape");
   }
+  await page.setViewportSize({ width: 1120, height: 740 });
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.downloads = [];
+    window.__pixelTest.tasks.jobs = [
+      {
+        id: "launch-presentation",
+        title: "启动 1.21.4",
+        status: "running",
+        currentStep: 4,
+        launch: {
+          versionId: "1.21.4",
+          gameVersion: "1.21.4",
+          directory: "test-game",
+          playerName: "TestPlayer",
+          running: false,
+        },
+        steps: [
+          "检查游戏与 Java",
+          "检查资源索引",
+          "补全游戏文件",
+          "准备运行环境",
+          "游戏运行",
+        ].map((name, index) => ({
+          name,
+          status: index < 4 ? "completed" : "running",
+          detail: index === 4 ? "Minecraft 正在运行" : "",
+        })),
+        log: ["Java 进程已创建"],
+      },
+    ];
+  });
+  const launchCard = page.locator(".job-card");
+  const launchBadge = launchCard.locator(".job-header .badge");
+  const finalStep = launchCard.locator(".steps li").last();
+  await expect(launchBadge).toHaveText("进行中");
+  await expect(finalStep).toHaveClass("running");
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.jobs[0].launch.running = true;
+  });
+  await expect(launchBadge).toHaveText("已启动");
+  await expect(launchBadge).toHaveClass(/completed/);
+  await expect(finalStep).toHaveClass("completed");
+  await expect(finalStep.locator("strong")).toHaveText("已启动");
+  await expect(finalStep.locator(".spin")).toHaveCount(0);
+  await expect(page.locator(".sidebar-progress")).toHaveCount(0);
+  expect(
+    await page.evaluate(() => window.__pixelTest.tasks.jobs[0].status),
+  ).toBe("running");
+  await page.screenshot({ path: `${evidence}/launch-task-started.png` });
+  await launchCard
+    .getByRole("button", { name: "查看 启动 1.21.4 日志", exact: true })
+    .click();
+  await finishModal();
+  await expect(dialog.locator(".badge")).toHaveText("已启动");
+  await expect(dialog.locator(".log-view")).toContainText("Java 进程已创建");
+  await closeModal("escape");
+  await page.evaluate(() => {
+    const job = window.__pixelTest.tasks.jobs[0];
+    job.launch.running = false;
+    job.status = "completed";
+  });
+  await expect(launchBadge).toHaveText("已启动");
+  await page.evaluate(() => {
+    const job = window.__pixelTest.tasks.jobs[0];
+    job.status = "failed";
+    job.error = "无法启动 Java 进程";
+    job.steps[4].status = "failed";
+  });
+  await expect(launchBadge).toHaveText("需要处理");
+  await expect(launchCard.locator(".inline-error")).toHaveText(
+    "无法启动 Java 进程",
+  );
+  checks.push({
+    name: "launch-started-status-step-log-and-sidebar-completion",
+  });
   expect(errors).toEqual([]);
   expect(
     await page.evaluate(

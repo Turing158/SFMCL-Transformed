@@ -104,6 +104,11 @@ export default function App() {
     ? sidebarProgress.info?.value
     : undefined;
   const downloadTitle = task?.title || "暂无下载任务";
+  const taskStatusLabel = task
+    ? "label" in task && task.label
+      ? task.label
+      : statusLabel[task.status]
+    : "准备好下一次出发";
   const background = useImage(
     app.data.backgroundPath ||
       (["none", "default"].includes(app.data.settings.backgroundType)
@@ -190,7 +195,7 @@ export default function App() {
                 className="sidebar-task has-surface"
                 onClick={() => app.setPage("downloads")}
                 aria-current={app.page === "downloads" ? "page" : undefined}
-                aria-label={`下载中心：${downloadTitle}${task ? `，${statusLabel[task.status]}` : ""}`}
+                aria-label={`下载中心：${downloadTitle}${task ? `，${taskStatusLabel}` : ""}`}
                 data-tooltip={railCollapsed ? downloadTitle : undefined}
                 data-tooltip-placement="right"
               >
@@ -198,9 +203,7 @@ export default function App() {
                 <ArrowDownToLine size={18} />
                 <span className="task-copy">
                   <strong>{downloadTitle}</strong>
-                  <small>
-                    {task ? statusLabel[task.status] : "准备好下一次出发"}
-                  </small>
+                  <small>{taskStatusLabel}</small>
                 </span>
                 {progress !== undefined && (
                   <b className="task-count has-surface">
@@ -233,9 +236,7 @@ export default function App() {
             <span className="profile-copy">
               <strong>{player?.name || "添加你的角色"}</strong>
               <small>
-                {player
-                  ? playerAccountLabel(player)
-                  : "准备好开启冒险"}
+                {player ? playerAccountLabel(player) : "准备好开启冒险"}
               </small>
             </span>
             <ChevronRight className="profile-chev" size={16} />

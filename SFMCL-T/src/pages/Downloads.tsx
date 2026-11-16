@@ -35,14 +35,26 @@ import {
   PixelFrame,
 } from "../components";
 import type { Download, DownloadFile, Job, Status } from "../types";
+import { getJobPresentation } from "../jobPresentation";
 import "../downloads.css";
 
-function DownloadBadge({ status }: { status: Status }) {
+function DownloadBadge({
+  status,
+  label = statusLabel[status],
+}: {
+  status: Status;
+  label?: string;
+}) {
   return (
     <Badge className={status}>
-      <AnimatedSwap value={status}>{statusLabel[status]}</AnimatedSwap>
+      <AnimatedSwap value={label}>{label}</AnimatedSwap>
     </Badge>
   );
+}
+
+function JobBadge({ job }: { job: Job }) {
+  const { status, label } = getJobPresentation(job);
+  return <DownloadBadge status={status} label={label} />;
 }
 
 export function Downloads() {
@@ -161,7 +173,7 @@ export function Downloads() {
           onClose={() => setLog(null)}
           wide
         >
-          <DownloadBadge status={selectedJob.status} />
+          <JobBadge job={selectedJob} />
           <pre className="log-view">
             {selectedJob.log.join("\n") || "尚无进程输出。"}
           </pre>
@@ -317,6 +329,7 @@ function DownloadRow({
 
 function JobCard({ job, onLog }: { job: Job; onLog: () => void }) {
   const app = useApp();
+  const presentation = getJobPresentation(job);
   const [open, setOpen] = useState(job.status !== "completed");
   const id = useId();
   return (
@@ -336,7 +349,7 @@ function JobCard({ job, onLog }: { job: Job; onLog: () => void }) {
           </span>
           <strong>{job.title}</strong>
         </button>
-        <DownloadBadge status={job.status} />
+        <JobBadge job={job} />
         <div className="row-actions">
           <button
             className="icon-button has-surface"
@@ -369,7 +382,7 @@ function JobCard({ job, onLog }: { job: Job; onLog: () => void }) {
         inert={!open}
       >
         <div className="job-body-clip">
-          <Steps steps={job.steps} animated />
+          <Steps steps={presentation.steps} animated />
           {job.error && <p className="inline-error">{job.error}</p>}
           {job.status === "failed" && job.downloadId && (
             <p className="helper">

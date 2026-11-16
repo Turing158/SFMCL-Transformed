@@ -412,7 +412,11 @@ pub fn extract_natives(root: &Path, id: &str, libraries: &[Library]) -> Result<P
             let destination = safe_join(&natives, entry.name())?;
             let mut bytes = Vec::new();
             entry.read_to_end(&mut bytes)?;
-            atomic_write(&destination, &bytes)?;
+            // A running game may have this DLL loaded on Windows. Reuse
+            // verified contents instead of replacing an identical native.
+            if std::fs::read(&destination).ok().as_deref() != Some(bytes.as_slice()) {
+                atomic_write(&destination, &bytes)?;
+            }
         }
     }
     Ok(natives)

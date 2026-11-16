@@ -80,6 +80,22 @@ const ready = async (scenario = "") => {
 const state = (value) => expect(dock).toHaveAttribute("data-state", value);
 const shot = (name) =>
   page.screenshot({ path: `${evidence}/${name}.png`, animations: "disabled" });
+const dragCard = async (distance, release = true) => {
+  const card = dock.locator(".launch-dock-main");
+  let bounds = await card.boundingBox();
+  await page.mouse.move(
+    bounds.x + bounds.width * 0.42,
+    bounds.y + bounds.height * 0.65,
+  );
+  await expect(dock.locator(".launch-dock-card")).toHaveCSS("scale", "1");
+  bounds = await card.boundingBox();
+  const x = bounds.x + bounds.width * 0.42;
+  const y = bounds.y + bounds.height * 0.65;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - distance, { steps: 6 });
+  if (release) await page.mouse.up();
+};
 
 try {
   await ready();
@@ -210,21 +226,318 @@ try {
   await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
   await state("running");
   await expect(primary).toHaveText("结束游戏");
-  await expect(change).toHaveText("查看日志");
+  await expect(change).toHaveText("继续启动");
+  const firstGame = await page.evaluate(
+    () => window.__pixelTest.latestLaunch.id,
+  );
   await change.click();
+  await state("ready");
+  await expect(primary).toBeEnabled();
+  await expect(dock.getByRole("status")).not.toContainText("请切换版本");
+  const toggle = dock.locator(".launch-process-toggle");
+  const processes = dock.getByRole("region", {
+    name: "收起的游戏进程",
+    exact: true,
+  });
+  await expect(toggle).toHaveText("展开");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle.locator("svg")).toHaveCount(1);
+  await expect(processes).toBeHidden();
+  expect(await count("jobs.cancel")).toBe(1);
+
+  // The launch row follows the pointer; a short pull returns to its old state.
+  const clip = dock.locator(".launch-processes-clip");
+  await dragCard(20, false);
+  await expect(dock).toHaveAttribute("data-dragging", "true");
+  await expect
+    .poll(async () => (await clip.boundingBox()).height)
+    .toBeCloseTo(20, 0);
+  await page.mouse.up();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(processes).toBeHidden();
+  await dragCard(60, false);
+  await expect(dock).toHaveAttribute("data-dragging", "true");
+  await expect
+    .poll(async () => (await clip.boundingBox()).height)
+    .toBeCloseTo(60, 0);
+  await page.mouse.up();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(processes).toBeVisible();
+  await expect(dock).not.toHaveAttribute("data-dragging");
+  await page.locator(".page-heading").hover();
+  await expect(dock.locator(".launch-dock-card")).toHaveCSS("scale", "1");
+  const joinedBounds = await dock.evaluate((node) => {
+    const row = node.querySelector(".launch-dock-main").getBoundingClientRect();
+    const panel = node
+      .querySelector(".launch-processes")
+      .getBoundingClientRect();
+    return {
+      left: panel.left - row.left,
+      width: panel.width - row.width,
+      gap: panel.top - row.bottom,
+    };
+  });
+  expect(joinedBounds.left).toBeCloseTo(0, 1);
+  expect(joinedBounds.width).toBeCloseTo(0, 1);
+  expect(joinedBounds.gap).toBeCloseTo(0, 1);
+  // Dragging the process list does not operate the launch-row disclosure.
+  const listBounds = await processes.boundingBox();
+  await page.mouse.move(listBounds.x + 20, listBounds.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(listBounds.x + 20, listBounds.y + 5, { steps: 4 });
+  await page.mouse.up();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(dock).not.toHaveAttribute("data-dragging");
+  await dragCard(-60);
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(processes).toBeHidden();
+  await page.locator(".page-heading").hover();
+  await expect(dock.locator(".launch-dock-card")).toHaveCSS("scale", "0.98");
+  // Controls retain their own pointer handling and normal click behavior.
+  const switchBounds = await change.boundingBox();
+  await page.mouse.move(
+    switchBounds.x + switchBounds.width / 2,
+    switchBounds.y + switchBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    switchBounds.x + switchBounds.width / 2,
+    switchBounds.y - 60,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(dock).not.toHaveAttribute("data-dragging");
+  await change.click();
+  await expect(picker).toBeVisible();
+  await page.keyboard.press("Escape");
+  checks.push(
+    "Only the launch row supports dragging; upward and downward pulls reveal or hide the content, partial pulls follow the pointer and snap back, and buttons and process-list scrolling retain their behavior",
+  );
+
+  const collapsedBounds = await dock.locator(".launch-dock-main").boundingBox();
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveText("收起");
+  await expect(processes).toBeVisible();
+  await expect(processes.getByRole("listitem")).toHaveCount(1);
+  const firstCard = processes.locator(`[data-job-id="${firstGame}"]`);
+  const launchedAt = await page.evaluate(
+    () => window.__pixelTest.latestLaunch.createdAt,
+  );
+  await expect(firstCard.locator("time")).toHaveAttribute(
+    "datetime",
+    new Date(launchedAt * 1000).toISOString(),
+  );
+  await expect(firstCard.locator(".resource-icon")).toBeVisible();
+  await expect(firstCard.locator("strong")).toHaveText("1.21.4");
+  const expansionHeight = (await processes.boundingBox()).height;
+  await expect
+    .poll(async () => (await dock.locator(".launch-dock-main").boundingBox()).y)
+    .toBeLessThan(collapsedBounds.y - expansionHeight + 5);
+  await shot("running-process-expanded");
+
+  const mainRow = dock.locator(".launch-dock-main");
+  const launchesBeforeRestore = await count("launch");
+  const stopsBeforeRestore = await count("jobs.cancel");
+  await firstCard.click();
+  await state("running");
+  await expect(mainRow).toHaveAttribute("data-job-id", firstGame);
+  await expect(primary).toHaveText("结束游戏");
+  await expect(change).toHaveText("继续启动");
+  await expect(primary).toBeFocused();
+  await expect(toggle).toBeHidden();
+  await shot("running-process-restored");
+  await change.click();
+  await state("ready");
+  await toggle.click();
+  await firstCard.locator(".launch-process-restore").focus();
+  await page.keyboard.press("Enter");
+  await expect(mainRow).toHaveAttribute("data-job-id", firstGame);
+  await expect(primary).toBeFocused();
+  expect(await count("launch")).toBe(launchesBeforeRestore);
+  expect(await count("jobs.cancel")).toBe(stopsBeforeRestore);
+  await change.click();
+  await state("ready");
+  await toggle.click();
+  checks.push(
+    "Clicking a collapsed card or pressing Enter restores its existing process to the main controls without launching or stopping a game, and focus follows the restored controls",
+  );
+
+  // The collection retains its processes and open state across page navigation.
+  await page.locator(".sidebar-downloads").click();
   await expect(
     page.getByRole("heading", { name: "下载中心", exact: true }),
   ).toBeVisible();
   await expect(dock).toHaveAttribute("aria-hidden", "true");
   await expect(dock).toHaveAttribute("inert", "");
-  await expect(dock.locator(".launch-dock-main")).toHaveCSS("opacity", "0");
+  await expect(dock.locator(".launch-dock-card")).toHaveCSS("opacity", "0");
   await expect(page.locator(".workspace-footer")).toBeVisible();
   await nav("开始游戏");
-  await state("running");
+  await state("ready");
+  await expect(processes).toBeVisible();
+  await toggle.click();
+  await expect(processes).toBeHidden();
+  // A second launch of the selected version keeps the first process alive.
   await primary.click();
+  await state("preparing");
+  await expect
+    .poll(() => page.evaluate(() => window.__pixelTest.latestLaunch.id))
+    .not.toBe(firstGame);
+  await expect(change).toBeEnabled();
+  const repeatedGame = await page.evaluate(
+    () => window.__pixelTest.latestLaunch.id,
+  );
+  expect(repeatedGame).not.toBe(firstGame);
+  await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
+  await state("running");
+  await toggle.click();
+  await firstCard.locator(".launch-process-restore").click();
+  await expect(mainRow).toHaveAttribute("data-job-id", firstGame);
+  await toggle.click();
+  const repeatedCard = processes.locator(`[data-job-id="${repeatedGame}"]`);
+  await repeatedCard.locator(".launch-process-restore").focus();
+  await page.keyboard.press("Space");
+  await expect(mainRow).toHaveAttribute("data-job-id", repeatedGame);
+  expect(await count("launch")).toBe(launchesBeforeRestore + 1);
+  expect(await count("jobs.cancel")).toBe(stopsBeforeRestore);
+  await change.click();
+  await state("ready");
+  await expect(primary).toBeEnabled();
+  await toggle.click();
+  await expect(processes.getByRole("listitem")).toHaveCount(2);
+  await expect(processes.locator("strong")).toHaveText(["1.21.4", "1.21.4"]);
+  await repeatedCard.locator(".launch-process-stop").click();
+  await expect(processes.getByRole("listitem")).toHaveCount(1);
+  await state("ready");
+  expect(
+    await page.evaluate(
+      (id) => window.__pixelTest.tasks.jobs.find((job) => job.id === id).status,
+      firstGame,
+    ),
+  ).toBe("running");
+  await toggle.click();
+  checks.push(
+    "The same version can launch again after collapse; duplicate processes can switch between the main controls by ID, and the stop icon only stops its own process without restoring it",
+  );
+  await change.click();
+  await picker.getByRole("option", { name: /^1\.20\.1-Fabric/ }).click();
+  await expect(primary).toBeEnabled();
+  await primary.click();
+  await expect(change).toBeEnabled();
+  await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
+  await state("running");
+  await change.click();
+  await state("ready");
+  await toggle.click();
+  await expect(processes.getByRole("listitem")).toHaveCount(2);
+  await page.evaluate(() => {
+    const test = window.__pixelTest;
+    for (let index = 1; index <= 4; index++) {
+      const copy = structuredClone(test.latestLaunch);
+      copy.id = `extra-game-${index}`;
+      copy.title = `启动 我的长期生存世界与大型模组整合包-${index}`;
+      copy.launch.versionId = copy.title.slice(3);
+      test.tasks.jobs.unshift(copy);
+    }
+  });
+  for (let index = 1; index <= 4; index++) {
+    await state("running");
+    await change.click();
+  }
+  await state("ready");
+  await toggle.click();
+  await expect(processes.getByRole("listitem")).toHaveCount(6);
+  for (const width of [1440, 768, 375]) {
+    await page.setViewportSize({ width, height: width === 375 ? 568 : 900 });
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate(
+        (value) => (document.documentElement.dataset.theme = value),
+        theme,
+      );
+      await page.locator(".workspace-footer-region").evaluate(async (node) => {
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        );
+        await Promise.allSettled(
+          node.getAnimations().map((animation) => animation.finished),
+        );
+      });
+      const grid = processes.locator(".launch-process-grid");
+      const geometry = await grid.evaluate((node) => {
+        const bounds = node.getBoundingClientRect();
+        const cards = Array.from(node.children, (card) =>
+          card.getBoundingClientRect(),
+        );
+        return {
+          rows: new Set(cards.map((card) => Math.round(card.top))).size,
+          columns: new Set(cards.map((card) => Math.round(card.left))).size,
+          width: bounds.width,
+          scrollWidth: node.scrollWidth,
+          bottom: node.closest(".launch-processes").getBoundingClientRect()
+            .bottom,
+          scrollHeight: node.closest(".launch-processes").scrollHeight,
+          clientHeight: node.closest(".launch-processes").clientHeight,
+          viewport: window.innerHeight,
+          bodyWidth: document.body.scrollWidth,
+        };
+      });
+      expect(geometry.rows).toBe(3);
+      expect(geometry.columns).toBe(2);
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width + 1);
+      if (width > 650) {
+        expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+      }
+      expect(geometry.bottom).toBeLessThan(geometry.viewport);
+      expect(geometry.bodyWidth).toBe(width);
+      await processes.evaluate((node) => (node.scrollTop = node.scrollHeight));
+      await expect(
+        processes.getByRole("listitem").last().locator(".launch-process-stop"),
+      ).toBeInViewport();
+      await shot(`processes-${width}-${theme}`);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await processes.evaluate((node) => (node.scrollTop = 0));
+  // A failed stop preserves the live card and allows retry.
+  await page.evaluate(
+    () => (window.__pixelTest.failures["jobs.cancel"] = "测试：结束失败"),
+  );
+  await firstCard.locator(".launch-process-stop").click();
+  await expect(firstCard.locator(".launch-process-stop")).toBeEnabled();
+  await expect(firstCard).toBeVisible();
+  await page
+    .locator(".toast.error")
+    .filter({ hasText: "测试：结束失败" })
+    .click();
+  await page.evaluate(() => {
+    delete window.__pixelTest.failures["jobs.cancel"];
+    window.__pixelTest.delays["jobs.cancel"] = 300;
+  });
+  const stopsBefore = await count("jobs.cancel");
+  await firstCard.locator(".launch-process-stop").click();
+  await expect(firstCard.locator(".launch-process-stop")).toBeDisabled();
+  await expect(firstCard).toHaveCount(0);
+  expect(await count("jobs.cancel")).toBe(stopsBefore + 1);
+  await expect(processes.getByRole("listitem")).toHaveCount(5);
+  expect(
+    await page.evaluate(() => window.__pixelTest.latestLaunch.status),
+  ).toBe("running");
+  // Natural exits also disappear; the handle vanishes after the last exit.
+  await page.evaluate(() => {
+    for (const job of window.__pixelTest.tasks.jobs) {
+      if (job.launch?.running) {
+        job.status = "completed";
+        job.launch.running = false;
+      }
+    }
+  });
+  await expect(toggle).toBeHidden();
+  await expect(processes).toHaveCount(0);
+  await expect(primary).toBeEnabled();
   await state("ready");
   checks.push(
-    "Running game exposes log and stop actions; navigating away restores the ordinary footer and returning preserves job state",
+    "Continue launch collapses without stopping; the centered keyboard-accessible handle reveals two columns with icons, names and launch times; independent stop, retry, natural exit, page retention and vertical scrolling work in narrow layouts",
   );
 
   await page.evaluate(
@@ -271,11 +584,10 @@ try {
   await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
   await state("running");
   await change.click();
-  await expect(
-    page.getByRole("heading", { name: "操作步骤", exact: true }),
-  ).toBeVisible();
+  await state("ready");
+  await expect(dock.locator(".launch-process-toggle")).toHaveText("展开");
   checks.push(
-    "Launch jobs without downloads show sidebar task progress; the log action still opens task details",
+    "Launch jobs without downloads retain sidebar task progress and can be collapsed from the dock",
   );
 
   await ready("empty");

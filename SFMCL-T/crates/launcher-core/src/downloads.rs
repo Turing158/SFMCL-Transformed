@@ -594,27 +594,36 @@ impl DownloadManager {
                 let Ok(_permit) = permit else { return; };
                 if cancel.is_cancelled() { return; }
                 batch.change(|s| { s.active_workers += 1; s.files[index].status = Status::Running; });
-                let mut outcome = Err(anyhow!("下载未执行"));
-                let candidates = manager.sources.candidates(&spec.url);
-                let ordered = match manager.sources.order(&manager.client, &candidates, &cancel).await {
-                    Ok(urls) => urls,
-                    Err(_) => vec![spec.url.clone()],
-                };
-                let attempts = ordered.len().max(3);
-                for attempt in 0..attempts {
-                    if cancel.is_cancelled() { break; }
-                    batch.change(|s| { s.files[index].attempts += 1; });
-                    let mut selected = spec.clone();
-                    selected.url = ordered[attempt % ordered.len()].clone();
-                    outcome = transfer(&manager.client, &root, cache_dir.as_deref(), &batch_id, &selected, &cancel, |bytes, total| {
-                        batch.change(|s| { s.files[index].downloaded = bytes; s.files[index].total = total; });
-                    }).await;
-                    if outcome.is_ok() || cancel.is_cancelled() { break; }
-                    manager.sources.failed(&selected.url).await;
-                    if attempt + 1 < attempts {
-                        tokio::select! { _ = cancel.cancelled() => break, _ = tokio::time::sleep(Duration::from_millis(300 * (1 << attempt.min(2)))) => {} }
+                let outcome = async {
+                    // Verify once before source probes or retries so an intact
+                    // install stays entirely local.
+                    if let Some(bytes) = reuse_local_file(&root, cache_dir.as_deref(), &batch_id, &spec, &cancel).await? {
+                        batch.change(|s| { s.files[index].downloaded = bytes; s.files[index].total = Some(bytes); });
+                        return Ok(());
                     }
-                }
+                    let candidates = manager.sources.candidates(&spec.url);
+                    let ordered = match manager.sources.order(&manager.client, &candidates, &cancel).await {
+                        Ok(urls) => urls,
+                        Err(_) => vec![spec.url.clone()],
+                    };
+                    let mut outcome = Err(anyhow!("下载未执行"));
+                    let attempts = ordered.len().max(3);
+                    for attempt in 0..attempts {
+                        if cancel.is_cancelled() { break; }
+                        batch.change(|s| { s.files[index].attempts += 1; });
+                        let mut selected = spec.clone();
+                        selected.url = ordered[attempt % ordered.len()].clone();
+                        outcome = transfer(&manager.client, &root, cache_dir.as_deref(), &batch_id, &selected, &cancel, |bytes, total| {
+                            batch.change(|s| { s.files[index].downloaded = bytes; s.files[index].total = total; });
+                        }).await;
+                        if outcome.is_ok() || cancel.is_cancelled() { break; }
+                        manager.sources.failed(&selected.url).await;
+                        if attempt + 1 < attempts {
+                            tokio::select! { _ = cancel.cancelled() => break, _ = tokio::time::sleep(Duration::from_millis(300 * (1 << attempt.min(2)))) => {} }
+                        }
+                    }
+                    outcome
+                }.await;
                 batch.change(|s| {
                     s.active_workers -= 1;
                     let f = &mut s.files[index];
@@ -834,6 +843,42 @@ struct PartialMetadata {
     validator: Option<String>,
 }
 
+async fn reuse_local_file(
+    root: &Path,
+    cache: Option<&Path>,
+    id: &str,
+    spec: &DownloadSpec,
+    cancel: &CancellationToken,
+) -> Result<Option<u64>> {
+    let root = root.to_owned();
+    let cache = cache.map(Path::to_owned);
+    let id = id.to_owned();
+    let spec = spec.clone();
+    let cancel = cancel.clone();
+    tokio::task::spawn_blocking(move || {
+        cancel_check(&cancel)?;
+        let target = safe_join(&root, &spec.path)?;
+        // Keep temporary-path validation and cleanup even when no transfer runs.
+        let (part, meta) = temporary_paths(&root, cache.as_deref(), &id, &spec)?;
+        if spec.sha1.is_none() && spec.sha512.is_none() {
+            return Ok(None);
+        }
+        let bytes = match verify_file_blocking(&target, &spec, &cancel) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                cancel_check(&cancel)?;
+                return Ok(None);
+            }
+        };
+        cancel_check(&cancel)?;
+        let _ = std::fs::remove_file(part);
+        let _ = std::fs::remove_file(meta);
+        Ok(Some(bytes))
+    })
+    .await
+    .context("本地文件校验任务失败")?
+}
+
 async fn transfer(
     client: &Client,
     root: &Path,
@@ -847,13 +892,6 @@ async fn transfer(
     // Validate launcher-owned temporary paths as well as the final target.
     let (part, meta) = temporary_paths(root, cache, id, spec)?;
     let expected_hash = spec.sha1.is_some() || spec.sha512.is_some();
-    if expected_hash && target.is_file() && verify_file(&target, spec, cancel).await.is_ok() {
-        let len = tokio::fs::metadata(&target).await?.len();
-        progress(len, Some(len));
-        let _ = tokio::fs::remove_file(&part).await;
-        let _ = tokio::fs::remove_file(&meta).await;
-        return Ok(());
-    }
     tokio::fs::create_dir_all(target.parent().context("无效下载目录")?).await?;
     tokio::fs::create_dir_all(part.parent().context("无效缓存目录")?).await?;
     let previous: Option<PartialMetadata> = tokio::fs::read(&meta)
@@ -1001,8 +1039,32 @@ pub async fn verify_file(
     spec: &DownloadSpec,
     cancel: &CancellationToken,
 ) -> Result<()> {
-    let mut file = tokio::fs::File::open(path).await?;
-    let size = file.metadata().await?.len();
+    cancel_check(cancel)?;
+    let path = path.to_owned();
+    let spec = spec.clone();
+    let cancel = cancel.clone();
+    // Await the worker rather than abandoning it on cancellation: pause/cancel
+    // must drain its reads and close the file before returning to the caller.
+    tokio::task::spawn_blocking(move || verify_file_blocking(&path, &spec, &cancel))
+        .await
+        .context("文件校验任务失败")?
+        .map(|_| ())
+}
+
+fn verify_file_blocking(
+    path: &Path,
+    spec: &DownloadSpec,
+    cancel: &CancellationToken,
+) -> Result<u64> {
+    use std::io::Read;
+
+    cancel_check(cancel)?;
+    let mut file = std::fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        bail!("校验目标不是普通文件");
+    }
+    let size = metadata.len();
     if spec.size.is_some_and(|expected| expected != size) {
         bail!("文件长度校验失败");
     }
@@ -1011,14 +1073,16 @@ pub async fn verify_file(
             zip::ZipArchive::new(std::fs::File::open(path)?)
                 .context("安装器不是有效的 JAR 文件")?;
         }
-        return Ok(());
+        cancel_check(cancel)?;
+        return Ok(size);
     }
     let mut sha1 = Sha1::new();
     let mut sha512 = Sha512::new();
-    let mut buffer = vec![0; 64 * 1024];
+    // Batch large reads without allocating a full MiB for each tiny asset.
+    let mut buffer = vec![0; size.clamp(1, 1024 * 1024) as usize];
     loop {
         cancel_check(cancel)?;
-        let count = file.read(&mut buffer).await?;
+        let count = file.read(&mut buffer)?;
         if count == 0 {
             break;
         }
@@ -1029,6 +1093,7 @@ pub async fn verify_file(
             sha512.update(&buffer[..count]);
         }
     }
+    cancel_check(cancel)?;
     if spec
         .sha1
         .as_ref()
@@ -1043,12 +1108,62 @@ pub async fn verify_file(
     {
         bail!("SHA-512 校验失败，已丢弃损坏文件");
     }
-    Ok(())
+    Ok(size)
 }
 
 #[cfg(test)]
 mod cache_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn reusing_local_file_cleans_only_owned_partials_after_verification() {
+        let temp = tempfile::tempdir().unwrap();
+        let cache = temp.path().join("cache");
+        let payload = b"verified local file";
+        let spec = DownloadSpec {
+            url: "https://example.invalid/game.jar".into(),
+            path: "game.jar".into(),
+            size: Some(payload.len() as u64),
+            sha1: Some(hex::encode(Sha1::digest(payload))),
+            sha512: None,
+        };
+        std::fs::write(temp.path().join(&spec.path), payload).unwrap();
+        let (part, meta) = temporary_paths(temp.path(), Some(&cache), "reuse", &spec).unwrap();
+        std::fs::create_dir_all(part.parent().unwrap()).unwrap();
+        std::fs::write(&part, b"old partial").unwrap();
+        std::fs::write(&meta, b"old metadata").unwrap();
+        let unrelated = part.parent().unwrap().join("user-file.txt");
+        std::fs::write(&unrelated, b"keep").unwrap();
+
+        let cancelled = CancellationToken::new();
+        cancelled.cancel();
+        assert!(
+            reuse_local_file(temp.path(), Some(&cache), "reuse", &spec, &cancelled)
+                .await
+                .is_err()
+        );
+        assert!(part.exists());
+        assert!(meta.exists());
+        assert_eq!(
+            reuse_local_file(
+                temp.path(),
+                Some(&cache),
+                "reuse",
+                &spec,
+                &CancellationToken::new()
+            )
+            .await
+            .unwrap(),
+            Some(payload.len() as u64)
+        );
+        assert!(!part.exists());
+        assert!(!meta.exists());
+        assert_eq!(std::fs::read(unrelated).unwrap(), b"keep");
+        assert_eq!(
+            std::fs::read(temp.path().join(&spec.path)).unwrap(),
+            payload
+        );
+    }
 
     fn completed_snapshot(root: &Path, cached: bool, count: usize) -> DownloadSnapshot {
         DownloadSnapshot {

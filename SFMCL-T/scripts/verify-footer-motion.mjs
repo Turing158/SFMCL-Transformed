@@ -19,11 +19,17 @@ await page.addInitScript(pixelAppFixture);
 await page.addInitScript(launchDockFixture);
 await page.addInitScript(() => {
   window.__footerMotions = [];
+  window.__disclosureMotions = [];
   const animate = Element.prototype.animate;
   Element.prototype.animate = function (frames, options) {
     const animation = animate.call(this, frames, options);
     if (options?.id === "sfmcl-t-footer-height") {
       window.__footerMotions.push(animation);
+      animation.pause();
+      animation.currentTime = 0;
+    }
+    if (options?.id === "sfmcl-t-launch-disclosure") {
+      window.__disclosureMotions.push(animation);
       animation.pause();
       animation.currentTime = 0;
     }
@@ -53,7 +59,7 @@ const sample = (time) =>
     const statusHeight = parseFloat(
       getComputedStyle(status, "::before").height,
     );
-    const card = document.querySelector(".launch-dock-main");
+    const card = document.querySelector(".launch-dock-card");
     const cardBounds = card.getBoundingClientRect();
     const cardStyle = getComputedStyle(card);
     return {
@@ -91,6 +97,78 @@ const sample = (time) =>
 const finish = async () => {
   await page.evaluate(() => window.__footerMotions.at(-1)?.finish());
   await expect(region).not.toHaveAttribute("data-resizing");
+};
+const disclosureCount = () =>
+  page.evaluate(() => window.__disclosureMotions.length);
+const disclosureSample = (time) =>
+  page.evaluate(async (time) => {
+    const animation = window.__disclosureMotions.at(-1);
+    animation.currentTime = time;
+    // Let both footer observers follow the actual animated clip height.
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+    const clip = animation.effect.target;
+    const card = clip.closest(".launch-dock-card");
+    const main = card.querySelector(".launch-dock-main");
+    const host = document.querySelector(".workspace-footer-region");
+    return {
+      height: parseFloat(getComputedStyle(clip).height),
+      natural: clip.firstElementChild.offsetHeight,
+      hidden: clip.hidden,
+      duration: animation.effect.getTiming().duration,
+      top: main.getBoundingClientRect().top,
+      rowHeight: main.offsetHeight,
+      cardBottom: card.getBoundingClientRect().bottom,
+      footerHeight: host.getBoundingClientRect().height,
+      contentHeight: host
+        .querySelector(".workspace-footer-content")
+        .getBoundingClientRect().height,
+      footerMotions: window.__footerMotions.length,
+    };
+  }, time);
+const disclosureFinish = async () => {
+  await page.evaluate(() => window.__disclosureMotions.at(-1).finish());
+  await expect(page.locator(".launch-dock")).not.toHaveAttribute(
+    "data-disclosure-animating",
+  );
+};
+const disclosureToggle = async () => {
+  const before = await disclosureCount();
+  // DOM activation avoids Playwright waiting for a deliberately paused card.
+  await page.locator(".launch-process-toggle").evaluate((node) => node.click());
+  await expect.poll(disclosureCount).toBe(before + 1);
+};
+const checkDisclosure = async (name, direction) => {
+  const start = await disclosureSample(0);
+  const early = await disclosureSample(60);
+  const middle = await disclosureSample(150);
+  const end = await disclosureSample(299);
+  for (const [previous, next] of [
+    [start, early],
+    [early, middle],
+    [middle, end],
+  ]) {
+    expect((next.height - previous.height) * direction).toBeGreaterThan(0);
+    expect((previous.top - next.top) * direction).toBeGreaterThan(0);
+  }
+  for (const frame of [start, early, middle, end]) {
+    expect(frame.hidden).toBe(false);
+    expect(frame.duration).toBe(300);
+    expect(frame.rowHeight).toBe(start.rowHeight);
+    expect(frame.cardBottom).toBeCloseTo(start.cardBottom, 1);
+    expect(frame.footerHeight).toBeCloseTo(frame.contentHeight, 1);
+    expect(frame.footerMotions).toBe(start.footerMotions);
+  }
+  expect(end.height).toBeCloseTo(direction === 1 ? end.natural : 0, 1);
+  await disclosureSample(100);
+  await page.screenshot({ path: `${evidence}/${name}.png` });
+  await disclosureFinish();
+  await expect(page.locator(".launch-processes-clip")).toHaveJSProperty(
+    "hidden",
+    direction === -1,
+  );
+  checks.push({ name, start, early, middle, end });
 };
 const checkTransition = async (name, direction) => {
   const start = await sample(0);
@@ -208,13 +286,112 @@ try {
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(375);
   await page.keyboard.press("Escape");
+
+  // Exercise the drawer under reduced-motion preference as well. Closing keeps
+  // its contents mounted until the same full-length height animation finishes.
+  await page.setViewportSize({ width: 1120, height: 640 });
+  await page.locator(".launch-primary").click();
+  await expect(page.locator(".launch-switch")).toBeEnabled();
+  await page.evaluate(() => window.__pixelTest.advanceLaunch(4));
+  await expect(page.locator(".launch-dock")).toHaveAttribute(
+    "data-state",
+    "running",
+  );
+  await page.locator(".launch-switch").click();
+  await expect(page.locator(".launch-process-toggle")).toBeVisible();
+  await page.locator(".launch-dock-card").hover();
+  await expect(page.locator(".launch-dock-card")).toHaveCSS("scale", "1");
+  await disclosureToggle();
+  await checkDisclosure("process-expand-full-motion", 1);
+  await disclosureToggle();
+  await checkDisclosure("process-collapse-full-motion", -1);
+
+  await disclosureToggle();
+  const opening = await disclosureSample(85);
+  await disclosureToggle();
+  const closingStart = await disclosureSample(0);
+  expect(closingStart.height).toBeCloseTo(opening.height, 1);
+  expect(closingStart.top).toBeCloseTo(opening.top, 1);
+  const closing = await disclosureSample(85);
+  await disclosureToggle();
+  const reopening = await disclosureSample(0);
+  expect(reopening.height).toBeCloseTo(closing.height, 1);
+  expect(reopening.top).toBeCloseTo(closing.top, 1);
+  expect(
+    await page.evaluate(() =>
+      window.__disclosureMotions
+        .slice(-3, -1)
+        .map((motion) => motion.playState),
+    ),
+  ).toEqual(["idle", "idle"]);
+  await disclosureFinish();
+  checks.push({ name: "process-rapid-reversals", opening, closing, reopening });
+
+  await disclosureToggle();
+  await disclosureFinish();
+  await disclosureToggle();
+  const grabbed = await disclosureSample(85);
+  const row = page.locator(".launch-dock-main");
+  const rowBounds = await row.boundingBox();
+  const x = rowBounds.x + rowBounds.width * 0.4;
+  const y = rowBounds.y + rowBounds.height * 0.7;
+  await row.evaluate((node) => {
+    node.addEventListener(
+      "pointerdown",
+      (event) => (window.__disclosurePointer = event.pointerId),
+      { once: true },
+    );
+  });
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  expect(
+    await page.evaluate(() => window.__disclosureMotions.at(-1).playState),
+  ).toBe("idle");
+  await expect(page.locator(".launch-processes-clip")).toHaveCSS(
+    "height",
+    `${grabbed.height}px`,
+  );
+  await page.mouse.move(x, y + 20);
+  await expect(page.locator(".launch-dock")).toHaveAttribute("data-dragging");
+  const dragged = await page
+    .locator(".launch-processes-clip")
+    .evaluate((node) => parseFloat(getComputedStyle(node).height));
+  expect(dragged).toBeCloseTo(Math.max(0, grabbed.height - 20), 1);
+  const beforeCancel = await disclosureCount();
+  await row.evaluate((node) => {
+    node.dispatchEvent(
+      new PointerEvent("pointercancel", {
+        pointerId: window.__disclosurePointer,
+        bubbles: true,
+      }),
+    );
+  });
+  await page.mouse.up();
+  await expect.poll(disclosureCount).toBe(beforeCancel + 1);
+  const rollback = await disclosureSample(0);
+  expect(rollback.height).toBeCloseTo(dragged, 1);
+  await checkDisclosure("process-drag-cancel-rollback", 1);
+  // Pressing and releasing without dragging also resumes an interrupted close.
+  await disclosureToggle();
+  const heldClose = await disclosureSample(85);
+  const heldBounds = await row.boundingBox();
+  await page.mouse.move(
+    heldBounds.x + heldBounds.width * 0.4,
+    heldBounds.y + heldBounds.height * 0.7,
+  );
+  await page.mouse.down();
+  const beforeRelease = await disclosureCount();
+  await page.mouse.up();
+  await expect.poll(disclosureCount).toBe(beforeRelease + 1);
+  expect((await disclosureSample(0)).height).toBeCloseTo(heldClose.height, 1);
+  await checkDisclosure("process-press-release-resume", -1);
   expect(errors).toEqual([]);
   await writeFile(
     `${evidence}/report.json`,
     JSON.stringify({ checks, errors }, null, 2),
   );
   console.log(
-    "PASS Inset launch card slides up/down with 3px pixel-stepped top corners and square bottom corners; card and page motion remain continuous through reversals and resizing, the bottom status strip stays anchored, and keyboard version selection remains usable.",
+    "PASS Launch card and page motion stay continuous through reversals and resizing. Process disclosure animates both directions for 300ms under reduced-motion preference, retains closing content, reverses without jumps and resumes smoothly after drag cancellation or a press/release; the footer follows without a second animation.",
   );
 } finally {
   await browser.close();

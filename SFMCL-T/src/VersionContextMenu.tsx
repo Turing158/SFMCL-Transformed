@@ -38,10 +38,8 @@ export function useVersionContextMenu(revision: string) {
   } | null>(null);
   const [managed, setManaged] = useState<Version | null>(null);
   const menuKey = useRef(0);
-  const locked = getLaunchTask(
-    app.tasks,
-    app.data.settings.activeVersion,
-  ).active;
+  const launchTask = getLaunchTask(app.tasks, app.data.settings.activeVersion);
+  const locked = launchTask.active && launchTask.phase !== "running";
 
   useEffect(() => {
     setMenu(null);
@@ -121,7 +119,8 @@ export function useVersionContextMenu(revision: string) {
           )
         )
           throw new Error("请先选择一个角色，再启动游戏");
-        if (getLaunchTask(latest.tasks, version.id).active) return;
+        const latestLaunch = getLaunchTask(latest.tasks, version.id);
+        if (latestLaunch.active && latestLaunch.phase !== "running") return;
         next.phase = "launching";
         setPending({ ...next });
         next.jobId = await api<string>("launch", {

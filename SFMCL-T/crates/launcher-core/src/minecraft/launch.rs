@@ -19,6 +19,95 @@ pub struct LaunchIdentity {
     pub online: bool,
     pub auth_server: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::{ConfigStore, GameDirectory},
+        downloads::{DownloadManager, Status},
+        jobs::Jobs,
+    };
+    use std::{fs::OpenOptions, time::Duration};
+
+    #[tokio::test]
+    async fn same_version_launches_have_independent_jobs_and_share_deletion_guard() {
+        let temp = tempfile::tempdir().unwrap();
+        let settings = Arc::new(ConfigStore::open(&temp.path().join("config")).unwrap());
+        let game = temp.path().join("game");
+        settings
+            .update(|settings| {
+                settings.active_dir = game.to_string_lossy().into_owned();
+                settings.game_dirs = vec![GameDirectory {
+                    name: "test".into(),
+                    path: settings.active_dir.clone(),
+                }];
+            })
+            .unwrap();
+        let root = settings.get().active_game_root().unwrap();
+        let version = root.join("versions/test");
+        std::fs::create_dir_all(&version).unwrap();
+        std::fs::write(version.join("test.json"), b"invalid version JSON").unwrap();
+        let installer = Arc::new(Installer {
+            settings,
+            downloads: DownloadManager::open(&temp.path().join("downloads"), 2).unwrap(),
+            jobs: Arc::new(Jobs::default()),
+            client: reqwest::Client::new(),
+        });
+        let player = || LaunchIdentity {
+            name: "Alex".into(),
+            uuid: "test-player".into(),
+            access_token: String::new(),
+            online: false,
+            auth_server: None,
+        };
+        // This single-thread runtime hasn't polled either workflow yet, so
+        // both jobs retain their guards while we try the deletion lock.
+        let first = installer.launch("test".into(), player()).await.unwrap();
+        let second = installer.launch("test".into(), player()).await.unwrap();
+        assert_ne!(first, second);
+        assert_eq!(installer.jobs.snapshots().len(), 2);
+        let deletion = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(root.join(".tmcl/locks/launch-test.lock"))
+            .unwrap();
+        assert!(deletion.try_lock().is_err());
+        installer.jobs.cancel(&first).unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if installer
+                    .jobs
+                    .snapshots()
+                    .iter()
+                    .all(|job| job.status.terminal())
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        // The corrupt test version fails preflight and releases both guards.
+        let completed = installer.jobs.snapshots();
+        assert_eq!(
+            completed.iter().find(|job| job.id == first).unwrap().status,
+            Status::Cancelled
+        );
+        assert_eq!(
+            completed
+                .iter()
+                .find(|job| job.id == second)
+                .unwrap()
+                .status,
+            Status::Failed
+        );
+        deletion.try_lock().unwrap();
+        assert!(installer.launch("test".into(), player()).await.is_err());
+        assert_eq!(installer.jobs.snapshots().len(), 2);
+    }
+}
 struct LaunchOptions {
     events: Option<LaunchEvents>,
     target: Option<crate::multiplayer::LaunchTarget>,
@@ -63,7 +152,10 @@ impl Installer {
             .create(true)
             .truncate(false)
             .open(lock_path)?;
-        lock.try_lock().context("此版本已在启动或运行中")?;
+        // Each launch retains a shared guard until its process exits. Other
+        // launches can coexist; version deletion still needs an exclusive lock.
+        lock.try_lock_shared()
+            .context("此版本正在被独占操作，请稍后启动")?;
         let job = self.jobs.create(
             JobKind::Launch,
             format!("启动 {id}"),

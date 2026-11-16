@@ -16,6 +16,8 @@ export function WorkspaceFooter({
   const targetHeight = useRef<number | null>(null);
   const statusHeight = useRef<number | null>(null);
   const cardHeight = useRef<number | null>(null);
+  const processesExpanded = useRef(false);
+  const cardDragging = useRef(false);
   const currentKind = useRef(kind);
   currentKind.current = kind;
   const transition = useRef<Animation | null>(null);
@@ -24,7 +26,7 @@ export function WorkspaceFooter({
     const host = region.current;
     const inner = content.current;
     if (!host || !inner) return;
-    const card = inner.querySelector<HTMLElement>(".launch-dock-main");
+    const card = inner.querySelector<HTMLElement>(".launch-dock-card");
     // Hover scaling must not change the footer's layout or slide distance.
     const nextCard = card?.offsetHeight ?? 0;
     const cardScale = card ? parseFloat(getComputedStyle(card).scale) || 1 : 1;
@@ -33,6 +35,17 @@ export function WorkspaceFooter({
     );
     const nextStatus = status?.getBoundingClientRect().height ?? 0;
     const launch = currentKind.current === "launch";
+    const expanded = !!inner.querySelector(
+      ".launch-dock[data-processes-expanded]",
+    );
+    const expansionChanged = expanded !== processesExpanded.current;
+    processesExpanded.current = expanded;
+    const dragging = !!inner.querySelector(".launch-dock[data-dragging]");
+    const disclosureAnimating =
+      launch &&
+      !!inner.querySelector(".launch-dock[data-disclosure-animating]");
+    const dragEnded = cardDragging.current && !dragging;
+    cardDragging.current = dragging;
     const next = launch ? inner.getBoundingClientRect().height : nextStatus;
     const nextOffset = launch ? 0 : nextCard;
     const nextAlpha = launch ? 1 : 0;
@@ -78,7 +91,9 @@ export function WorkspaceFooter({
     host.style.setProperty("--launch-card-alpha", String(nextAlpha));
     delete host.dataset.resizing;
     if (
-      !animate ||
+      dragging ||
+      disclosureAnimating ||
+      (!animate && !expansionChanged && !dragEnded) ||
       !initialized ||
       (Math.abs(from - next) < 0.5 &&
         Math.abs(fromStatus - nextStatus) < 0.5 &&

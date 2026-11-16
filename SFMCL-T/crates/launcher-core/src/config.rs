@@ -71,8 +71,15 @@ pub struct GameDirectory {
 
 impl Default for Settings {
     fn default() -> Self {
-        let default_dir = directories::BaseDirs::new()
-            .map(|d| d.data_dir().to_path_buf())
+        let executable_dir = if cfg!(feature = "single-file") {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(Path::to_path_buf))
+        } else {
+            None
+        };
+        let default_dir = executable_dir
+            .or_else(|| directories::BaseDirs::new().map(|d| d.data_dir().to_path_buf()))
             .unwrap_or_else(|| PathBuf::from("."));
         let path = default_dir.to_string_lossy().into_owned();
         Self {
@@ -361,6 +368,58 @@ pub fn import_legacy(value: &Value, base: &Path) -> Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fresh_settings_use_the_package_default_game_directory() {
+        let expected = if cfg!(feature = "single-file") {
+            std::env::current_exe()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .to_path_buf()
+        } else {
+            directories::BaseDirs::new()
+                .unwrap()
+                .data_dir()
+                .to_path_buf()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let old: Settings = serde_json::from_str("{}").unwrap();
+        for settings in [ConfigStore::open(dir.path()).unwrap().get(), old] {
+            assert_eq!(Path::new(&settings.active_dir), expected);
+            assert_eq!(settings.game_dirs.len(), 1);
+            assert_eq!(settings.game_dirs[0].name, "默认游戏目录");
+            assert_eq!(settings.game_dirs[0].path, settings.active_dir);
+            assert_eq!(
+                settings.active_game_root().unwrap(),
+                expected.join(".minecraft")
+            );
+            settings.validate().unwrap();
+        }
+        assert!(!dir.path().join("settings.json").exists());
+    }
+    #[test]
+    fn saved_game_directories_override_the_package_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let game = dir.path().join("existing-game");
+        let mut settings = Settings::default();
+        settings.game_dirs = vec![GameDirectory {
+            name: "已有目录".into(),
+            path: game.to_string_lossy().into_owned(),
+        }];
+        settings.active_dir = settings.game_dirs[0].path.clone();
+        ConfigStore::open(dir.path())
+            .unwrap()
+            .save(settings)
+            .unwrap();
+        let path = dir.path().join("settings.json");
+        let bytes = std::fs::read(&path).unwrap();
+        let loaded = ConfigStore::open(dir.path()).unwrap().get();
+        assert_eq!(Path::new(&loaded.active_dir), game);
+        assert_eq!(loaded.game_dirs.len(), 1);
+        assert_eq!(loaded.game_dirs[0].name, "已有目录");
+        assert_eq!(loaded.game_dirs[0].path, loaded.active_dir);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    }
     #[test]
     fn home_settings_default_for_old_configs_and_persist_new_layouts() {
         let dir = tempfile::tempdir().unwrap();

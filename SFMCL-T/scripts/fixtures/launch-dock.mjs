@@ -29,6 +29,7 @@ export function launchDockFixture() {
     const job = test.latestLaunch;
     job.currentStep = index;
     job.status = "running";
+    job.launch.running = index === 4;
     job.steps = names.map((name, i) => ({
       name,
       status: i < index ? "completed" : i === index ? "running" : "queued",
@@ -100,11 +101,19 @@ export function launchDockFixture() {
     if (operation === "launch") {
       test.latestLaunch = {
         id: `launch-${++serial}`,
+        createdAt: Math.floor(Date.now() / 1000),
         title: `启动 ${test.data.settings.activeVersion}`,
         status: "running",
         currentStep: 0,
         steps: [],
         log: [],
+        launch: {
+          versionId: test.data.settings.activeVersion,
+          gameVersion: test.data.settings.activeVersion,
+          directory: test.data.settings.activeDir,
+          playerName: "Alex",
+          running: false,
+        },
       };
       test.advanceLaunch(0);
       if (!test.holdLaunch) test.tasks.jobs.unshift(test.latestLaunch);
@@ -113,6 +122,7 @@ export function launchDockFixture() {
     if (operation === "jobs.cancel") {
       const job = test.tasks.jobs.find((item) => item.id === payload.id);
       job.status = "cancelled";
+      job.launch.running = false;
       job.steps[job.currentStep].status = "cancelled";
       const file = test.tasks.downloads.find(
         (item) => item.id === job.downloadId,

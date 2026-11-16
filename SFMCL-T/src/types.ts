@@ -146,6 +146,7 @@ export interface Step {
 }
 export interface Job {
   id: string;
+  createdAt?: number;
   title: string;
   status: Status;
   steps: Step[];
