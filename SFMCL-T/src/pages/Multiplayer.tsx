@@ -21,6 +21,7 @@ import { Input, Select, Textarea } from "../controls";
 import { PageHeader } from "../PageHeader";
 import { api, confirmAction, desktop, pick } from "../api";
 import { useApp } from "../store";
+import { useTasks } from "../tasks";
 import { useMultiplayer } from "../useMultiplayer";
 import { useTabContentTransition } from "../useTabContentTransition";
 import { getHostLaunch, getHostLaunches, getLaunchTask } from "../launchState";
@@ -49,6 +50,7 @@ const formatOfficialCode = (value: string) =>
 
 export function Multiplayer() {
   const app = useApp();
+  const tasks = useTasks();
   const mp = useMultiplayer();
   const id = useId();
   const s = mp.snapshot;
@@ -62,8 +64,8 @@ export function Multiplayer() {
   const version = app.versions.find(
     (item) => item.id === settings.activeVersion,
   );
-  const launch = getLaunchTask(app.tasks, settings.activeVersion);
-  const hostGames = getHostLaunches(app.tasks);
+  const launch = getLaunchTask(tasks, settings.activeVersion);
+  const hostGames = getHostLaunches(tasks);
   const hostLaunch = getHostLaunch(hostGames, mp.hostLaunchId);
   const hostContext = hosting ? hostLaunch?.launch : undefined;
   const usingHostGame = hosting && hostGames.length > 0;
@@ -79,8 +81,13 @@ export function Multiplayer() {
   const official = service === "official";
   const needsTunnel = !official && hosting && mp.connectionMode === "tunnel";
   const componentsReady = s.componentReady && (!needsTunnel || s.tunnelReady);
-  const componentNoticeAtBottom =
-    componentsReady && s.state === "idle" && !s.sessionId;
+  const showComponentNotice =
+    !inSession &&
+    (mp.loading ||
+      mp.statusUnavailable ||
+      !componentsReady ||
+      s.state !== "idle" ||
+      !!s.sessionId);
   const serviceContent = useTabContentTransition(official ? 0 : 1, !inSession);
   const roomContent = useTabContentTransition(hosting ? 0 : 1, !inSession);
   const usingSharedNode = !official && mp.connectionMode === "shared";
@@ -289,7 +296,7 @@ export function Multiplayer() {
           </div>
         }
       />
-      {!inSession && !componentNoticeAtBottom && notice}
+      {showComponentNotice && notice}
       <TabPanel
         ref={serviceContent}
         id={`${id}-service`}
@@ -759,7 +766,6 @@ export function Multiplayer() {
           )}
         </section>
       </TabPanel>
-      {componentNoticeAtBottom && notice}
     </div>
   );
 }

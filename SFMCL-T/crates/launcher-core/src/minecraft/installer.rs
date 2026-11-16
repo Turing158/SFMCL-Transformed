@@ -18,6 +18,7 @@ use std::{
 };
 
 pub use super::download_source::{BMCL, MANIFEST};
+mod work;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -135,16 +136,43 @@ impl Installer {
         job: Arc<Job>,
         offset: usize,
     ) -> Result<()> {
+        let work = work::InstallWork::create(&request.root, &job.snapshot().id)?;
+        let result = self
+            .install_with_work(request, job.clone(), offset, work.path())
+            .await;
+        // Clear download records and drain their workers before removing the
+        // installer JARs/processor scratch files, on every completion path.
+        match work.cleanup(&self.downloads).await {
+            Ok(ids) => {
+                if job
+                    .snapshot()
+                    .download_id
+                    .as_ref()
+                    .is_some_and(|id| ids.contains(id))
+                {
+                    job.detach_download();
+                }
+            }
+            Err(error) => job.log(format!(
+                "安装临时文件暂未清理，保留于 {}：{error:#}",
+                work.path().display()
+            )),
+        }
+        result
+    }
+
+    async fn install_with_work(
+        &self,
+        request: &InstallRequest,
+        job: Arc<Job>,
+        offset: usize,
+        work: &Path,
+    ) -> Result<()> {
         job.step(offset, "获取 Minecraft 官方版本信息");
         let mut base = self.base_version(&request.minecraft, &job).await?;
         base["id"] = json!(request.name);
         base["jar"] = json!(request.name);
         base["clientVersion"] = json!(request.minecraft);
-        let work = safe_join(
-            &request.root,
-            format!(".tmcl/install/{}", job.snapshot().id),
-        )?;
-        std::fs::create_dir_all(&work)?;
         atomic_write(
             &work.join("request.json"),
             &serde_json::to_vec_pretty(request)?,
@@ -163,13 +191,13 @@ impl Installer {
         job.step(offset + 3, "准备加载器");
         let mut profile = base.clone();
         if let Some(choice) = &request.loader {
-            profile = loaders::install(self, request, &base, choice, &work, job.clone()).await?;
+            profile = loaders::install(self, request, &base, choice, work, job.clone()).await?;
         }
         if let Some(optifine) = &request.optifine {
             if request.loader.as_ref().is_none_or(|l| l.kind != "Forge") {
                 bail!("附加 OptiFine 仅用于兼容的 Forge 安装");
             }
-            loaders::install_optifine_mod(self, request, optifine, &work, job.clone()).await?;
+            loaders::install_optifine_mod(self, request, optifine, work, job.clone()).await?;
         }
         if let Some(api) = &request.fabric_api {
             if request.loader.as_ref().is_none_or(|l| l.kind != "Fabric") {

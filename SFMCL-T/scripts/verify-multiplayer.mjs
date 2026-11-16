@@ -296,6 +296,10 @@ await page.addInitScript(() => {
   };
 });
 const main = page.locator('main[data-page="multiplayer"]');
+const componentNotice = main.getByRole("region", {
+  name: "联机状态",
+  exact: true,
+});
 const nav = page.getByRole("navigation", { name: "主导航" });
 const notification = (message, kind = "error") =>
   page
@@ -334,7 +338,7 @@ try {
     window.__multiplayerTest.failStatus = false;
   });
   await main.getByRole("button", { name: "刷新", exact: true }).click();
-  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
+  await expect(componentNotice).toHaveCount(0);
   await main.getByRole("tab", { name: "自定义", exact: true }).click();
   await statusFailure.click();
   await expect(
@@ -352,7 +356,7 @@ try {
   await main.screenshot({ path: `${evidence}/components-ready.png` });
   await go("版本管理");
   await go("联机");
-  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
+  await expect(componentNotice).toHaveCount(0);
   await page.evaluate(() => {
     window.__multiplayerTest.snapshot.componentReady = false;
   });
@@ -365,7 +369,7 @@ try {
   ).toBeEnabled();
   await main.screenshot({ path: `${evidence}/components-required.png` });
   pass(
-    "启动自动读取已校验组件状态、无需手动准备、切页保持就绪、缺失时显示准备和导入入口",
+    "启动自动读取已校验组件状态、就绪后隐藏状态卡片、切页保持隐藏、缺失时显示准备和导入入口",
   );
   await main.getByLabel("房间名称", { exact: true }).fill("周末的生存世界");
   await main.getByRole("button", { name: "准备组件", exact: true }).click();
@@ -419,7 +423,7 @@ try {
   ).toBeVisible();
   await page.evaluate(() => window.__multiplayerTest.finishPreparation());
   await go("联机");
-  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
+  await expect(componentNotice).toHaveCount(0);
   await expect(
     main.getByRole("button", { name: "准备组件", exact: true }),
   ).toHaveCount(0);
@@ -609,13 +613,7 @@ try {
   ).toBeVisible();
   await main.getByRole("button", { name: "准备组件", exact: true }).click();
   await page.evaluate(() => window.__multiplayerTest.finishPreparation());
-  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
-  await expect(
-    componentList.getByRole("img", {
-      name: "Cloudflare Tunnel 2026.10.7 · 已就绪",
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(componentNotice).toHaveCount(0);
   await expect(
     main.getByRole("button", { name: "准备组件", exact: true }),
   ).toHaveCount(0);
@@ -638,16 +636,16 @@ try {
     archive: "C:/Fixtures/easytier-windows-x86_64-v2.6.4.zip",
   });
   await page.evaluate(() => window.__multiplayerTest.finishPreparation());
-  await expect(main.getByText("组件已就绪", { exact: true })).toBeVisible();
+  await expect(componentNotice).toHaveCount(0);
   await main.getByRole("tab", { name: "加入房间", exact: true }).click();
-  await expect(componentList).not.toContainText("Cloudflare Tunnel");
+  await expect(componentList).toHaveCount(0);
   await main.getByRole("tab", { name: "创建房间", exact: true }).click();
-  await expect(componentList).toContainText("Cloudflare Tunnel");
+  await expect(componentList).toHaveCount(0);
   await main.getByRole("tab", { name: "官方", exact: true }).click();
-  await expect(componentList).not.toContainText("Cloudflare Tunnel");
+  await expect(componentList).toHaveCount(0);
   await main.getByRole("tab", { name: "自定义", exact: true }).click();
   pass(
-    "选择 Cloudflare 后显示独立组件状态、提前下载、取消重试、导入时获取隧道、就绪后隐藏准备入口，官方和加入模式按需显示",
+    "选择 Cloudflare 后显示缺失组件状态、提前下载、取消重试、导入时获取隧道、全部就绪后隐藏状态卡片，切换官方和加入模式保持隐藏",
   );
   const connectionRow = main.locator(".multiplayer-connection-row");
   await expect

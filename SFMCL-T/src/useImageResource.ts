@@ -1,13 +1,18 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { api } from "./api";
-import { imageCache as images, imageRevision, subscribeImages } from "./images";
+import { loadImage, imageRevision, subscribeImages } from "./images";
 
 export function useImageResource(
   path: string,
   fallback = "",
   proxyRemote = false,
 ) {
-  const revision = useSyncExternalStore(subscribeImages, imageRevision);
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeImages(path, listener),
+    [path],
+  );
+  const snapshot = useCallback(() => imageRevision(path), [path]);
+  const revision = useSyncExternalStore(subscribe, snapshot);
   const [resolved, setResolved] = useState({
     path: "",
     fallback,
@@ -24,20 +29,13 @@ export function useImageResource(
     const resolve = (url: string) => {
       if (active) setResolved({ path, fallback, revision, url });
     };
-    const cached = images.get(path);
-    if (cached) {
-      resolve(cached);
-      return;
-    }
-    void api<string>("image", { path })
+    void loadImage(path, () => api<string>("image", { path }))
       .then((value) => {
-        if (imageRevision() !== revision) return;
-        if (images.size > 100) images.clear();
-        images.set(path, value);
+        if (imageRevision(path) !== revision) return;
         resolve(value);
       })
       .catch(() => {
-        resolve(fallback);
+        if (imageRevision(path) === revision) resolve(fallback);
       });
     return () => {
       active = false;

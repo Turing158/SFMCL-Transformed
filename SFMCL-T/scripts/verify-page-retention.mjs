@@ -7,7 +7,9 @@ import { playersFixture } from "./fixtures/players.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 import { waitForAutoSave } from "./lib/auto-save.mjs";
 
-const evidence = runtimePath("evidence/page-retention");
+const evidence =
+  process.env.SFMCL_T_TEST_ARTIFACT_DIR ||
+  runtimePath("evidence/page-retention");
 await mkdir(evidence, { recursive: true });
 const browser = await chromium.launch({
   ...(process.platform === "win32" ? { channel: "msedge" } : {}),

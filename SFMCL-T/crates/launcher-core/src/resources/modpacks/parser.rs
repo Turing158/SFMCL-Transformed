@@ -36,11 +36,13 @@ pub struct Pack {
     pub profile_files: HashSet<PathBuf>,
     pub verified: Vec<(String, String)>,
 }
+#[derive(Clone)]
 pub struct PackFile {
     pub path: String,
     pub optional: bool,
     pub source: FileSource,
 }
+#[derive(Clone)]
 pub enum FileSource {
     Download {
         spec: DownloadSpec,

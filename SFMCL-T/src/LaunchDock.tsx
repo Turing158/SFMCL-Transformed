@@ -37,6 +37,7 @@ import { versionIcon } from "./versionIcon";
 import { versionPayload } from "./versionActions";
 import { gameDirectoryName, gameDirectoryPath } from "./gameDirectories";
 import { useApp } from "./store";
+import { useTasks } from "./tasks";
 import { FooterText } from "./FooterText";
 import { useLaunchDisclosure } from "./useLaunchDisclosure";
 import { useVersionPickerPopup } from "./useVersionPickerPopup";
@@ -105,6 +106,7 @@ export function LaunchDock({
   playerCaption: string;
 }) {
   const app = useApp();
+  const tasks = useTasks();
   const settings = app.data.settings;
   const [collapsedGames, setCollapsedGames] = useState<
     Record<string, { icon: string; startedAt: number }>
@@ -116,12 +118,12 @@ export function LaunchDock({
   const [stoppingGames, setStoppingGames] = useState<string[]>([]);
   const stopRequests = useRef(new Set<string>());
   const task = getLaunchTask(
-    app.tasks,
+    tasks,
     settings.activeVersion,
     Object.keys(collapsedGames),
   );
-  const processes = app.tasks.jobs.filter(
-    (job) => collapsedGames[job.id] && isActiveLaunch(job, app.tasks.downloads),
+  const processes = tasks.jobs.filter(
+    (job) => collapsedGames[job.id] && isActiveLaunch(job, tasks.downloads),
   );
   const processesExpanded = processesOpen && processes.length > 0;
   const version = app.versions.find((item) => item.id === task.versionId);
@@ -152,8 +154,8 @@ export function LaunchDock({
   const actions = useRef<HTMLDivElement>(null);
   const requestInFlight = useRef(false);
   const focusWhenReady = useRef(false);
-  const tasksRef = useRef(app.tasks);
-  tasksRef.current = app.tasks;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
   const pickerId = useId();
   const statusId = useId();
   const processesId = useId();
@@ -170,10 +172,10 @@ export function LaunchDock({
 
   useLayoutEffect(() => {
     const previous = previousSelection.current;
-    const running = app.tasks.jobs.filter(
+    const running = tasks.jobs.filter(
       (job) =>
         !collapsedGames[job.id] &&
-        isActiveLaunch(job, app.tasks.downloads) &&
+        isActiveLaunch(job, tasks.downloads) &&
         (job.launch?.running ??
           job.steps[job.currentStep]?.name === "游戏运行"),
     );
@@ -202,13 +204,13 @@ export function LaunchDock({
       return next;
     });
     setProcessesOpen(false);
-  }, [versionSelection, app.tasks, app.versions, collapsedGames]);
+  }, [versionSelection, tasks, app.versions, collapsedGames]);
 
   useEffect(() => {
     for (const id of stopRequests.current) {
       if (
-        !app.tasks.jobs.some(
-          (job) => job.id === id && isActiveLaunch(job, app.tasks.downloads),
+        !tasks.jobs.some(
+          (job) => job.id === id && isActiveLaunch(job, tasks.downloads),
         )
       ) {
         stopRequests.current.delete(id);
@@ -217,15 +219,15 @@ export function LaunchDock({
     }
     setCollapsedGames((current) => {
       const entries = Object.entries(current).filter(([id]) =>
-        app.tasks.jobs.some(
-          (job) => job.id === id && isActiveLaunch(job, app.tasks.downloads),
+        tasks.jobs.some(
+          (job) => job.id === id && isActiveLaunch(job, tasks.downloads),
         ),
       );
       return entries.length === Object.keys(current).length
         ? current
         : Object.fromEntries(entries);
     });
-  }, [app.tasks]);
+  }, [tasks]);
 
   const closePicker = useCallback((restoreFocus = true) => {
     setPickerOpen(false);
@@ -372,15 +374,14 @@ export function LaunchDock({
 
   useEffect(() => {
     if (!pending?.requested || !pending.jobId) return;
-    const job = app.tasks.jobs.find((item) => item.id === pending.jobId);
+    const job = tasks.jobs.find((item) => item.id === pending.jobId);
     if (!job) return;
     const settled =
       pending.kind === "launch" ||
-      (pending.kind === "cancel" &&
-        !isActiveLaunch(job, app.tasks.downloads)) ||
-      (pending.kind === "resume" && app.tasks !== pending.snapshot);
+      (pending.kind === "cancel" && !isActiveLaunch(job, tasks.downloads)) ||
+      (pending.kind === "resume" && tasks !== pending.snapshot);
     if (settled) setPending(null);
-  }, [app.tasks, pending]);
+  }, [tasks, pending]);
 
   const mode = pending
     ? pending.kind === "cancel"
@@ -499,7 +500,7 @@ export function LaunchDock({
     requestInFlight.current = true;
     setActionError(null);
     closePicker(false);
-    setPending({ kind, jobId, requested: false, snapshot: app.tasks });
+    setPending({ kind, jobId, requested: false, snapshot: tasks });
     try {
       await app.run(async () => {
         try {

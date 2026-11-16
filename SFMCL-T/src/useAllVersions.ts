@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { gameDirectoryName } from "./gameDirectories";
 import { invalidateImages } from "./images";
@@ -51,7 +51,6 @@ export function useAllVersions(
         }
       });
       setResult({ request, versions: [...versions.values()], errors });
-      invalidateImages();
     });
     return () => {
       active = false;
@@ -59,10 +58,17 @@ export function useAllVersions(
   }, [enabled, request]);
 
   const ready = result?.request === request;
-  return {
-    versions: ready ? result.versions : [],
-    errors: ready ? result.errors : [],
-    loading: enabled && !ready,
-    refresh: () => setRevision((value) => value + 1),
-  };
+  const refresh = useCallback(() => {
+    invalidateImages(result?.versions.map((version) => version.icon) ?? []);
+    setRevision((value) => value + 1);
+  }, [result]);
+  return useMemo(
+    () => ({
+      versions: ready ? result.versions : [],
+      errors: ready ? result.errors : [],
+      loading: enabled && !ready,
+      refresh,
+    }),
+    [result, ready, enabled, refresh],
+  );
 }

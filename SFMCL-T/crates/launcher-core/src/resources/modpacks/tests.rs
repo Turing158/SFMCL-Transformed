@@ -1,3 +1,4 @@
+use super::parser::FileSource;
 use super::*;
 use serde_json::{json, Value};
 use sha1::Digest;

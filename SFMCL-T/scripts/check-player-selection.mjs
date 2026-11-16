@@ -22,18 +22,15 @@ export async function verifyPlayerSelection(page, check) {
       has: page.getByRole("button", { name: "选择角色 Alex", exact: true }),
     });
     const cardBox = await card.boundingBox();
-    const actionsBox = await card.locator(".players-row-actions").boundingBox();
     const actionBox = await card
       .getByRole("button", { name: "刷新 Alex 登录", exact: true })
       .boundingBox();
     const gaps = [
       { x: cardBox.x + cardBox.width - 4, y: cardBox.y + 24 },
-      view === "grove"
-        ? { x: actionsBox.x + actionBox.width / 2, y: cardBox.y + 4 }
-        : { x: cardBox.x + 24, y: actionsBox.y + actionsBox.height / 2 },
+      { x: cardBox.x + cardBox.width / 2, y: cardBox.y + 4 },
       {
-        x: actionBox.x + actionBox.width + 3,
-        y: actionsBox.y + actionsBox.height / 2,
+        x: actionBox.x - 3,
+        y: actionBox.y + actionBox.height / 2,
       },
     ];
     for (const point of gaps) {
@@ -58,7 +55,7 @@ export async function verifyPlayerSelection(page, check) {
     await expect(select("Steve")).toHaveAttribute("aria-pressed", "true");
   }
   check(
-    "Card padding, action-row/column blanks and button gaps select exactly once in both views; refresh and remove stay independent",
+    "Card padding and corner-button gaps select exactly once in both views; refresh and remove stay independent",
   );
 
   // Load a cached local skin as well as the default avatars before measuring.
@@ -93,7 +90,7 @@ export async function verifyPlayerSelection(page, check) {
       await ui.evaluate((root) => {
         const controls = [
           ...root.querySelectorAll(
-            '.players-heading button, .players-row-actions button, .players-actions button, .players-model, .players-view-switch, .players-select[aria-label="选择角色 Alex"]',
+            '.players-heading button, .players-icon-button, .players-actions button, .players-model, .players-view-switch, .players-select[aria-label="选择角色 Alex"]',
           ),
         ];
         const cards = [...root.querySelectorAll(".players-card")];

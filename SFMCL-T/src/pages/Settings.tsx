@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Check, FolderOpen, RefreshCw, Settings2 } from "lucide-react";
 import { PageHeader } from "../PageHeader";
 import { useApp } from "../store";
+import { invalidateImages } from "../images";
 import { api, pick } from "../api";
 import { Button, TabList, TabPanel, PixelFrame } from "../components";
 import { GameSettingsFields } from "./GameSettingsFields";
@@ -186,7 +187,10 @@ export function SettingsPage() {
                               "jpg",
                               "jpeg",
                             ]);
-                            if (path) change("background", path);
+                            if (path) {
+                              invalidateImages([path]);
+                              change("background", path);
+                            }
                           })
                         }
                       >
@@ -204,7 +208,12 @@ export function SettingsPage() {
               )}
               <div className="row-actions">
                 <Button
-                  onClick={() => void app.run(app.refresh, "背景与图片已刷新")}
+                  onClick={() =>
+                    void app.run(
+                      () => app.refresh("backgrounds"),
+                      "背景图片已刷新",
+                    )
+                  }
                 >
                   <RefreshCw size={16} />
                   刷新背景图片
@@ -328,7 +337,10 @@ export function SettingsPage() {
                               "jpg",
                               "jpeg",
                             ]);
-                            if (path) change("player3dBackground", path);
+                            if (path) {
+                              invalidateImages([path]);
+                              change("player3dBackground", path);
+                            }
                           })
                         }
                       >

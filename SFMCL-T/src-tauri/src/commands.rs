@@ -356,6 +356,8 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             }
             r.settings.save(settings)?;
             r.downloads
+                .set_concurrency(r.settings.get().download_concurrency);
+            r.downloads
                 .sources()
                 .set_mode(r.settings.get().minecraft_download_source);
             r.downloads.set_cache_directory(&cache)?;
@@ -377,6 +379,8 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             let count = r.accounts.import_legacy(&value)?;
             let cache = settings.download_cache_directory(&r.directory);
             r.settings.save(settings)?;
+            r.downloads
+                .set_concurrency(r.settings.get().download_concurrency);
             r.downloads
                 .sources()
                 .set_mode(r.settings.get().minecraft_download_source);

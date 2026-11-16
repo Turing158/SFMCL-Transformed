@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, external } from "./api";
 import { useApp } from "./store";
+import { useTaskSelector } from "./tasks";
 import { usePageActive } from "./PageActivity";
 import type { Step } from "./types";
 
@@ -24,7 +25,7 @@ const terminal = (status?: string) =>
 let loginQueue: Promise<void> = Promise.resolve();
 
 export function usePlayerLogin(active: boolean) {
-  const { tasks, run, refresh, notify, navigate } = useApp();
+  const { run, refresh, notify, navigate } = useApp();
   const pageActive = usePageActive();
   const [login, setLogin] = useState<DeviceLogin | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,7 +38,9 @@ export function usePlayerLogin(active: boolean) {
   // A new attempt waits for any late device-code response to be cancelled first.
   // This also avoids racing the backend's single-login gate on rapid navigation.
   const notified = useRef("");
-  const job = tasks.jobs.find((item) => item.id === login?.jobId);
+  const job = useTaskSelector((tasks) =>
+    tasks.jobs.find((item) => item.id === login?.jobId),
+  );
   const completed = job?.status === "completed";
   const step = completed
     ? 3

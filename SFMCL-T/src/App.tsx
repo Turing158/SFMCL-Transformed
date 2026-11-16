@@ -1,6 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import {
-  ArrowDownToLine,
   Box,
   ChevronLeft,
   ChevronRight,
@@ -10,8 +9,8 @@ import {
   Play,
   Settings2,
 } from "lucide-react";
-import { PageRouteProvider, useApp } from "./store";
-import { desktop, statusLabel } from "./api";
+import { PageRouteProvider, useApp, useNotifications } from "./store";
+import { desktop } from "./api";
 import { Skin, useImage, PixelFrame } from "./components";
 import { Players } from "./pages/Players";
 import { Versions } from "./pages/Versions";
@@ -38,7 +37,8 @@ import { appIcon } from "./branding";
 import { BrandWordmark } from "./BrandWordmark";
 import { PageHeader } from "./PageHeader";
 import { PageActivity } from "./PageActivity";
-import { SidebarProgress, useSidebarProgress } from "./SidebarProgress";
+import { SidebarDownloads } from "./SidebarDownloads";
+import { useTaskSelector } from "./tasks";
 import { HomeLandscape } from "./HomeLandscape";
 import { useHomeScrollPadding } from "./useHomeScrollPadding";
 import { handleWindowDrag } from "./windowDrag";
@@ -80,35 +80,6 @@ export default function App() {
     (p) => p.uuid === app.data.settings.activePlayer,
   );
   const playerCaption = usePlayerCaption(pageKey, player?.name);
-  const active = app.tasks.downloads.filter(
-    (d) => d.status === "running",
-  ).length;
-  const sidebarProgress = useSidebarProgress(
-    app.tasks,
-    ["always", "active"].includes(app.data.settings.downloadTaskDisplay),
-  );
-  const showDownloadTasks =
-    app.data.settings.downloadTaskDisplay === "always" ||
-    (app.data.settings.downloadTaskDisplay === "active" &&
-      (sidebarProgress.active || sidebarProgress.present));
-  const download =
-    app.tasks.downloads.find((d) => d.status === "running") ??
-    app.tasks.downloads.find((d) => ["pausing", "queued"].includes(d.status)) ??
-    app.tasks.downloads.find((d) => ["failed", "paused"].includes(d.status)) ??
-    app.tasks.downloads[0];
-  const task =
-    (sidebarProgress.active || sidebarProgress.present
-      ? sidebarProgress.info
-      : undefined) ?? download;
-  const progress = sidebarProgress.present
-    ? sidebarProgress.info?.value
-    : undefined;
-  const downloadTitle = task?.title || "暂无下载任务";
-  const taskStatusLabel = task
-    ? "label" in task && task.label
-      ? task.label
-      : statusLabel[task.status]
-    : "准备好下一次出发";
   const background = useImage(
     app.data.backgroundPath ||
       (["none", "default"].includes(app.data.settings.backgroundType)
@@ -186,35 +157,7 @@ export default function App() {
         </nav>
         <FavoriteVersions collapsed={railCollapsed} />
         <div className="sidebar-bottom">
-          {showDownloadTasks && (
-            <div
-              className="sidebar-downloads"
-              data-status={task?.status || "idle"}
-            >
-              <button
-                className="sidebar-task has-surface"
-                onClick={() => app.setPage("downloads")}
-                aria-current={app.page === "downloads" ? "page" : undefined}
-                aria-label={`下载中心：${downloadTitle}${task ? `，${taskStatusLabel}` : ""}`}
-                data-tooltip={railCollapsed ? downloadTitle : undefined}
-                data-tooltip-placement="right"
-              >
-                <PixelFrame />
-                <ArrowDownToLine size={18} />
-                <span className="task-copy">
-                  <strong>{downloadTitle}</strong>
-                  <small>{taskStatusLabel}</small>
-                </span>
-                {progress !== undefined && (
-                  <b className="task-count has-surface">
-                    <PixelFrame />
-                    {progress}%
-                  </b>
-                )}
-              </button>
-              <SidebarProgress state={sidebarProgress} />
-            </div>
-          )}
+          <SidebarDownloads railCollapsed={railCollapsed} />
           <button
             className="profile-button has-surface"
             onClick={() => app.setPage("players")}
@@ -280,11 +223,7 @@ export default function App() {
                 <FooterStatusIcon iconKey="dot">
                   <span className="status-dot" />
                 </FooterStatusIcon>
-                <FooterText
-                  slot="message"
-                  role="status"
-                  text={active > 0 ? `${active} 个下载正在进行` : "准备就绪"}
-                />
+                <DownloadStatus />
               </span>
               <FooterText
                 slot="player"
@@ -296,10 +235,7 @@ export default function App() {
           )}
         </WorkspaceFooter>
       </div>
-      <NotificationDeck
-        notifications={app.notifications}
-        onDismiss={app.dismissNotification}
-      />
+      <AppNotifications />
       <ModpackDropTarget />
       <YggdrasilDropTarget />
     </div>
@@ -330,5 +266,29 @@ function Home() {
         !app.data.backgroundPath &&
         ["none", "default"].includes(s.backgroundType) && <HomeLandscape />}
     </div>
+  );
+}
+
+function DownloadStatus() {
+  const active = useTaskSelector(
+    (tasks) =>
+      tasks.downloads.filter((download) => download.status === "running")
+        .length,
+  );
+  return (
+    <FooterText
+      slot="message"
+      role="status"
+      text={active > 0 ? `${active} 个下载正在进行` : "准备就绪"}
+    />
+  );
+}
+function AppNotifications() {
+  const { notifications, dismissNotification } = useNotifications();
+  return (
+    <NotificationDeck
+      notifications={notifications}
+      onDismiss={dismissNotification}
+    />
   );
 }

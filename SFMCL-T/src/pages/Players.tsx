@@ -125,7 +125,8 @@ function RefreshLoginButton({ player }: { player: Player }) {
   }, [pageActive]);
 
   return (
-    <Button
+    <button
+      type="button"
       className="players-icon-button players-refresh"
       aria-label={`刷新 ${player.name} 登录`}
       aria-busy={refreshing}
@@ -163,7 +164,7 @@ function RefreshLoginButton({ player }: { player: Player }) {
           setRefreshing(false);
         }}
       />
-    </Button>
+    </button>
   );
 }
 
@@ -571,10 +572,10 @@ export function Players() {
                         : "未选择角色"}
                     </span>
                   </div>
-                  {previewPlayer && (
+                  {previewPlayer && loginKind && (
                     <span className="players-equipped">
                       <Check size={13} />
-                      {loginKind ? "离线登录" : "当前角色"}
+                      离线登录
                     </span>
                   )}
                 </div>
@@ -856,33 +857,30 @@ export function Players() {
                           </small>
                         </span>
                       </button>
-                      <div className="players-row-actions">
-                        {player.online && (
-                          <RefreshLoginButton player={player} />
-                        )}
-                        <Button
-                          className="players-icon-button players-remove"
-                          aria-label={`移除 ${player.name}`}
-                          data-tooltip="移除角色"
-                          disabled={app.busy}
-                          onClick={async () => {
-                            if (
-                              await confirmAction(
-                                `移除角色 ${player.name}？此操作不会删除游戏存档。`,
-                              )
+                      {player.online && <RefreshLoginButton player={player} />}
+                      <button
+                        type="button"
+                        className="players-icon-button players-remove"
+                        aria-label={`移除 ${player.name}`}
+                        data-tooltip="移除角色"
+                        disabled={app.busy}
+                        onClick={async () => {
+                          if (
+                            await confirmAction(
+                              `移除角色 ${player.name}？此操作不会删除游戏存档。`,
                             )
-                              await app.run(() =>
-                                app.update(
-                                  "players.remove",
-                                  { id: player.uuid },
-                                  "角色已移除",
-                                ),
-                              );
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+                          )
+                            await app.run(() =>
+                              app.update(
+                                "players.remove",
+                                { id: player.uuid },
+                                "角色已移除",
+                              ),
+                            );
+                        }}
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
                     </div>
                   ))}
                 </div>

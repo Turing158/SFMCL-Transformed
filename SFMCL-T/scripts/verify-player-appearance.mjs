@@ -3,8 +3,11 @@ import { chromium, expect } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { playersFixture } from "./fixtures/players.mjs";
+import { openPlayerLogin } from "./lib/player-login.mjs";
 
-const evidence = runtimePath("players-implementation/appearance");
+const evidence =
+  process.env.SFMCL_T_TEST_ARTIFACT_DIR ||
+  runtimePath("players-implementation/appearance");
 await mkdir(evidence, { recursive: true });
 const browser = await chromium.launch({
   ...(process.platform === "win32" ? { channel: "msedge" } : {}),
@@ -14,6 +17,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.setDefaultTimeout(8000);
 const checks = [],
   errors = [];
+const imagesOnly = process.argv.includes("--images-only");
 page.on("pageerror", (error) => errors.push(error.message));
 await page.addInitScript(pixelAppFixture);
 await page.addInitScript(playersFixture);
@@ -168,27 +172,29 @@ try {
     .toBe(255);
   // The established app preference keeps animations enabled for all OS settings.
   await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const theme of ["light", "dark"]) {
-    await page.evaluate((theme) => {
-      document.documentElement.dataset.theme = theme;
-    }, theme);
-    for (const view of ["grove", "gallery"]) {
-      if ((await ui.getAttribute("data-view")) !== view)
-        await ui.locator(".players-view-switch").click();
-      await expect(page.locator("html")).not.toHaveAttribute(
-        "data-player-view-transition",
-      );
-      check(
-        `${await verifyButtons()} buttons hover and press smoothly in ${theme}/${view}, without resizing`,
-      );
+  if (!imagesOnly) {
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((theme) => {
+        document.documentElement.dataset.theme = theme;
+      }, theme);
+      for (const view of ["grove", "gallery"]) {
+        if ((await ui.getAttribute("data-view")) !== view)
+          await ui.locator(".players-view-switch").click();
+        await expect(page.locator("html")).not.toHaveAttribute(
+          "data-player-view-transition",
+        );
+        check(
+          `${await verifyButtons()} buttons hover and press smoothly in ${theme}/${view}, without resizing`,
+        );
+      }
     }
+    await button("更改名称").click();
+    expect(await ui.locator("dialog button:enabled").count()).toBe(3);
+    check(
+      `${await verifyButtons(ui.locator("dialog"))} buttons include rename-dialog close, cancel and save`,
+    );
+    await button("取消").click();
   }
-  await button("更改名称").click();
-  expect(await ui.locator("dialog button:enabled").count()).toBe(3);
-  check(
-    `${await verifyButtons(ui.locator("dialog"))} buttons include rename-dialog close, cancel and save`,
-  );
-  await button("取消").click();
 
   for (const [width, target] of [
     [1440, "Builder_07"],
@@ -264,7 +270,8 @@ try {
     ),
   ).toBe(true);
   await settle();
-  for (const control of [ui.locator(".players-model"), button("重置皮肤")]) {
+  for (const control of [ui.locator(".players-model")]) {
+    await expect(control).toBeDisabled();
     await control.hover();
     await page.mouse.down();
     expect(
@@ -273,7 +280,7 @@ try {
     await page.mouse.up();
   }
   check(
-    "Rapid character changes cancel old animations; disabled model/reset controls stay still",
+    "Rapid character changes cancel old animations; the disabled model control stays still",
   );
 
   await button("选择角色 Steve_New").click();
@@ -303,7 +310,7 @@ try {
   await expect(title).toHaveText("Alex");
   check("A late skin response cannot overwrite the newly selected character");
 
-  await button("离线登录").click();
+  await openPlayerLogin(page, "offline");
   await expect(title).toHaveText("Steve");
   await arm();
   const offlineName = page.getByLabel("角色名称", { exact: true });
@@ -318,14 +325,16 @@ try {
   check(
     "Offline typing and clearing update the name immediately without appearance animations",
   );
-  check(
-    `${await verifyButtons()} offline-login buttons share hover and press feedback`,
-  );
-  await button("Microsoft 登录").click();
+  if (!imagesOnly)
+    check(
+      `${await verifyButtons()} offline-login buttons share hover and press feedback`,
+    );
+  await openPlayerLogin(page, "microsoft");
   await expect(ui.locator(".device-code")).toBeVisible();
-  check(
-    `${await verifyButtons()} Microsoft-login buttons include device-code and split actions`,
-  );
+  if (!imagesOnly)
+    check(
+      `${await verifyButtons()} Microsoft-login buttons include device-code and split actions`,
+    );
   await page
     .getByRole("navigation", { name: "页面路径" })
     .getByRole("button", { name: "返回上一级", exact: true })

@@ -12,6 +12,7 @@ import { ContextMenu } from "./ContextMenu";
 import type { ContextMenuAnchor, ContextMenuEntry } from "./ContextMenu";
 import { getLaunchTask } from "./launchState";
 import { useApp } from "./store";
+import { useTaskSelector, useTaskSnapshot } from "./tasks";
 import type { Version } from "./types";
 import { versionPayload } from "./versionActions";
 import { VersionManageDialog } from "./VersionManageDialog";
@@ -38,8 +39,15 @@ export function useVersionContextMenu(revision: string) {
   } | null>(null);
   const [managed, setManaged] = useState<Version | null>(null);
   const menuKey = useRef(0);
-  const launchTask = getLaunchTask(app.tasks, app.data.settings.activeVersion);
-  const locked = launchTask.active && launchTask.phase !== "running";
+  const taskSnapshot = useTaskSnapshot();
+  const locked = useTaskSelector((tasks) => {
+    const launch = getLaunchTask(tasks, app.data.settings.activeVersion);
+    return launch.active && launch.phase !== "running";
+  });
+  const pendingVisible = useTaskSelector(
+    (tasks) =>
+      !!pending?.jobId && tasks.jobs.some((job) => job.id === pending.jobId),
+  );
 
   useEffect(() => {
     setMenu(null);
@@ -56,14 +64,11 @@ export function useVersionContextMenu(revision: string) {
   }
 
   useEffect(() => {
-    if (
-      pending?.jobId &&
-      app.tasks.jobs.some((job) => job.id === pending.jobId)
-    ) {
+    if (pendingVisible) {
       action.current = null;
       setPending(null);
     }
-  }, [app.tasks, pending]);
+  }, [pendingVisible]);
 
   async function activate(
     version: Version,
@@ -119,7 +124,7 @@ export function useVersionContextMenu(revision: string) {
           )
         )
           throw new Error("请先选择一个角色，再启动游戏");
-        const latestLaunch = getLaunchTask(latest.tasks, version.id);
+        const latestLaunch = getLaunchTask(taskSnapshot(), version.id);
         if (latestLaunch.active && latestLaunch.phase !== "running") return;
         next.phase = "launching";
         setPending({ ...next });

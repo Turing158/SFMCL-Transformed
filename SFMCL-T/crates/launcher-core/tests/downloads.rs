@@ -166,6 +166,53 @@ async fn partial(manager: &DownloadManager, id: &str) {
 }
 
 #[tokio::test]
+async fn concurrency_changes_apply_to_an_existing_batch_without_restarting_files() {
+    let server = TestServer::start().await;
+    let temp = tempfile::tempdir().unwrap();
+    let manager = DownloadManager::open(&temp.path().join("state"), 1).unwrap();
+    let id = manager
+        .enqueue(
+            "resize".into(),
+            temp.path().join("game"),
+            (0..9)
+                .map(|i| server.spec("normal", &format!("{i}.jar")))
+                .collect(),
+        )
+        .await
+        .unwrap();
+    partial(&manager, &id).await;
+    assert_eq!(server.state.max_active.load(Ordering::SeqCst), 1);
+    manager.set_concurrency(3);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while server.state.active.load(Ordering::SeqCst) < 3 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    manager.set_concurrency(1);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let snapshot = manager.snapshot(&id).await.unwrap();
+            if snapshot.completed() >= 3 && snapshot.active_workers == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    server
+        .state
+        .max_active
+        .store(server.state.active.load(Ordering::SeqCst), Ordering::SeqCst);
+    complete(&manager, &id).await;
+    assert!(server.state.max_active.load(Ordering::SeqCst) <= 1);
+    assert_eq!(server.state.requests.load(Ordering::SeqCst), 9);
+    assert_eq!(manager.snapshot(&id).await.unwrap().completed(), 9);
+}
+
+#[tokio::test]
 async fn cancelling_a_workflow_reports_its_type_and_drains_its_download() {
     let server = TestServer::start().await;
     let temp = tempfile::tempdir().unwrap();

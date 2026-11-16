@@ -90,6 +90,9 @@
 .downloads-page .job-toggle:is(:hover, :focus-visible) {
   color: var(--accent);
 }
+.job-header .icon-button > .surface-frame {
+  display: none;
+}
 .job-chevron {
   display: inline-flex;
   flex: 0 0 auto;

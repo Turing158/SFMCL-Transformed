@@ -218,18 +218,21 @@
   grid-row: 3;
   min-width: 0;
 }
-.version-actions {
+.version-actions,
+.versions-directory-actions {
   display: flex;
   align-items: center;
   gap: 4px;
   position: static;
 }
-.version-actions .icon-button {
+.version-actions .icon-button,
+.versions-directory-actions .icon-button {
   width: 32px;
   height: 38px;
   min-height: 38px;
 }
-.version-actions .icon-button > .surface-frame {
+.version-actions .icon-button > .surface-frame,
+.versions-directory-actions .icon-button > .surface-frame {
   display: none;
 }
 .version-actions > button {

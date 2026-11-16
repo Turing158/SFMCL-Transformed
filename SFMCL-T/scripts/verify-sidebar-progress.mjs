@@ -5,7 +5,9 @@ import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 
 const url = process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/";
-const evidence = runtimePath("evidence/sidebar-progress");
+const evidence =
+  process.env.SFMCL_T_TEST_ARTIFACT_DIR ||
+  runtimePath("evidence/sidebar-progress");
 await mkdir(evidence, { recursive: true });
 const browser = await chromium.launch({
   ...(process.platform === "win32" ? { channel: "msedge" } : {}),
@@ -63,7 +65,7 @@ const pauseMotion = async (direction, fraction = 0.5) => {
       animation.currentTime = animation.effect.getTiming().duration * fraction;
       const style = getComputedStyle(element);
       return {
-        height: element.getBoundingClientRect().height,
+        scale: new DOMMatrix(style.transform).a,
         opacity: Number(style.opacity),
       };
     },
@@ -75,8 +77,8 @@ const finishMotion = () =>
     for (const animation of element.getAnimations()) animation.finish();
   });
 const intermediate = (sample) => {
-  expect(sample.height).toBeGreaterThan(0);
-  expect(sample.height).toBeLessThan(16);
+  expect(sample.scale).toBeGreaterThan(0.84);
+  expect(sample.scale).toBeLessThan(1);
   expect(sample.opacity).toBeGreaterThan(0);
   expect(sample.opacity).toBeLessThan(1);
 };
@@ -93,7 +95,7 @@ try {
   await page.waitForTimeout(2600);
   await expect(slot).toHaveCount(0);
   checks.push(
-    "Empty state and completed history do not show an idle progress bar",
+    "Empty state and completed history do not show an idle progress ring",
   );
 
   await start("download");
@@ -101,14 +103,18 @@ try {
   await shot("enter");
   await finishMotion();
   await expect(progress).toHaveAttribute("aria-valuenow", "64");
-  await expect(slot).toHaveCSS("height", "16px");
+  await expect(button.locator(".sidebar-progress")).toHaveCount(1);
+  await expect(page.locator(".sidebar-progress-fill, .task-count")).toHaveCount(
+    0,
+  );
+  await expect(slot).toHaveCSS("height", "30px");
   await shot("visible");
   await page.evaluate(() => {
     window.__pixelTest.tasks.downloads[0].status = "completed";
   });
   await expect(progress).toHaveAttribute("aria-valuenow", "100");
   await page.waitForTimeout(900);
-  await expect(slot).toHaveCSS("height", "16px");
+  await expect(slot).toHaveCSS("height", "30px");
   intermediate(await pauseMotion("exit"));
   await shot("exit");
   await finishMotion();
@@ -116,7 +122,7 @@ try {
   await expect(button).toBeVisible();
   await shot("hidden");
   checks.push(
-    "Completion holds the final 100% frame, then fades and collapses the 16px slot; the always-visible entry remains",
+    "Completion holds the final closed 100% ring, then fades it away; the always-visible entry remains",
   );
 
   await start("job");
@@ -126,7 +132,7 @@ try {
     window.__pixelTest.tasks.downloads = [];
   });
   await page.waitForTimeout(2600);
-  await expect(slot).toHaveCSS("height", "16px");
+  await expect(slot).toHaveCSS("height", "30px");
   await page.evaluate(() => {
     const job = window.__pixelTest.tasks.jobs[0];
     job.status = "completed";
@@ -143,7 +149,7 @@ try {
   await start("download", "paused");
   await expect(progress).toHaveAttribute("aria-valuenow", "64");
   await page.waitForTimeout(2200);
-  await expect(slot).toHaveCSS("height", "16px");
+  await expect(slot).toHaveCSS("height", "30px");
   checks.push(
     "Step-only work keeps progress visible; clearing a finished job preserves its final frame; pending work cancels the idle deadline",
   );
@@ -151,7 +157,7 @@ try {
   await page.locator(".brand-logo").hover();
   await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
   await page.mouse.move(500, 300);
-  await expect(progress).toHaveCSS("width", "38px");
+  await expect(progress).toHaveCSS("width", "30px");
   await page.evaluate(() => {
     window.__pixelTest.tasks.downloads = [];
   });
@@ -160,15 +166,20 @@ try {
   await shot("collapsed-exit");
   await start("job", "queued");
   const reopening = await pauseMotion("enter", 0);
-  expect(reopening.height).toBeCloseTo(closing.height, 1);
+  expect(reopening.scale).toBeCloseTo(closing.scale, 2);
   expect(reopening.opacity).toBeCloseTo(closing.opacity, 2);
   await finishMotion();
-  await expect(slot).toHaveCSS("height", "16px");
+  await expect(slot).toHaveCSS("height", "30px");
   await page.evaluate(() => {
     window.__pixelTest.tasks.jobs[0].steps = [];
   });
   await expect(progress).not.toHaveAttribute("aria-valuenow");
-  await expect(page.locator(".task-count")).toHaveCount(0);
+  await expect(
+    page.locator('.sidebar-progress-percent [data-transition="number"]'),
+  ).toHaveText("···");
+  await expect(
+    page.locator(".sidebar-progress-glyph svg.lucide-hourglass"),
+  ).toHaveCount(1);
   await shot("collapsed-job");
   checks.push(
     "Collapsed rail animates too; new work reverses an unfinished exit from the current frame; unknown progress has no percentage",
@@ -228,6 +239,126 @@ try {
   await expect(slot).toHaveCount(0);
   await start("job");
   await expect(progress).toHaveAttribute("aria-valuenow", "33");
+  // Verify actual state motion under the user's full-animation preference.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() => {
+    window.__sidebarMotionSamples = [];
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (frames, options) {
+      const animation = animate.call(this, frames, options);
+      if (options?.id?.startsWith("sfmcl-t-sidebar-")) {
+        window.__sidebarMotionSamples.push({
+          id: options.id,
+          frames,
+          duration: options.duration,
+        });
+      }
+      return animation;
+    };
+  });
+  const glyph = page.locator(".sidebar-progress-icon");
+  const setJobState = async (status, unknown = false) => {
+    await page.evaluate(
+      ({ status, unknown }) => {
+        const job = window.__pixelTest.tasks.jobs[0];
+        job.status = status;
+        job.steps = unknown
+          ? []
+          : structuredClone(window.__pixelTest.jobTemplate.steps);
+      },
+      { status, unknown },
+    );
+    await expect(progress).toHaveAttribute("data-status", status);
+  };
+  await setJobState("paused");
+  await expect(glyph).toHaveAttribute("data-icon", "pause");
+  await expect(progress).toHaveCSS("color", "rgb(238, 212, 154)");
+  await setJobState("running");
+  await expect(glyph).toHaveAttribute("data-icon", "arrow-down");
+  await setJobState("running", true);
+  await expect(glyph).toHaveAttribute("data-icon", "hourglass");
+  await expect(progress).not.toHaveAttribute("aria-valuenow");
+  await expect(page.locator(".sidebar-progress-chart")).toHaveAttribute(
+    "data-spinning",
+    "true",
+  );
+  await setJobState("paused", true);
+  await expect(glyph).toHaveAttribute("data-icon", "pause");
+  await expect(page.locator(".sidebar-progress-chart")).not.toHaveAttribute(
+    "data-spinning",
+  );
+  await setJobState("running");
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.jobs[0].steps[1].status = "completed";
+  });
+  await expect(progress).toHaveAttribute("aria-valuenow", "67");
+  await expect(
+    page.locator('.sidebar-progress-percent [data-transition="number"]'),
+  ).toHaveText("67%");
+  const motionSamples = await page.evaluate(
+    () => window.__sidebarMotionSamples,
+  );
+  for (const kind of ["icon", "text", "number"])
+    expect(
+      motionSamples.some(
+        (sample) => sample.id === `sfmcl-t-sidebar-${kind}-in`,
+      ),
+    ).toBeTruthy();
+  expect(
+    motionSamples
+      .filter((sample) => sample.id.includes("icon-"))
+      .every((sample) => sample.duration === 280),
+  ).toBeTruthy();
+  expect(
+    motionSamples
+      .filter((sample) => sample.id.includes("text-"))
+      .every((sample) => sample.duration === 240),
+  ).toBeTruthy();
+  const numeric = motionSamples.filter((sample) =>
+    sample.id.includes("number"),
+  );
+  expect(
+    numeric.every(
+      (sample) =>
+        sample.duration === 220 &&
+        sample.frames.every(
+          (frame) =>
+            !frame.transform?.includes("px") ||
+            /translateY\(-?3px\)/.test(frame.transform),
+        ),
+    ),
+  ).toBeTruthy();
+  await page.waitForTimeout(500);
+  await expect(page.locator(".sidebar-progress-outgoing")).toHaveCount(0);
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.jobs[0].status = "completed";
+  });
+  await expect(progress).toHaveAttribute("aria-valuenow", "100");
+  await expect(glyph).toHaveAttribute("data-icon", "check");
+  await expect(page.locator(".sidebar-progress-arc")).toHaveCSS(
+    "stroke-dashoffset",
+    "0px",
+  );
+  await expect(
+    page.locator(".sidebar-progress-glyph .sidebar-progress-current path"),
+  ).toHaveAttribute("pathLength", "1");
+  await expect(
+    page.locator('.sidebar-progress-percent [data-transition="number"]'),
+  ).toHaveText("100%");
+  await page.evaluate(() => {
+    const job = window.__pixelTest.tasks.jobs[0];
+    job.status = "paused";
+    job.steps = structuredClone(window.__pixelTest.jobTemplate.steps);
+  });
+  await expect(glyph).toHaveAttribute("data-icon", "pause");
+  await page.waitForTimeout(500);
+  await expect(page.locator(".sidebar-progress-outgoing")).toHaveCount(0);
+  await expect(progress).toHaveAttribute("aria-valuenow", "33");
+  await shot("paused-ring");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  checks.push(
+    "Pause, resume, unknown hourglass, completed check and whole-number swaps animate under reduced-motion preference; numbers move only ±3px and the 100% ring closes completely",
+  );
   expect(errors).toEqual([]);
   checks.push(
     "Changing display preferences cleans up timers and animations, and a later task can still appear; no page errors",

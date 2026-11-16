@@ -103,6 +103,7 @@ async fn installation_uses_the_selected_name_for_files_profiles_and_tasks() {
         .unwrap();
         assert_eq!(job.status, Status::Completed, "{name}: {:?}", job.error);
         assert_eq!(job.title, format!("安装 {name}"));
+        assert!(!root.join(".tmcl/install").join(&id).exists());
         let directory = root.join("versions").join(name);
         assert_eq!(
             std::fs::read(directory.join(format!("{name}.jar"))).unwrap(),
@@ -124,4 +125,97 @@ async fn installation_uses_the_selected_name_for_files_profiles_and_tasks() {
     }
     assert!(!root.join("versions/1.20.1").exists());
     server.abort();
+}
+
+#[tokio::test]
+async fn failed_and_cancelled_installations_remove_only_their_work_directory() {
+    for cancel in [false, true] {
+        let requested = Arc::new(tokio::sync::Notify::new());
+        let signal = requested.clone();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/manifest", listener.local_addr().unwrap());
+        let app = Router::new().route(
+            "/manifest",
+            get(move || {
+                let signal = signal.clone();
+                async move {
+                    signal.notify_one();
+                    if cancel {
+                        std::future::pending::<()>().await;
+                    }
+                    Json(json!({"versions": []}))
+                }
+            }),
+        );
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("game");
+        let other = root.join(".tmcl/install/other");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("keep.txt"), b"other installation").unwrap();
+        let downloads = DownloadManager::open(&temp.path().join("downloads"), 1).unwrap();
+        downloads.sources().register(MANIFEST, vec![url]);
+        let settings = Arc::new(ConfigStore::open(&temp.path().join("config")).unwrap());
+        settings
+            .update(|settings| {
+                settings.minecraft_download_source = MinecraftDownloadSource::Official;
+            })
+            .unwrap();
+        let installer = Arc::new(Installer {
+            downloads,
+            jobs: Arc::new(Jobs::default()),
+            client: reqwest::Client::new(),
+            settings,
+        });
+        let id = installer
+            .start(InstallRequest {
+                minecraft: "1.20.1".into(),
+                name: "game".into(),
+                root: root.clone(),
+                loader: None,
+                optifine: None,
+                fabric_api: None,
+            })
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), requested.notified())
+            .await
+            .unwrap();
+        if cancel {
+            assert!(root.join(".tmcl/install").join(&id).is_dir());
+            installer.jobs.cancel(&id).unwrap();
+        }
+        let job = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let job = installer
+                    .jobs
+                    .snapshots()
+                    .into_iter()
+                    .find(|job| job.id == id)
+                    .unwrap();
+                if job.status.terminal() {
+                    break job;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            job.status,
+            if cancel {
+                Status::Cancelled
+            } else {
+                Status::Failed
+            }
+        );
+        assert!(!root.join(".tmcl/install").join(&id).exists());
+        assert_eq!(
+            std::fs::read(other.join("keep.txt")).unwrap(),
+            b"other installation"
+        );
+        assert!(installer.downloads.snapshots().await.is_empty());
+        server.abort();
+        let _ = server.await;
+    }
 }

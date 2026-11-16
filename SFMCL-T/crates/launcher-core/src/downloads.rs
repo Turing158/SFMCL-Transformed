@@ -1,4 +1,5 @@
 use crate::paths::{atomic_write, safe_join};
+mod concurrency;
 use anyhow::{anyhow, bail, Context, Result};
 use futures_util::{stream, StreamExt};
 use reqwest::{header, Client, StatusCode};
@@ -14,7 +15,7 @@ use std::{
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::{Mutex as AsyncMutex, Semaphore},
+    sync::Mutex as AsyncMutex,
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
@@ -146,8 +147,7 @@ pub struct DownloadManager {
     cache_directory: Mutex<PathBuf>,
     batches: AsyncMutex<HashMap<String, Arc<Batch>>>,
     admission: AsyncMutex<()>,
-    permits: Arc<Semaphore>,
-    concurrency: usize,
+    concurrency: concurrency::Concurrency,
 }
 impl DownloadManager {
     pub fn open(directory: &Path, concurrency: usize) -> Result<Arc<Self>> {
@@ -216,13 +216,16 @@ impl DownloadManager {
             cache_directory: Mutex::new(std::path::absolute(directory)?.join("cache")),
             batches: AsyncMutex::new(batches),
             admission: AsyncMutex::new(()),
-            permits: Arc::new(Semaphore::new(concurrency)),
-            concurrency,
+            concurrency: concurrency::Concurrency::new(concurrency),
         }))
     }
     /// Shares source ranking and fallback routes across download workflows.
     pub fn sources(&self) -> Arc<crate::download_sources::SourceSelector> {
         self.sources.clone()
+    }
+
+    pub fn set_concurrency(&self, concurrency: usize) {
+        self.concurrency.set_limit(concurrency);
     }
 
     /// Applies only to new batches; changing this never relocates active partials.
@@ -586,12 +589,11 @@ impl DownloadManager {
             .filter(|(_, f)| f.status != Status::Completed)
             .map(|(i, file)| (i, file.spec))
             .collect();
-        stream::iter(pending).for_each_concurrent(self.concurrency, |(index, spec)| {
+        stream::iter(pending).for_each_concurrent(32, |(index, spec)| {
             let manager = self.clone(); let batch = batch.clone(); let cancel = cancel.clone();
             let root = initial.root.clone(); let batch_id = initial.id.clone(); let cache_dir = initial.cache_dir.clone();
             async move {
-                let permit = tokio::select! { biased; _ = cancel.cancelled() => return, p = manager.permits.acquire() => p };
-                let Ok(_permit) = permit else { return; };
+                let _permit = tokio::select! { biased; _ = cancel.cancelled() => return, p = manager.concurrency.acquire() => p };
                 if cancel.is_cancelled() { return; }
                 batch.change(|s| { s.active_workers += 1; s.files[index].status = Status::Running; });
                 let outcome = async {

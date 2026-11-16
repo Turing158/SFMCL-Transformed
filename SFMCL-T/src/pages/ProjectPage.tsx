@@ -163,7 +163,12 @@ export function ProjectPage({
         onValueChange={setTab}
         items={[
           { value: "description", label: "项目介绍" },
-          { value: "files", label: "可下载版本", count: files.length },
+          {
+            value: "files",
+            label: "可下载版本",
+            count: files.length,
+            loading,
+          },
         ]}
       />
       <TabPanel ref={tabContent} id="project" value={tab}>

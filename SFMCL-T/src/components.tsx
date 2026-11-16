@@ -98,7 +98,13 @@ export function TabList({
   label: string;
   value: string;
   onValueChange: (value: string) => void;
-  items: { value: string; label: string; icon?: ReactNode; count?: number }[];
+  items: {
+    value: string;
+    label: string;
+    icon?: ReactNode;
+    count?: number;
+    loading?: boolean;
+  }[];
   className?: string;
   disabled?: boolean;
 }) {
@@ -213,6 +219,7 @@ export function TabList({
             id={`${id}-tab-${item.value}`}
             aria-controls={`${id}-panel`}
             aria-selected={value === item.value}
+            aria-busy={item.loading || undefined}
             tabIndex={value === item.value ? 0 : -1}
             className={`has-surface ${value === item.value ? "active" : ""}`}
             onClick={(event) => {
@@ -227,8 +234,17 @@ export function TabList({
             <span className="tab-content">
               {item.icon}
               {item.label}
-              {item.count !== undefined && (
-                <Badge className="tab-count">{item.count}</Badge>
+              {(item.loading || item.count !== undefined) && (
+                <Badge
+                  className="tab-count"
+                  aria-label={item.loading ? "正在加载" : undefined}
+                >
+                  {item.loading ? (
+                    <LoaderCircle size={12} className="spin" aria-hidden="true" />
+                  ) : (
+                    item.count
+                  )}
+                </Badge>
               )}
             </span>
           </button>

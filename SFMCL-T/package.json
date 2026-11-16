@@ -21,6 +21,8 @@
     "package:x86": "npm run package -- -Architecture x86",
     "package:x64": "npm run package -- -Architecture x64",
     "test": "vitest run --dir src",
+    "test:state-isolation": "node scripts/verify-state-isolation.mjs",
+    "test:player-image-cache": "node scripts/verify-player-appearance.mjs --images-only",
     "test:confirmations": "node scripts/verify-confirmations.mjs",
     "test:startup": "node scripts/verify-startup.mjs",
     "test:window-motion": "node scripts/verify-window-motion.mjs",

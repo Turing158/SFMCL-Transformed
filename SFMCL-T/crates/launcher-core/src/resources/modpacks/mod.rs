@@ -1,4 +1,5 @@
 mod archive;
+mod dependencies;
 mod parser;
 #[cfg(test)]
 mod tests;
@@ -17,8 +18,8 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use futures_util::future::BoxFuture;
+use parser::Pack;
 pub use parser::PackInfo;
-use parser::{FileSource, Pack};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
@@ -323,48 +324,15 @@ async fn install(
         .await?;
     }
     job.step(8, "解析并下载整合包依赖");
-    let mut downloads = vec![];
-    let mut mirrors = HashMap::new();
-    let mut paths = HashSet::new();
-    for file in &pack.pack.files {
-        if file.optional && !request.include_optional {
-            continue;
-        }
-        archive::check_cancel(&job.cancel)?;
-        let mut spec = match &file.source {
-            FileSource::Download {
-                spec,
-                mirrors: urls,
-            } => {
-                mirrors.insert(
-                    format!("versions/{}/{}", request.name, file.path),
-                    urls.clone(),
-                );
-                spec.clone()
-            }
-            FileSource::CurseForge { project, file } => tokio::select! {
-                result = community.pack_file(*project, *file) => result?,
-                _ = job.cancel.cancelled() => bail!("整合包安装已取消"),
-            },
-        };
-        reserved(&spec.path, &request.name)?;
-        if !paths.insert(spec.path.to_lowercase()) {
-            bail!("整合包依赖存在重复安装路径");
-        }
-        let resolution = tokio::select! { result = resolver(spec.url.clone()) => result, _ = job.cancel.cancelled() => bail!("整合包安装已取消") };
-        match resolution {
-            Ok(url) => spec.url = url,
-            Err(error) if crate::resources::curseforge::is_download_entry(&spec.url) => {
-                job.log(format!(
-                    "无法自动获取 {}：{error:#}。可在下载文件详情中补选原始文件。",
-                    spec.path
-                ));
-            }
-            Err(error) => return Err(error),
-        }
-        spec.path = format!("versions/{}/{}", request.name, spec.path);
-        downloads.push(spec);
-    }
+    let (downloads, mirrors) = dependencies::resolve(
+        &pack.pack.files,
+        request.include_optional,
+        &request.name,
+        &job,
+        |project, file| community.pack_file(project, file),
+        &resolver,
+    )
+    .await?;
     download_contents(&installer, &job, &stage, &request.name, downloads, &mirrors).await?;
     job.step(9, "合并客户端覆盖文件");
     for source in &pack.pack.contents {

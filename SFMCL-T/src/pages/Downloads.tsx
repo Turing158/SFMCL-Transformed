@@ -23,6 +23,7 @@ import { AnimatedSwap } from "../AnimatedSwap";
 import { useTabContentTransition } from "../useTabContentTransition";
 import { useButtonPressFeedback } from "../useButtonPressFeedback";
 import { useApp } from "../store";
+import { useTasks, useDownloadActions } from "../tasks";
 import { api, bytes, confirmAction, pick, statusLabel } from "../api";
 import {
   Badge,
@@ -59,6 +60,7 @@ function JobBadge({ job }: { job: Job }) {
 
 export function Downloads() {
   const app = useApp();
+  const tasks = useTasks();
   const [filter, setFilter] = useState("all");
   const tabContent = useTabContentTransition(
     ["all", "active", "completed", "failed"].indexOf(filter),
@@ -66,22 +68,22 @@ export function Downloads() {
   const [fileId, setFileId] = useState<string | null>(null);
   const [log, setLog] = useState<string | null>(null);
   const pressFeedback = useButtonPressFeedback("sfmcl-t-download-press");
-  const active = app.tasks.downloads.filter((d) =>
+  const active = tasks.downloads.filter((d) =>
     ["running", "paused", "pausing", "queued"].includes(d.status),
   );
-  const failed = app.tasks.downloads.filter((d) => d.status === "failed");
-  const speed = app.tasks.downloads.reduce((a, d) => a + d.speed, 0);
-  const selectedJob = app.tasks.jobs.find((j) => j.id === log);
+  const failed = tasks.downloads.filter((d) => d.status === "failed");
+  const speed = tasks.downloads.reduce((a, d) => a + d.speed, 0);
+  const selectedJob = tasks.jobs.find((j) => j.id === log);
   const downloads = useMemo(
     () =>
-      app.tasks.downloads.filter(
+      tasks.downloads.filter(
         (d) =>
           filter === "all" ||
           (filter === "active"
             ? ["running", "paused", "pausing", "queued"].includes(d.status)
             : d.status === filter),
       ),
-    [app.tasks.downloads, filter],
+    [tasks.downloads, filter],
   );
   return (
     <div className="downloads-page" onClickCapture={pressFeedback}>
@@ -89,7 +91,7 @@ export function Downloads() {
         icon={<ArrowDownToLine />}
         eyebrow="EVERY BYTE COUNTS"
         title="下载中心"
-        action={<DownloadMining downloads={app.tasks.downloads} />}
+        action={<DownloadMining downloads={tasks.downloads} />}
       />
       <div className="stat-grid">
         <div className="panel stat has-surface">
@@ -126,14 +128,14 @@ export function Downloads() {
           </strong>
         </div>
       </div>
-      {app.tasks.jobs.length > 0 && (
+      {tasks.jobs.length > 0 && (
         <>
           <div className="section-heading">
             <h2>操作步骤</h2>
             <span>安装、启动、联机组件与账号状态</span>
           </div>
           <div className="job-list">
-            {app.tasks.jobs.slice(0, 12).map((job) => (
+            {tasks.jobs.slice(0, 12).map((job) => (
               <JobCard key={job.id} job={job} onLog={() => setLog(job.id)} />
             ))}
           </div>
@@ -149,13 +151,13 @@ export function Downloads() {
             {
               value: "all",
               label: "全部任务",
-              count: app.tasks.downloads.length,
+              count: tasks.downloads.length,
             },
             { value: "active", label: "进行中", count: active.length },
             {
               value: "completed",
               label: "已完成",
-              count: app.tasks.downloads.filter((d) => d.status === "completed")
+              count: tasks.downloads.filter((d) => d.status === "completed")
                 .length,
             },
             { value: "failed", label: "需要处理", count: failed.length },
@@ -402,6 +404,7 @@ function DownloadCard({
   onFiles: () => void;
 }) {
   const app = useApp();
+  const { clearingDownloads, clearDownload } = useDownloadActions();
   const progress =
     d.status === "completed"
       ? 1
@@ -412,7 +415,7 @@ function DownloadCard({
           : 0;
   const control = (action: string) =>
     void app.run(() => api("downloads.control", { id: d.id, action }));
-  const clearing = app.clearingDownloads.has(d.id);
+  const clearing = clearingDownloads.has(d.id);
   return (
     <article className="panel download-card has-surface">
       <PixelFrame />
@@ -481,7 +484,7 @@ function DownloadCard({
               aria-label={`清理 ${d.title}`}
               disabled={clearing}
               aria-busy={clearing}
-              onClick={() => void app.clearDownload(d.id)}
+              onClick={() => void clearDownload(d.id)}
             >
               <PixelFrame />
               <Trash2 size={17} />
@@ -519,6 +522,7 @@ function DownloadCard({
 }
 function FileDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const app = useApp();
+  const tasks = useTasks();
   const [result, setResult] = useState<{
     offset: number;
     files: DownloadFile[];
@@ -526,8 +530,8 @@ function FileDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState("");
   const content = useRef<HTMLDivElement>(null);
-  const download = app.tasks.downloads.find((d) => d.id === id);
-  const packDownload = app.tasks.jobs.some(
+  const download = tasks.downloads.find((d) => d.id === id);
+  const packDownload = tasks.jobs.some(
     (job) =>
       job.downloadId === id &&
       job.title.startsWith("安装整合包 ") &&

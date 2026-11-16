@@ -5,7 +5,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 
 const url = process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/";
-const evidence = runtimePath("evidence");
+const evidence =
+  process.env.SFMCL_T_TEST_ARTIFACT_DIR || runtimePath("evidence");
 await mkdir(`${evidence}/sidebar-after`, { recursive: true });
 const browser = await chromium.launch({
   ...(process.platform === "win32" ? { channel: "msedge" } : {}),
@@ -94,11 +95,7 @@ const inspectFrames = () =>
       const before = getComputedStyle(frame, "::before"),
         after = getComputedStyle(frame, "::after");
       cuts.add(style.clipPath);
-      const stroke = host.matches(
-        ".nav-count,.task-count,.sidebar-progress,.sidebar-progress-fill",
-      )
-        ? 1
-        : 2;
+      const stroke = host.matches(".nav-count") ? 1 : 2;
       insetProbe.style.clipPath = getComputedStyle(host).getPropertyValue(
         `--surface-shape-${stroke}`,
       );
@@ -164,14 +161,7 @@ const inspectFrames = () =>
         );
       })
       .map((node) => node.className);
-    const needed = [
-      ".sidebar-task",
-      ".sidebar-progress",
-      ".sidebar-progress-fill",
-      ".avatar",
-      ".profile-button",
-      ".task-count",
-    ];
+    const needed = [".sidebar-task", ".avatar", ".profile-button"];
     const missing = needed.filter(
       (selector) =>
         !rail.querySelector(selector)?.querySelector(":scope > .surface-frame"),
@@ -213,11 +203,11 @@ try {
   const frames = await inspectFrames();
   record(
     "外层使用生成轮廓，填充使用对应描边厚度的腐蚀内轮廓",
-    frames.cutBroken.length === 0 && frames.cuts === 4,
+    frames.cutBroken.length === 0 && frames.cuts >= 2,
     frames,
   );
   record(
-    "控件描边为 2px，数字徽标和细进度条为 1px",
+    "控件描边为 2px，导航数字徽标为 1px",
     frames.strokeBad.length === 0,
     frames.strokeBad,
   );
@@ -474,22 +464,32 @@ try {
       fixture.tasks.downloads[0].total * 0.25;
   });
   await expect(progress).toHaveAttribute("aria-valuenow", "25");
-  const widths = [];
+  await expect(page.locator(".sidebar-progress-arc")).toHaveCSS(
+    "stroke-dashoffset",
+    "75px",
+  );
+  const offsets = [];
   for (let i = 0; i < 4; i++) {
-    widths.push(
+    offsets.push(
       await sidebar
-        .locator(".sidebar-progress-fill")
-        .evaluate((el) => el.getBoundingClientRect().width),
+        .locator(".sidebar-progress-arc")
+        .evaluate((el) => getComputedStyle(el).strokeDashoffset),
     );
     await page.waitForTimeout(150);
   }
-  expect(new Set(widths).size).toBe(1);
+  expect(new Set(offsets).size).toBe(1);
   await page.evaluate(() => {
     window.__pixelTest.tasks.downloads[0].unknownSize = true;
     window.__pixelTest.tasks.downloads[0].fileCount = 0;
   });
   await expect(progress).not.toHaveAttribute("aria-valuenow");
-  await expect(sidebar.locator(".task-count")).toHaveCount(0);
+  await expect(sidebar.locator(".sidebar-progress-icon")).toHaveAttribute(
+    "data-icon",
+    "hourglass",
+  );
+  await expect(
+    sidebar.locator('.sidebar-progress-percent [data-transition="number"]'),
+  ).toHaveText("···");
   await page.evaluate(() => {
     const download = window.__pixelTest.tasks.downloads[0];
     download.fileCount = 10;
@@ -525,7 +525,7 @@ try {
     page.getByRole("heading", { name: "下载中心", exact: true }),
   ).toBeVisible();
   extraChecks.push(
-    "真实轮询更新、字节/文件进度、未知总量、七种任务状态、摘要跳转；微动不改变进度长度",
+    "真实轮询更新、字节/文件进度、未知总量沙漏、七种任务状态、摘要跳转；微动不改变圆环进度",
   );
 
   await ready("default");

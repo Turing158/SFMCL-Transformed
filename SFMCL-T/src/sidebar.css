@@ -172,7 +172,7 @@
   overflow: hidden;
   white-space: nowrap;
 }
-.sidebar :is(.brand-copy, .nav-copy, .profile-copy, .task-copy, .task-count) {
+.sidebar :is(.brand-copy, .nav-copy, .profile-copy, .task-copy) {
   opacity: var(--rail-open);
   visibility: visible;
   transition: visibility 0s;
@@ -221,7 +221,7 @@
 .sidebar nav button:nth-child(6) {
   animation-delay: 175ms;
 }
-.sidebar :is(.nav-count, .task-count) {
+.sidebar .nav-count {
   --surface-shape: var(--corner-badge);
   --surface-shape-0: var(--corner-badge-inset-0);
   --surface-shape-1: var(--corner-badge-inset-1);
@@ -470,29 +470,6 @@
   padding: calc(4px + 2px * var(--rail-open));
   gap: calc(7px * var(--rail-open));
 }
-.sidebar .task-count {
-  --surface-edge: transparent;
-  --surface-fill: var(--chrome-accent);
-  color: var(--sidebar);
-  min-width: calc(19px * var(--rail-open));
-  max-width: calc(64px * var(--rail-open));
-  margin-left: 0;
-  padding: calc(1px * var(--rail-open)) calc(4px * var(--rail-open));
-  overflow: hidden;
-}
-.sidebar-downloads:is(
-    [data-status="paused"],
-    [data-status="pausing"],
-    [data-status="queued"]
-  )
-  .task-count {
-  --surface-fill: #eed49a;
-  color: #493812;
-}
-.sidebar-downloads[data-status="failed"] .task-count {
-  --surface-fill: #f2b3b6;
-  color: #5a2026;
-}
 .sidebar .task-copy {
   min-width: 0;
 }
@@ -505,57 +482,120 @@
   font-weight: 500;
 }
 .sidebar .task-copy small {
-  display: block;
+  display: flex;
+  align-items: center;
   color: var(--sidebar-muted);
-  font-size: 10px;
+  font-size: 11px;
+}
+.sidebar-progress-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
 }
 .sidebar-progress-motion {
+  position: absolute;
+  inset: 0;
   display: grid;
-  min-height: 0;
-  overflow: hidden;
+  place-items: center;
 }
 .sidebar .sidebar-progress {
-  --surface-shape: var(--corner-micro);
-  --surface-shape-0: var(--corner-micro-inset-0);
-  --surface-shape-1: var(--corner-micro-inset-1);
-  --surface-shape-2: var(--corner-micro-inset-2);
-  --surface-stroke: 1px;
-  --surface-inset-shape: var(--surface-shape-1);
-  --surface-depth: 0px;
-  --surface-base: transparent;
-  --surface-edge: rgba(0, 0, 0, 0.5);
-  --surface-fill: rgba(0, 0, 0, 0.36);
-  height: 8px;
-  width: calc(
-    var(--button-height) + (100% - var(--button-height)) * var(--rail-open)
-  );
-  justify-self: center;
-  margin-top: 8px;
-  padding: 1px;
+  width: 30px;
+  height: 30px;
+  color: var(--chrome-accent);
+  transition: color 320ms cubic-bezier(0.22, 0.8, 0.25, 1);
 }
-.sidebar .sidebar-progress-fill {
-  --surface-shape: var(--corner-micro);
-  --surface-shape-0: var(--corner-micro-inset-0);
-  --surface-shape-1: var(--corner-micro-inset-1);
-  --surface-shape-2: var(--corner-micro-inset-2);
-  --surface-stroke: 1px;
-  --surface-inset-shape: var(--surface-shape-1);
-  --surface-depth: 0px;
-  --surface-base: transparent;
-  --surface-edge: transparent;
-  --surface-fill: linear-gradient(90deg, var(--accent), var(--sidebar-tip));
+.sidebar-progress:is(
+  [data-status="paused"],
+  [data-status="pausing"],
+  [data-status="queued"]
+) {
+  color: #eed49a;
+}
+.sidebar-progress[data-status="failed"] {
+  color: #f2b3b6;
+}
+.sidebar-progress-chart {
   display: block;
+  width: 100%;
   height: 100%;
+  transform: rotate(-90deg);
 }
-/* Animate light, never the measured progress. Unknown totals have no numeric value. */
-.sidebar-progress[data-status="running"]
-  .sidebar-progress-fill
-  > .surface-frame::after {
-  background-size: 200% 100%;
-  animation: rail-progress 3.6s ease-in-out infinite alternate;
+.sidebar-progress-chart circle {
+  fill: none;
+  stroke-width: 2.5;
 }
-.sidebar-progress:not([aria-valuenow]) .sidebar-progress-fill {
-  opacity: 0.55;
+.sidebar-progress-track {
+  stroke: color-mix(in srgb, var(--sidebar-muted), transparent 72%);
+}
+.sidebar-progress-arc {
+  stroke: currentColor;
+  transition: stroke-dashoffset 300ms cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.sidebar-progress-chart[data-spinning="true"] {
+  animation: sidebar-ring-spin 1800ms linear infinite;
+}
+.sidebar-progress-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 20px;
+}
+.sidebar-progress-icon[data-running="true"] .sidebar-progress-current svg {
+  animation: sidebar-download-arrow 900ms ease-in-out infinite;
+}
+.sidebar-progress-switch {
+  position: relative;
+  display: inline-grid;
+  vertical-align: bottom;
+  min-width: 0;
+}
+.sidebar-progress-current {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+}
+.sidebar-progress-outgoing {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.sidebar-progress-glyph
+  :is(
+    .sidebar-progress-switch,
+    .sidebar-progress-current,
+    .sidebar-progress-outgoing
+  ) {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 20px;
+}
+.sidebar-progress-percent {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 1;
+  transition: opacity 240ms ease;
+}
+.sidebar-progress-percent[data-visible="false"] {
+  opacity: 0;
+}
+.sidebar-progress-switch[data-transition="number"] {
+  width: 4ch;
+  text-align: right;
+  font-family: Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+.sidebar-progress-copy > .sidebar-progress-switch {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-progress-separator {
+  white-space: pre;
 }
 .sidebar .profile-button {
   height: calc(var(--button-height) + 6px * var(--rail-open));
@@ -675,8 +715,7 @@
   }
 }
 /* The effective class includes both the manual preference and the media query. */
-.sidebar.rail-collapsed
-  :is(.profile-copy, .task-copy, .task-count, .brand-copy, .nav-copy) {
+.sidebar.rail-collapsed :is(.profile-copy, .task-copy, .brand-copy, .nav-copy) {
   visibility: hidden;
   transition-delay: 240ms;
 }
@@ -720,11 +759,20 @@
     background-color: color-mix(in srgb, var(--danger), #fff 16%);
   }
 }
-@keyframes rail-progress {
+@keyframes sidebar-ring-spin {
   from {
-    background-position: 0 0;
+    transform: rotate(-90deg);
   }
   to {
-    background-position: 100% 0;
+    transform: rotate(270deg);
+  }
+}
+@keyframes sidebar-download-arrow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  55% {
+    transform: translateY(3px);
   }
 }

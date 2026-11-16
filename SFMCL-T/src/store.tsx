@@ -3,13 +3,16 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import type { ReactNode } from "react";
+import { TaskProvider } from "./tasks";
 import { api, desktop } from "./api";
 import { PRODUCT_NAME } from "./branding";
 import { invalidateImages } from "./images";
+import { mutationImagePaths } from "./imageInvalidation";
 import {
   initialNavigation,
   navigateTo,
@@ -34,7 +37,6 @@ import type {
   Page,
   Player,
   Settings,
-  Tasks,
   Version,
   VersionSettings,
 } from "./types";
@@ -83,9 +85,6 @@ interface AppState {
   setShowAllVersions: (showAll: boolean) => void;
   allVersions: ReturnType<typeof useAllVersions>;
   favorites: FavoriteVersion[];
-  tasks: Tasks;
-  clearingDownloads: ReadonlySet<string>;
-  clearDownload: (id: string) => Promise<void>;
   page: Page;
   setPage: (p: Page, sourcePage?: Page) => void;
   route: NavigationEntry;
@@ -100,11 +99,9 @@ interface AppState {
   ) => void;
   busy: boolean;
   error: string;
-  notifications: Notification[];
   notify: (s: string) => void;
-  dismissNotification: (id: number) => void;
   clearError: () => void;
-  refresh: () => Promise<void>;
+  refresh: (images?: "versions" | "backgrounds") => Promise<void>;
   selectPlayer: (id: string) => Promise<void>;
   reorderPlayers: (ids: string[]) => Promise<void>;
   selectVersion: (version: Version) => Promise<void>;
@@ -132,6 +129,15 @@ interface AppState {
   ) => Promise<string[]>;
 }
 const Context = createContext<AppState | null>(null);
+const NotificationsContext = createContext<{
+  notifications: Notification[];
+  dismissNotification: (id: number) => void;
+} | null>(null);
+export function useNotifications() {
+  const value = useContext(NotificationsContext);
+  if (!value) throw new Error("Notification provider missing");
+  return value;
+}
 export function Provider({ children }: { children: ReactNode }) {
   const [initialized, setInitialized] = useState(false);
   const [startupError, setStartupError] = useState("");
@@ -151,13 +157,9 @@ export function Provider({ children }: { children: ReactNode }) {
   );
   const settingsRef = useRef(data.settings);
   settingsRef.current = data.settings;
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const [favorites, setFavorites] = useState<FavoriteVersion[]>([]);
-  const [tasks, setTasks] = useState<Tasks>({ downloads: [], jobs: [] });
-  const tasksGeneration = useRef(0);
-  const pendingDownloadClears = useRef(new Set<string>());
-  const [clearingDownloads, setClearingDownloads] = useState<
-    ReadonlySet<string>
-  >(new Set());
   const [navigation, setNavigation] = useState(initialNavigation);
   const { route } = navigation;
   const page = navigationPage(route);
@@ -213,7 +215,7 @@ export function Provider({ children }: { children: ReactNode }) {
   const dismissNotification = useCallback((id: number) => {
     setNotifications((current) => current.filter((item) => item.id !== id));
   }, []);
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (images?: "versions" | "backgrounds") => {
     if (!desktop) return;
     const generation = ++refreshGeneration.current;
     while (generation === refreshGeneration.current) {
@@ -243,7 +245,13 @@ export function Provider({ children }: { children: ReactNode }) {
       setVersions(versions);
       setVersionsRevision((revision) => revision + 1);
       setFavorites(favorites);
-      invalidateImages();
+      if (images === "versions")
+        invalidateImages(versions.map((version) => version.icon));
+      if (images === "backgrounds")
+        invalidateImages([
+          value.backgroundPath || value.settings.background,
+          value.settings.player3dBackground,
+        ]);
       return;
     }
   }, []);
@@ -368,30 +376,6 @@ export function Provider({ children }: { children: ReactNode }) {
     },
     [notify, setError],
   );
-  const clearDownload = useCallback(
-    async (id: string) => {
-      if (pendingDownloadClears.current.has(id)) return;
-      pendingDownloadClears.current.add(id);
-      setClearingDownloads(new Set(pendingDownloadClears.current));
-      try {
-        await run(async () => {
-          await api("downloads.control", { id, action: "clear" });
-          // An older poll must not restore a record after its deletion succeeds.
-          tasksGeneration.current += 1;
-          setTasks((current) => ({
-            ...current,
-            downloads: current.downloads.filter(
-              (download) => download.id !== id,
-            ),
-          }));
-        });
-      } finally {
-        pendingDownloadClears.current.delete(id);
-        setClearingDownloads(new Set(pendingDownloadClears.current));
-      }
-    },
-    [run],
-  );
   const navigate = useCallback(
     (next: NavigationEntry, sourcePage?: Page) => {
       if (navigating.current) return;
@@ -444,6 +428,7 @@ export function Provider({ children }: { children: ReactNode }) {
   const update = useCallback(
     async (op: string, p: unknown = {}, message?: string) => {
       const result = await api(op, p);
+      invalidateImages(mutationImagePaths(op, p, result, dataRef.current));
       await refresh();
       if (message) notify(message);
       return result;
@@ -586,38 +571,6 @@ export function Provider({ children }: { children: ReactNode }) {
     else setError(data.localDataResult.message);
   }, [initialized, data.localDataResult, setPage, notify, setError]);
   useEffect(() => {
-    if (!desktop || !initialized) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    let lastPollError = "";
-    const completed = new Set<string>();
-    const poll = async () => {
-      try {
-        const generation = tasksGeneration.current;
-        const next = await api<Tasks>("tasks");
-        lastPollError = "";
-        if (active && generation === tasksGeneration.current) setTasks(next);
-        const newlyCompleted = next.jobs.filter(
-          (j) => j.status === "completed" && !completed.has(j.id),
-        );
-        newlyCompleted.forEach((j) => completed.add(j.id));
-        if (active && newlyCompleted.length > 0) await refresh();
-      } catch (e) {
-        // One outage should not create a new card on every 500 ms poll.
-        const message = String(e);
-        if (active && message !== lastPollError) setError(message);
-        lastPollError = message;
-      } finally {
-        if (active) timer = setTimeout(poll, 500);
-      }
-    };
-    void poll();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [refresh, setError, initialized]);
-  useEffect(() => {
     if (!initialized) return;
     const media = matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
@@ -633,52 +586,97 @@ export function Provider({ children }: { children: ReactNode }) {
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
   }, [data.settings.theme, data.settings.accent, initialized]);
+  const clearError = useCallback(() => setError(""), [setError]);
+  const value = useMemo<AppState>(
+    () => ({
+      initialized,
+      startupError,
+      data,
+      versions,
+      versionsRevision,
+      showAllVersions,
+      setShowAllVersions,
+      allVersions,
+      favorites,
+      page,
+      setPage,
+      route,
+      pageRoutes: navigation.pages,
+      navigate,
+      openVersionPage,
+      openResources,
+      openPlayerLogin,
+      setNavigationGuard,
+      busy,
+      error,
+      notify,
+      clearError,
+      refresh,
+      selectPlayer,
+      reorderPlayers,
+      selectVersion,
+      run,
+      mutate,
+      update,
+      save,
+      autoSaveSettings,
+      loadVersionSettings,
+      autoSaveVersionSettings,
+      reportError: setError,
+      saveJavaPaths,
+    }),
+    [
+      initialized,
+      startupError,
+      data,
+      versions,
+      versionsRevision,
+      showAllVersions,
+      allVersions,
+      favorites,
+      page,
+      setPage,
+      route,
+      navigation.pages,
+      navigate,
+      openVersionPage,
+      openResources,
+      openPlayerLogin,
+      setNavigationGuard,
+      busy,
+      error,
+      notify,
+      clearError,
+      refresh,
+      selectPlayer,
+      reorderPlayers,
+      selectVersion,
+      run,
+      mutate,
+      update,
+      save,
+      autoSaveSettings,
+      loadVersionSettings,
+      autoSaveVersionSettings,
+      setError,
+      saveJavaPaths,
+    ],
+  );
+  const notificationValue = useMemo(
+    () => ({ notifications, dismissNotification }),
+    [notifications, dismissNotification],
+  );
   return (
-    <Context.Provider
-      value={{
-        initialized,
-        startupError,
-        data,
-        versions,
-        versionsRevision,
-        showAllVersions,
-        setShowAllVersions,
-        allVersions,
-        favorites,
-        tasks,
-        clearingDownloads,
-        clearDownload,
-        page,
-        setPage,
-        route,
-        pageRoutes: navigation.pages,
-        navigate,
-        openVersionPage,
-        openResources,
-        openPlayerLogin,
-        setNavigationGuard,
-        busy,
-        error,
-        notifications,
-        notify,
-        dismissNotification,
-        clearError: () => setError(""),
-        refresh,
-        selectPlayer,
-        reorderPlayers,
-        selectVersion,
-        run,
-        mutate,
-        update,
-        save,
-        autoSaveSettings,
-        loadVersionSettings,
-        autoSaveVersionSettings,
-        reportError: setError,
-        saveJavaPaths,
-      }}
-    >
-      {children}
+    <Context.Provider value={value}>
+      <NotificationsContext.Provider value={notificationValue}>
+        <TaskProvider
+          initialized={initialized}
+          refresh={refresh}
+          reportError={setError}
+        >
+          {children}
+        </TaskProvider>
+      </NotificationsContext.Provider>
     </Context.Provider>
   );
 }
@@ -700,23 +698,21 @@ export function PageRouteProvider({
     (nextPage: Page) => app.setPage(nextPage, page),
     [app.setPage, page],
   );
-  return (
-    <Context.Provider
-      value={{
-        ...app,
-        route,
-        page,
-        navigate,
-        setPage,
-        openResources: (tab) => navigate({ page: "resources", tab }),
-        openVersionPage: (kind, version) =>
-          navigate({ page: "versions", detail: { kind, version } }),
-        openPlayerLogin: (login) => navigate({ page: "players", login }),
-      }}
-    >
-      {children}
-    </Context.Provider>
+  const value = useMemo<AppState>(
+    () => ({
+      ...app,
+      route,
+      page,
+      navigate,
+      setPage,
+      openResources: (tab) => navigate({ page: "resources", tab }),
+      openVersionPage: (kind, version) =>
+        navigate({ page: "versions", detail: { kind, version } }),
+      openPlayerLogin: (login) => navigate({ page: "players", login }),
+    }),
+    [app, route, page, navigate, setPage],
   );
+  return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useApp() {
   const app = useContext(Context);

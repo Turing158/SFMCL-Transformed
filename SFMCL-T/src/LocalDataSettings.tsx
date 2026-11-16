@@ -11,6 +11,7 @@ import { flushAutoSaves } from "./autoSave";
 import { Button, PixelFrame } from "./components";
 import { Input } from "./controls";
 import { useApp } from "./store";
+import { useTaskSelector } from "./tasks";
 import type { LocalDataOperation } from "./types";
 
 interface PreparedOperation {
@@ -28,13 +29,15 @@ export function LocalDataSettings() {
   const [restarting, setRestarting] = useState(false);
   const inFlight = useRef(false);
   const result = app.data.localDataResult;
-  const activeTasks =
-    app.tasks.downloads.some((download) =>
-      ["queued", "running", "pausing"].includes(download.status),
-    ) ||
-    app.tasks.jobs.some(
-      (job) => !["completed", "failed", "cancelled"].includes(job.status),
-    );
+  const activeTasks = useTaskSelector(
+    (tasks) =>
+      tasks.downloads.some((download) =>
+        ["queued", "running", "pausing"].includes(download.status),
+      ) ||
+      tasks.jobs.some(
+        (job) => !["completed", "failed", "cancelled"].includes(job.status),
+      ),
+  );
   const unavailable = app.busy || !!working || restarting || !app.data.dataDir;
   const disabled = unavailable || activeTasks;
 
