@@ -8,6 +8,7 @@ export function CatalogItems({
   view,
   revision,
   label,
+  busy,
   id,
   className = "",
   children,
@@ -15,6 +16,7 @@ export function CatalogItems({
   view: ResourceView;
   revision?: unknown;
   label?: string;
+  busy?: boolean;
   id?: string;
   className?: string;
   children: ReactNode;
@@ -72,6 +74,7 @@ export function CatalogItems({
       id={id}
       className={`catalog-projects ${view} ${className}`}
       aria-label={label}
+      aria-busy={busy}
     >
       {children}
     </div>

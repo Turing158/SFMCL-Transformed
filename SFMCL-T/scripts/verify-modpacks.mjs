@@ -166,26 +166,47 @@ try {
   await page
     .getByRole("button", { name: "查看 Sodium 详情", exact: true })
     .click();
-  await page.getByRole("tab", { name: /可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   await page
     .getByRole("button", {
       name: "选择 兼容文件 1.20.1 的下载位置",
       exact: true,
     })
     .click();
-  await expect(dialog().getByRole("tab", { name: "安装新实例" })).toBeVisible();
+  await expect(dialog().getByRole("tab", { name: "安装整合包" })).toBeVisible();
   await expect(
     dialog().getByRole("combobox", { name: "本地游戏版本" }),
   ).toHaveCount(0);
   await dialog()
     .getByRole("textbox", { name: "整合包游戏名称" })
     .fill("在线整合包");
+  const installRoot = dialog().getByRole("combobox", {
+    name: "整合包安装目录",
+  });
+  const addRoot = dialog().getByRole("button", { name: "添加安装目录" });
+  const newRoot = "C:/Packs/新游戏目录";
+  const previousRoot = await installRoot.textContent();
+  await page.evaluate(() => {
+    window.__pixelTest.resources.selectedDirectory = null;
+  });
+  await addRoot.click();
+  await expect(installRoot).toHaveText(previousRoot);
+  await page.evaluate((root) => {
+    window.__pixelTest.resources.selectedDirectory = root + "/.minecraft";
+  }, newRoot);
+  await addRoot.click();
+  await expect(installRoot).toContainText(newRoot);
+  await addRoot.click();
+  await installRoot.click();
+  await expect(page.getByRole("option", { name: /新游戏目录/ })).toHaveCount(1);
+  await installRoot.press("Escape");
   await settleDialog();
   await page.screenshot({ path: `${evidence}/online-install.png` });
   await dialog().getByRole("button", { name: "开始安装" }).click();
   await expect(dialog()).toHaveCount(0);
   expect(await last("modpacks.install")).toMatchObject({
     name: "在线整合包",
+    root: newRoot,
     file: { path: "test-0.zip" },
     includeOptional: false,
   });
@@ -215,6 +236,16 @@ try {
   );
 
   await nav("版本管理");
+  const gameRoots = page.getByRole("combobox", {
+    name: "游戏目录",
+    exact: true,
+  });
+  await gameRoots.click();
+  await expect(page.getByRole("option", { name: /新游戏目录/ })).toBeVisible();
+  await gameRoots.press("Escape");
+  checks.push(
+    "The install dialog registers the selected game directory once, installs into it and shares it with version management.",
+  );
   await page.getByRole("button", { name: "导入整合包", exact: true }).click();
   await page.evaluate(() => {
     window.__pixelTest.resources.selectedDirectory = "C:/Packs/Client";

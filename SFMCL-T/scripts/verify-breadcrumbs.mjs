@@ -406,7 +406,7 @@ try {
     await verifyMotion(1);
     if (tab !== "Minecraft") {
       const beforeInternalTab = await motionCount();
-      await page.getByRole("tab", { name: /可下载版本/ }).click();
+      await page.getByRole("tab", { name: /^下载/ }).click();
       await expect(
         page.getByRole("textbox", { name: "筛选游戏版本" }),
       ).toBeVisible();

@@ -265,7 +265,7 @@ try {
   await expect(
     resourcePage.getByRole("heading", { name: "渲染优化", exact: true }),
   ).toBeVisible();
-  await resourcePage.getByRole("tab", { name: /^可下载版本/ }).click();
+  await resourcePage.getByRole("tab", { name: /^下载/ }).click();
   await expect(resourcePage.locator(".project-file")).toHaveCount(1);
   await expect(
     resourcePage.getByRole("button", { name: /暂时无法下载/ }),

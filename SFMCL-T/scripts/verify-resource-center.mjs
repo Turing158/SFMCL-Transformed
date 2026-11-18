@@ -613,7 +613,7 @@ try {
   await page
     .getByRole("button", { name: "查看 Sodium 详情", exact: true })
     .click();
-  await page.getByRole("tab", { name: /^可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   await expect(
     page.getByRole("combobox", { name: "筛选加载器" }),
   ).toBeDisabled();
@@ -668,7 +668,7 @@ try {
 
   await select("资源来源", "Modrinth");
   await page.getByRole("tab", { name: "模组", exact: true }).click();
-  await select("资源排序", "推荐排序");
+  await select("资源排序", "推荐");
   await settled();
   for (const theme of ["light", "dark"]) {
     await page.evaluate((value) => {
@@ -718,8 +718,8 @@ try {
   await page
     .getByRole("button", { name: "查看 Sodium 详情", exact: true })
     .click();
-  await page.getByRole("tab", { name: /^可下载版本/ }).click();
-  await expect(page.getByRole("tab", { name: /^可下载版本/ })).toHaveAttribute(
+  await page.getByRole("tab", { name: /^下载/ }).click();
+  await expect(page.getByRole("tab", { name: /^下载/ })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -937,7 +937,7 @@ try {
     await page
       .getByRole("button", { name: "查看 Sodium 详情", exact: true })
       .click();
-    await page.getByRole("tab", { name: /^可下载版本/ }).click();
+    await page.getByRole("tab", { name: /^下载/ }).click();
     await expect(page.locator(".project-file")).toHaveCount(3);
     expect(await last("resources.files")).toMatchObject({ loader: "datapack" });
     await expect(
@@ -1024,7 +1024,7 @@ try {
   await page
     .getByRole("button", { name: "查看 Sodium 详情", exact: true })
     .click();
-  await page.getByRole("tab", { name: /^可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   await select("筛选加载器", "Fabric");
   await page.locator("button.project-file").first().click();
   await expect(dialog.getByRole("region", { name: "前置资源" })).toContainText(

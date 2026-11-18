@@ -1,6 +1,5 @@
 import { LayoutGrid, List } from "lucide-react";
 import { useState } from "react";
-import { PixelFrame } from "../components";
 
 export type ResourceView = "list" | "grid";
 
@@ -23,7 +22,7 @@ export function CatalogView({
   return (
     <button
       type="button"
-      className={`icon-button catalog-view has-surface ${className}`}
+      className={`icon-button catalog-view ${className}`}
       data-tooltip={label}
       aria-label={label}
       aria-controls={ariaControls}
@@ -32,7 +31,6 @@ export function CatalogView({
         onValueChange(nextView);
       }}
     >
-      <PixelFrame />
       <span
         key={value}
         className={`catalog-view-symbol ${changed ? "is-changing" : ""}`}

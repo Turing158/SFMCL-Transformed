@@ -1,0 +1,221 @@
+.settings-stack.about-container {
+  container-type: inline-size;
+  width: 100%;
+  max-width: 740px;
+}
+
+.about-card.about-layout {
+  display: grid;
+  grid-template-columns: 218px minmax(0, 1fr);
+  padding: 0;
+}
+
+.about-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  min-height: 380px;
+  padding: 36px 12px 20px;
+}
+
+.about-brand-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  align-self: stretch;
+  margin-top: auto;
+  padding-top: 24px;
+}
+
+.about-brand-footer .row-actions {
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.about-credits {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  margin: 20px 0;
+  padding: 0 18px;
+  border-left: 1px solid var(--line);
+  list-style: none;
+  text-align: left;
+}
+
+.about-credits > li {
+  min-width: 0;
+}
+
+.about-credit.has-surface {
+  --card-accent: var(--about-brand-accent);
+  --surface-edge: color-mix(in srgb, var(--card-accent) 23%, var(--line));
+  --surface-fill: color-mix(in srgb, var(--card-accent) 3%, var(--panel));
+  --surface-depth: 2px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 50px;
+  padding: 6px 12px;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+  transition: box-shadow 240ms ease;
+}
+
+.about-credit[data-tone="amber"] {
+  --card-accent: #87602c;
+}
+.about-credit[data-tone="teal"] {
+  --card-accent: #24716b;
+}
+.about-credit[data-tone="purple"] {
+  --card-accent: #706099;
+}
+.about-credit[data-tone="green"] {
+  --card-accent: #16704a;
+}
+.about-credit[data-tone="orange"] {
+  --card-accent: #a8582b;
+}
+
+:root[data-theme="dark"] .about-credit[data-tone="amber"] {
+  --card-accent: #dec18d;
+}
+:root[data-theme="dark"] .about-credit[data-tone="teal"] {
+  --card-accent: #8bcfc3;
+}
+:root[data-theme="dark"] .about-credit[data-tone="purple"] {
+  --card-accent: #c1b2e7;
+}
+:root[data-theme="dark"] .about-credit[data-tone="green"] {
+  --card-accent: #85d1aa;
+}
+:root[data-theme="dark"] .about-credit[data-tone="orange"] {
+  --card-accent: #edb28f;
+}
+
+.about-credit > .surface-frame::before,
+.about-credit > .surface-frame::after,
+.about-credit-icon > .surface-frame::before,
+.about-credit-icon > .surface-frame::after {
+  transition: background-color 240ms ease;
+}
+
+.about-credit:is(:hover, :focus-visible) {
+  --surface-edge: var(--card-accent);
+  --surface-fill: color-mix(in srgb, var(--card-accent) 9%, var(--panel));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--card-accent) 12%, transparent);
+}
+
+.about-credit.has-surface:focus-visible {
+  outline: 2px solid var(--card-accent);
+  outline-offset: 3px;
+}
+
+.about-credit-icon.has-surface {
+  --surface-stroke: 1px;
+  --surface-inset-shape: var(--surface-shape-1);
+  --surface-edge: color-mix(in srgb, var(--card-accent) 25%, var(--line));
+  --surface-fill: color-mix(in srgb, var(--card-accent) 10%, var(--panel));
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--card-accent);
+}
+
+.about-credit-icon > img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.about-credit-icon > :is(svg, img) {
+  transition: filter 240ms ease;
+}
+
+.about-credit:is(:hover, :focus-visible) .about-credit-icon {
+  --surface-edge: color-mix(in srgb, var(--card-accent) 60%, var(--line));
+  --surface-fill: color-mix(in srgb, var(--card-accent) 19%, var(--panel));
+}
+
+.about-credit:is(:hover, :focus-visible) .about-credit-icon > :is(svg, img) {
+  filter: brightness(1.1) saturate(1.15);
+}
+
+.about-credit-copy {
+  min-width: 0;
+}
+
+.about-credit-name,
+.about-credit-description {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.about-credit-name {
+  padding-right: 20px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.3;
+  transition: color 240ms ease;
+}
+
+.about-credit:is(:hover, :focus-visible) .about-credit-name {
+  color: var(--card-accent);
+}
+
+.about-credit-description {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.about-credit-external {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  color: var(--muted);
+  opacity: 0.6;
+  transition:
+    color 240ms ease,
+    opacity 240ms ease;
+}
+
+.about-credit:is(:hover, :focus-visible) .about-credit-external {
+  color: var(--card-accent);
+  opacity: 1;
+}
+
+@container (max-width: 520px) {
+  .about-card.about-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about-credits {
+    margin: 0 16px 20px;
+    padding: 18px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+@container (max-width: 460px) {
+  .about-credit.has-surface {
+    padding: 6px 10px;
+  }
+
+  .about-credit-description {
+    font-size: 12px;
+  }
+}

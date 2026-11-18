@@ -227,7 +227,7 @@ try {
   await page
     .getByRole("button", { name: "查看 Sodium 详情", exact: true })
     .click();
-  await page.getByRole("tab", { name: /^可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   await expect(rows).toHaveCount(5);
   const before = await fileRequests();
   await expect(page.locator(".project-file-title .badge")).toHaveCount(0);
@@ -376,7 +376,7 @@ try {
     await page
       .getByRole("button", { name: "查看 Sodium 详情", exact: true })
       .click();
-    await page.getByRole("tab", { name: /^可下载版本/ }).click();
+    await page.getByRole("tab", { name: /^下载/ }).click();
     await expect(rows).toHaveCount(5);
   };
   const backToCatalog = () =>
@@ -395,7 +395,7 @@ try {
       "Sodium",
     );
     await expect(
-      page.getByRole("tab", { name: /^可下载版本/ }),
+      page.getByRole("tab", { name: /^下载/ }),
     ).toHaveAttribute("aria-selected", "true");
     await expect(
       page.getByRole("textbox", { name: "筛选游戏版本" }),
@@ -465,7 +465,7 @@ try {
     "Fabric API",
   );
   await expect(page.locator(".resource-subpage-header h1")).toBeFocused();
-  await expect(page.getByRole("tab", { name: /^可下载版本/ })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: /^下载/ })).toHaveAttribute(
     "aria-selected",
     "true",
   );

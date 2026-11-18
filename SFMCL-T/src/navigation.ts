@@ -5,6 +5,7 @@ import type {
   Project,
   Version,
 } from "./types";
+import { resourceName } from "./resourceNames";
 
 export const pageNames: Record<Page, string> = {
   home: "开始游戏",
@@ -179,7 +180,11 @@ export function entryLabel(entry: NavigationEntry) {
   if (entry.page === "resources") {
     if (entry.resource?.kind === "minecraft")
       return `${entry.resource.version.id} · 安装配置`;
-    if (entry.resource?.kind === "project") return entry.resource.project.title;
+    if (entry.resource?.kind === "project")
+      return resourceName(
+        entry.resource.project.title,
+        entry.resource.project.localizedName,
+      );
     return `${resourceTabNames[entry.tab ?? "minecraft"]}资源`;
   }
   if (entry.page === "players" && entry.login)
@@ -194,7 +199,10 @@ export function entryLabel(entry: NavigationEntry) {
           : "Microsoft 登录";
   if (!entry.detail) return pageNames[entry.page];
   if (entry.detail.kind === "resources" && entry.detail.resource)
-    return entry.detail.resource.name;
+    return resourceName(
+      entry.detail.resource.name,
+      entry.detail.resource.localizedName,
+    );
   const label = entry.detail.kind === "settings" ? "游戏设置" : "本地资源";
   return `${entry.detail.version.id} · ${label}`;
 }

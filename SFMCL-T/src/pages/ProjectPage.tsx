@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, LoaderCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Input, Select } from "../controls";
 import { useApp } from "../store";
@@ -22,6 +22,7 @@ import { CatalogView, type ResourceView } from "./CatalogView";
 import { CatalogItems } from "./CatalogMotion";
 import { ProjectFileItem } from "./ProjectFileItem";
 import { ResourceSourceBadge } from "../resourceSources";
+import { resourceName } from "../resourceNames";
 
 const filePageSize = 20;
 const resourceLoaders = {
@@ -141,9 +142,15 @@ export function ProjectPage({
           .textContent || ""
       : detail.body;
   return (
-    <ResourceSubpage title={detail.title} tab={kind}>
+    <ResourceSubpage
+      title={resourceName(detail.title, detail.localizedName)}
+      tab={kind}
+    >
       <div className="project-heading">
-        <ResourceImage path={detail.icon} alt={detail.title} />
+        <ResourceImage
+          path={detail.icon}
+          alt={resourceName(detail.title, detail.localizedName)}
+        />
         <div>
           <p>{detail.description}</p>
           <small>
@@ -165,16 +172,13 @@ export function ProjectPage({
           { value: "description", label: "项目介绍" },
           {
             value: "files",
-            label: "可下载版本",
+            label: "下载",
             count: files.length,
             loading,
           },
         ]}
       />
       <TabPanel ref={tabContent} id="project" value={tab}>
-        {loading && tab === "files" && (
-          <p className="loading-text">正在获取可下载版本…</p>
-        )}
         {(detailError || error) && (
           <div className="inline-error resource-error" role="alert">
             {detailError || error}
@@ -202,42 +206,40 @@ export function ProjectPage({
             </ReactMarkdown>
           </div>
         ) : (
-          <div className="project-files" ref={fileResults} aria-busy={loading}>
+          <div className="project-files" ref={fileResults}>
             <div className="project-file-toolbar">
-              <div className="project-file-filters" aria-label="资源版本筛选">
-                <label>
-                  游戏版本
-                  <Input
-                    aria-label="筛选游戏版本"
-                    placeholder="全部版本"
-                    value={versionInput}
-                    onChange={(event) => setVersionInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter")
-                        setFileVersion(versionInput.trim());
-                    }}
-                  />
-                </label>
+              <div
+                className="project-file-filters"
+                role="group"
+                aria-label="资源版本筛选"
+              >
+                <Input
+                  aria-label="筛选游戏版本"
+                  placeholder="全部版本"
+                  value={versionInput}
+                  onChange={(event) => setVersionInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter")
+                      setFileVersion(versionInput.trim());
+                  }}
+                />
                 {kind !== "datapack" && (
-                  <label>
-                    加载器
-                    <Select
-                      aria-label="筛选加载器"
-                      value={fileLoader}
-                      onValueChange={setFileLoader}
-                      disabled={!loaderOptions.length}
-                      data-tooltip={
-                        loaderOptions.length
-                          ? undefined
-                          : "此来源未提供该资源的加载器信息"
-                      }
-                    >
-                      <option value="">全部加载器</option>
-                      {loaderOptions.map((value) => (
-                        <option key={value}>{value}</option>
-                      ))}
-                    </Select>
-                  </label>
+                  <Select
+                    aria-label="筛选加载器"
+                    value={fileLoader}
+                    onValueChange={setFileLoader}
+                    disabled={!loaderOptions.length}
+                    data-tooltip={
+                      loaderOptions.length
+                        ? undefined
+                        : "此来源未提供该资源的加载器信息"
+                    }
+                  >
+                    <option value="">全部加载器</option>
+                    {loaderOptions.map((value) => (
+                      <option key={value}>{value}</option>
+                    ))}
+                  </Select>
                 )}
               </div>
               <CatalogView
@@ -246,6 +248,12 @@ export function ProjectPage({
                 aria-controls="project-file-results"
               />
             </div>
+            {loading && (
+              <div className="project-file-loading loading-text" role="status">
+                <LoaderCircle size={28} className="spin" aria-hidden="true" />
+                <span>加载中...</span>
+              </div>
+            )}
             {files.length === 0 && !loading && !error && (
               <Empty
                 title="未找到兼容文件"
@@ -261,7 +269,8 @@ export function ProjectPage({
               className="project-file-results"
               view={view}
               revision={pageFiles}
-              label="可下载版本"
+              label="下载列表"
+              busy={loading}
             >
               {pageFiles.map((file) => (
                 <ProjectFileItem
@@ -278,7 +287,7 @@ export function ProjectPage({
             {!loading && !error && files.length > 0 && (
               <nav
                 className="pagination catalog-pagination project-file-pagination"
-                aria-label="可下载版本分页"
+                aria-label="下载列表分页"
               >
                 <Button
                   aria-controls="project-file-results"
@@ -313,6 +322,7 @@ export function ProjectPage({
         <ModpackInstallDialog
           resource={download}
           title={detail.title}
+          localizedName={detail.localizedName}
           queued={queued}
           onQueued={(key) => setQueued((current) => [...current, key])}
           onClose={() => {
@@ -325,6 +335,7 @@ export function ProjectPage({
         <ResourceDownloadDialog
           resource={download}
           title={detail.title}
+          localizedName={detail.localizedName}
           kind={kind}
           queued={queued}
           onQueued={(key) => setQueued((current) => [...current, key])}

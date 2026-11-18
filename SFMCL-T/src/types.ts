@@ -208,8 +208,13 @@ export interface ManifestVersion {
   releaseTime: string;
   url: string;
 }
+export interface LocalizedName {
+  name: string;
+  aliases: string[];
+}
 export interface LocalResource {
   name: string;
+  localizedName?: LocalizedName | null;
   path: string;
   kind: string;
   entryType?: "file" | "resourceDirectory" | "directory";
@@ -226,6 +231,8 @@ export interface Project {
   id: string;
   source: string;
   title: string;
+  slug?: string;
+  localizedName?: LocalizedName | null;
   description: string;
   author: string;
   icon: string;

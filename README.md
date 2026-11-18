@@ -118,7 +118,7 @@ Forge 与 OptiFine 联装时，OptiFine JAR 放入对应游戏目录的 `mods/`�
 
 ### 安装整合包
 
-在「资源中心 → 整合包」搜索 Modrinth 或 CurseForge 项目，选择文件后可「安装新实例」或「下载到文件夹」。
+在「资源中心 → 整合包」搜索 Modrinth 或 CurseForge 项目，选择文件后可「安装整合包」或「下载到文件夹」。
 
 本地整合包可通过版本管理中的「导入整合包」选择，也可将单个压缩包或客户端目录拖入桌面窗口。识别成功后会打开已填好包信息的安装设置。
 
@@ -361,6 +361,10 @@ Microsoft 真人授权、令牌刷新与正版启动仍待完整实测；已验�
 ## 许可与致谢
 
 项目采用 [MIT License](LICENSE)。RAR 解压使用 UnRAR，其使用与分发条款见 [UNRAR-LICENSE.txt](UNRAR-LICENSE.txt)；随附 Pixelify Sans 字体的许可见 [OFL 声明](SFMCL-T/public/assets/players/PixelifySans-OFL.txt)。
+
+模组与整合包中文名称数据使用 [HMCL](https://github.com/HMCL-dev/HMCL) 的 `mod.csv` 和 `modpack.csv`，原始数据来自 [MC 百科](https://www.mcmod.cn/)。感谢 HMCL 维护者及 MC 百科贡献者，保留文件原有版权声明并记录引用版本。
+
+两份词库引用 HMCL 提交 [`bf558a882fcf9998997e40bd3fdf0fec4c8e101b`](https://github.com/HMCL-dev/HMCL/commit/bf558a882fcf9998997e40bd3fdf0fec4c8e101b)，随程序内置，用于名称显示与本地模组检索。来源链接与 SHA-256 校验值记录在 [词库来源记录](SFMCL-T/crates/launcher-core/resources/hmcl/source.json)；更新时从同一提交取得两份文件并更新记录。
 
 感谢 [StarFall Minecraft Launcher](https://github.com/Turing158/StarFall-Minecraft-Launcher) 提供原有实现与资源参考，以及 [Modrinth](https://modrinth.com/) 和 [CurseForge](https://www.curseforge.com/minecraft) 提供社区资源服务。
 

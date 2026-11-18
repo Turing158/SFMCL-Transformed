@@ -1,0 +1,16 @@
+{
+  "repository": "https://github.com/HMCL-dev/HMCL",
+  "revision": "bf558a882fcf9998997e40bd3fdf0fec4c8e101b",
+  "files": [
+    {
+      "name": "mod.csv",
+      "source": "https://github.com/HMCL-dev/HMCL/blob/bf558a882fcf9998997e40bd3fdf0fec4c8e101b/HMCL/src/main/resources/assets/addon/mod.csv",
+      "sha256": "2cb86f33762d3931838e18e51d45b3333001a50675fc097830c21af87b543021"
+    },
+    {
+      "name": "modpack.csv",
+      "source": "https://github.com/HMCL-dev/HMCL/blob/bf558a882fcf9998997e40bd3fdf0fec4c8e101b/HMCL/src/main/resources/assets/addon/modpack.csv",
+      "sha256": "83746867b67302e2556f2fbb1d3235063e8620c74ee64b89f46518e222d24c0a"
+    }
+  ]
+}

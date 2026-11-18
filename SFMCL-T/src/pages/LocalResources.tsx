@@ -29,6 +29,7 @@ import { api, confirmAction } from "../api";
 import { minecraftDirectoryPath } from "../gameDirectories";
 import { useApp } from "../store";
 import type { LocalResource, Project, Version } from "../types";
+import { localResourceSearchText, resourceName } from "../resourceNames";
 import { usePageActive } from "../PageActivity";
 import { useTabContentTransition } from "../useTabContentTransition";
 import { LocalResourcePage } from "./LocalResourcePage";
@@ -240,10 +241,7 @@ export function LocalResources({
     };
   }, [version.id, root, revision]);
   const items = (resources[kind] || []).filter((item) =>
-    (kind === "shader"
-      ? item.name
-      : `${item.name} ${item.authors} ${item.description}`
-    )
+    (kind === "shader" ? item.name : localResourceSearchText(item))
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
@@ -398,7 +396,7 @@ export function LocalResources({
                       <button
                         type="button"
                         className="catalog-project-info local-resource-title"
-                        aria-label={`${item.name} 详情`}
+                        aria-label={`${resourceName(item.name, item.localizedName)} 详情`}
                         onClick={(event) =>
                           openDetail(item, event.currentTarget)
                         }
@@ -408,7 +406,7 @@ export function LocalResources({
                     )}
                     <div className="row-actions local-resource-actions">
                       <Button
-                        aria-label={`打开 ${item.name} 所在目录`}
+                        aria-label={`打开 ${resourceName(item.name, item.localizedName)} 所在目录`}
                         data-tooltip="打开所在目录"
                         onClick={() =>
                           void app.run(() => openLocalResource(item))
@@ -419,7 +417,7 @@ export function LocalResources({
                       {kind === "mod" && (
                         <Button
                           disabled={app.busy}
-                          aria-label={`${item.disabled ? "启用" : "禁用"} ${item.name}`}
+                          aria-label={`${item.disabled ? "启用" : "禁用"} ${resourceName(item.name, item.localizedName)}`}
                           data-tooltip={item.disabled ? "启用模组" : "禁用模组"}
                           onClick={() =>
                             void app.run(async () => {
@@ -571,7 +569,13 @@ function LocalResourceInfo({
       )}
       <div className="catalog-project-copy">
         <div className="catalog-project-title">
-          <h3 data-tooltip={compact ? item.name : undefined}>{item.name}</h3>
+          <h3
+            data-tooltip={
+              compact ? resourceName(item.name, item.localizedName) : undefined
+            }
+          >
+            {resourceName(item.name, item.localizedName)}
+          </h3>
           {isLocalResourceDirectory(item) && <Badge>文件夹</Badge>}
           {item.authors && (
             <span data-tooltip={compact ? item.authors : undefined}>

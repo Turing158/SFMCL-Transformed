@@ -50,6 +50,8 @@
     "test:multiplayer": "node scripts/verify-multiplayer.mjs",
     "test:all-versions": "node scripts/verify-all-versions.mjs",
     "test:resources": "node scripts/verify-resource-center.mjs",
+    "test:resource-names": "node scripts/verify-resource-names.mjs",
+    "test:resource-search": "node scripts/verify-resource-search.mjs",
     "test:modpacks": "node scripts/verify-modpacks.mjs",
     "test:modpack-drop": "node scripts/verify-modpack-drop.mjs",
     "test:datapack-desktop": "node scripts/verify-datapack-desktop.mjs",

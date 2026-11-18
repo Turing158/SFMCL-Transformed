@@ -1,4 +1,5 @@
 use super::archive::{self, MAX_METADATA};
+use crate::resources::names::{self, LocalizedName};
 use crate::{
     downloads::DownloadSpec,
     minecraft::{loaders::LoaderChoice, versions},
@@ -19,6 +20,7 @@ use tokio_util::sync::CancellationToken;
 pub struct PackInfo {
     pub format: String,
     pub name: String,
+    pub localized_name: Option<LocalizedName>,
     pub version: String,
     pub minecraft: String,
     pub loader: Option<LoaderChoice>,
@@ -96,6 +98,7 @@ fn new_pack(format: &str, name: &str, version: &str) -> Pack {
         info: PackInfo {
             format: format.into(),
             name: name.into(),
+            localized_name: names::local_modpack(name),
             version: version.into(),
             minecraft: String::new(),
             loader: None,

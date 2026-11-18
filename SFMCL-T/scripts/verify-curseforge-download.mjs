@@ -47,7 +47,7 @@ try {
   await page.getByRole("combobox", { name: "资源来源", exact: true }).click();
   await page.getByRole("option", { name: "CurseForge", exact: true }).click();
   await page.locator(".catalog-project-info").first().click();
-  await page.getByRole("tab", { name: /^可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   const item = page.getByRole("button", {
     name: "选择 缺少 API 直链的版本 的下载位置",
     exact: true,

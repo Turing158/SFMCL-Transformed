@@ -10,11 +10,18 @@ import {
   resourceDependencyKinds,
 } from "../resourceDownloads";
 import { useApp } from "../store";
-import type { ResourceDependency, ResourceFile, Version } from "../types";
+import type {
+  LocalizedName,
+  ResourceDependency,
+  ResourceFile,
+  Version,
+} from "../types";
+import { resourceName } from "../resourceNames";
 
 export function ResourceDownloadDialog({
   resource,
   title,
+  localizedName,
   kind,
   queued,
   onQueued,
@@ -23,6 +30,7 @@ export function ResourceDownloadDialog({
 }: {
   resource: ResourceFile;
   title: string;
+  localizedName?: LocalizedName | null;
   kind: Exclude<ResourceTab, "minecraft">;
   queued: string[];
   onQueued: (key: string) => void;
@@ -83,7 +91,7 @@ export function ResourceDownloadDialog({
 
   return (
     <Modal
-      title={`下载 ${downloadName}`}
+      title={`下载 ${resourceName(downloadName, localizedName)}`}
       onClose={onClose}
       closeDisabled={app.busy}
     >

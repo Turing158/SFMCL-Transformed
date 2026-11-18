@@ -148,12 +148,29 @@ input.pixel-checkbox {
   vertical-align: middle;
   cursor: pointer;
 }
-input.pixel-checkbox:checked,
-input.pixel-checkbox:indeterminate {
-  --pixel-frame: var(--px-frame-active-small);
-  --pixel-surface: var(--accent);
+input.pixel-checkbox::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border: 2px solid transparent;
+  border-image: var(--px-frame-active-small) 4 / 4px / 0 stretch;
+  background: color-mix(in srgb, var(--soft), var(--accent) 20%) padding-box;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    background-color 180ms ease,
+    opacity 180ms ease;
 }
-input.pixel-checkbox:checked::after {
+input.pixel-checkbox:is(:checked, :indeterminate)::before {
+  background-color: var(--pixel-checkbox-accent, var(--accent));
+  opacity: 1;
+}
+input.pixel-checkbox:hover:enabled::before,
+label:hover > input.pixel-checkbox:enabled::before {
+  --pixel-checkbox-accent: var(--accent-hover);
+  opacity: 1;
+}
+input.pixel-checkbox::after {
   content: "";
   position: absolute;
   left: 2px;
@@ -165,19 +182,17 @@ input.pixel-checkbox:checked::after {
     3px 3px 0 var(--pixel-on-accent),
     6px 0 0 var(--pixel-on-accent),
     9px -3px 0 var(--pixel-on-accent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+input.pixel-checkbox:is(:checked, :indeterminate)::after {
+  opacity: 1;
 }
 input.pixel-checkbox:indeterminate::after {
-  content: "";
-  position: absolute;
   left: 3px;
-  top: 6px;
   width: 10px;
-  height: 3px;
-  background: var(--pixel-on-accent);
   box-shadow: none;
-}
-input.pixel-checkbox:hover:not(:disabled) {
-  --pixel-frame: var(--px-frame-active-small);
 }
 input.pixel-checkbox:disabled {
   opacity: 0.4;
@@ -989,6 +1004,7 @@ input.pixel-range-input:focus-visible::-moz-range-thumb {
   }
 }
 @media (forced-colors: active) {
+  input.pixel-checkbox::before,
   .pixel-check-shadow {
     display: none;
   }

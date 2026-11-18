@@ -203,7 +203,7 @@ try {
   await page
     .getByRole("button", { name: "查看 Sodium 详情", exact: true })
     .click();
-  await page.getByRole("tab", { name: /可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   const gameVersion = page.getByRole("textbox", {
     name: "筛选游戏版本",
     exact: true,
@@ -243,7 +243,7 @@ try {
   await page
     .getByRole("button", { name: "查看 Sodium 详情", exact: true })
     .click();
-  await page.getByRole("tab", { name: /可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   await gameVersion.fill("1.21.4");
   await expect(
     page.locator("main.page button.project-file").first(),
@@ -272,7 +272,7 @@ try {
   await expect(
     navigation.getByRole("button", { name: "版本管理", exact: true }),
   ).toHaveAttribute("aria-current", "page");
-  await page.getByRole("tab", { name: /可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   const ownedVersion = ownedProject.getByRole("textbox", {
     name: "筛选游戏版本",
     exact: true,

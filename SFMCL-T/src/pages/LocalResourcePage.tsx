@@ -5,6 +5,7 @@ import type { LocalResource, Project, Version } from "../types";
 import { ResourceSubpage } from "./ResourceSubpage";
 import { LocalModChannels } from "./LocalModChannels";
 import { localResourceSize, openLocalResource } from "../localResources";
+import { resourceName } from "../resourceNames";
 
 export function LocalResourcePage({
   item,
@@ -26,7 +27,10 @@ export function LocalResourcePage({
       : [];
   return (
     <div className="local-resource-page">
-      <ResourceSubpage title={item.name} tab={tab}>
+      <ResourceSubpage
+        title={resourceName(item.name, item.localizedName)}
+        tab={tab}
+      >
         <div className="project-heading">
           <ResourceImage path={item.icon} alt="" />
           <div>

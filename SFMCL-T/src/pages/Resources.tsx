@@ -39,6 +39,7 @@ import { usePageActive } from "../PageActivity";
 import { useTabContentTransition } from "../useTabContentTransition";
 import type { ResourcePage, ResourceTab } from "../navigation";
 import type { Project } from "../types";
+import { resourceName } from "../resourceNames";
 
 const kinds = [
   { id: "mod", label: "模组", icon: Box },
@@ -171,8 +172,19 @@ export function Resources() {
     changeFilters({ gameVersion: "", loader: "", category: "" });
   };
   const submitSearch = () => {
-    changeFilters({ query: query.trim(), gameVersion: versionInput.trim() });
-    setRetry((value) => value + 1);
+    const value = (isMinecraft ? minecraftQuery : query).trim();
+    if (!value) {
+      app.reportError("请输入搜索内容");
+      searchForm.current
+        ?.querySelector<HTMLInputElement>("input[type='search']")
+        ?.focus();
+      return;
+    }
+    if (isMinecraft) setMinecraftQuery(value);
+    else {
+      changeFilters({ query: value, gameVersion: versionInput.trim() });
+      setRetry((value) => value + 1);
+    }
   };
 
   useEffect(() => {
@@ -274,8 +286,7 @@ export function Resources() {
           role="search"
           onSubmit={(event) => {
             event.preventDefault();
-            if (isMinecraft) setMinecraftQuery(minecraftQuery.trim());
-            else submitSearch();
+            submitSearch();
           }}
         >
           <PixelFrame />
@@ -322,7 +333,12 @@ export function Resources() {
               aria-label="资源来源"
               value={filters.source}
               onValueChange={(source) =>
-                changeFilters({ source, category: "" })
+                changeFilters({
+                  source,
+                  category: "",
+                  query: query.trim(),
+                  gameVersion: versionInput.trim(),
+                })
               }
             >
               <option value="modrinth">Modrinth</option>
@@ -401,7 +417,7 @@ export function Resources() {
                       value={filters.sort}
                       onValueChange={(sort) => changeFilters({ sort })}
                     >
-                      <option value="relevance">推荐排序</option>
+                      <option value="relevance">推荐</option>
                       <option value="downloads">下载最多</option>
                       <option value="updated">最近更新</option>
                     </Select>
@@ -572,7 +588,7 @@ export function Resources() {
                           <PixelFrame />
                           <button
                             className="catalog-project-info"
-                            aria-label={`查看 ${project.title} 详情`}
+                            aria-label={`查看 ${resourceName(project.title, project.localizedName)} 详情`}
                             onClick={() =>
                               openDetail({
                                 kind: "project",
@@ -586,7 +602,12 @@ export function Resources() {
                             <ResourceImage path={project.icon} alt="" />
                             <div className="catalog-project-copy">
                               <div className="catalog-project-title">
-                                <h2>{project.title}</h2>
+                                <h2>
+                                  {resourceName(
+                                    project.title,
+                                    project.localizedName,
+                                  )}
+                                </h2>
                                 <span>{project.author}</span>
                               </div>
                               <p>{project.description}</p>

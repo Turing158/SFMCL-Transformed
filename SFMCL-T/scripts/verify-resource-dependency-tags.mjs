@@ -144,7 +144,7 @@ try {
   await page
     .getByRole("button", { name: "查看 Sodium 详情", exact: true })
     .click();
-  await page.getByRole("tab", { name: /^可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   await openDialog();
   await expect(
     dependencies.getByRole("list", { name: "前置模组" }).getByRole("button"),

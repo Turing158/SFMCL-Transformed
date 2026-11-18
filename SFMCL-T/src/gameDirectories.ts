@@ -1,3 +1,5 @@
+import type { Settings } from "./types";
+
 const minecraftFolder = /(?:^|[\\/])\.minecraft$/i;
 
 function trimDirectorySeparator(path: string) {
@@ -25,4 +27,24 @@ export function gameDirectoryName(directory: { name: string; path: string }) {
     ? gameDirectoryPath(directory.path).split(/[\\/]/).filter(Boolean).pop() ||
         "游戏目录"
     : directory.name;
+}
+
+function directoryKey(path: string) {
+  const root = gameDirectoryPath(path);
+  return /^(?:[a-z]:[\\/]|[\\/]{2})/i.test(root)
+    ? root.replace(/\\/g, "/").toLowerCase()
+    : root;
+}
+
+export function registerGameDirectory(
+  gameDirs: Settings["gameDirs"],
+  selected: string,
+) {
+  const key = directoryKey(selected);
+  const existing = gameDirs.find((entry) => directoryKey(entry.path) === key);
+  if (existing) return { gameDirs, path: existing.path };
+
+  const path = gameDirectoryPath(selected);
+  const name = path.split(/[\\/]/).filter(Boolean).pop() || "游戏目录";
+  return { gameDirs: [...gameDirs, { name, path }], path };
 }

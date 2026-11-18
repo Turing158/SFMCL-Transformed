@@ -233,6 +233,24 @@ describe("resource dependency navigation", () => {
     },
   });
 
+  it("uses localized breadcrumb labels without replacing project identity", () => {
+    const translated = {
+      ...project,
+      localizedName: { name: "钠", aliases: ["Sodium"] },
+    };
+    const route: ResourceNavigationEntry = {
+      ...parent,
+      resource: {
+        ...parent.resource!,
+        kind: "project",
+        project: translated,
+      } as ResourceNavigationEntry["resource"],
+    };
+    expect(entryLabel(route)).toBe("钠（Sodium）");
+    expect(translated.title).toBe("Sodium");
+    expect(translated.id).toBe("sodium");
+  });
+
   it.each(["mod", "resourcepack", "shader"] as const)(
     "returns from a %s dependency to its source project with the saved filters",
     (tab) => {

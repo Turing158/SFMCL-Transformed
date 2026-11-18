@@ -258,7 +258,7 @@ try {
   await page.locator(".catalog-project-info").first().click();
   expect(await tabMotionCount()).toBe(beforeDetail);
   const detailTabs = page.getByRole("tablist", { name: "资源详情" });
-  await detailTabs.getByRole("tab", { name: /^可下载版本/ }).click();
+  await detailTabs.getByRole("tab", { name: /^下载/ }).click();
   await sampleTab(1, "#project-panel");
   await detailTabs.getByRole("tab", { name: "项目介绍", exact: true }).click();
   await sampleTab(-1, "#project-panel");

@@ -1,3 +1,4 @@
+use super::names::{self, LocalizedName, NameKind};
 use crate::{downloads::DownloadSpec, vault::Vault};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -6,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 mod dependencies;
 mod local_projects;
+mod search;
 pub use dependencies::{ResourceDependency, ResourceKind};
 pub use local_projects::LocalProjectMatch;
 
@@ -43,6 +45,10 @@ pub struct Project {
     pub id: String,
     pub source: String,
     pub title: String,
+    #[serde(default)]
+    pub slug: String,
+    #[serde(default)]
+    pub localized_name: Option<LocalizedName>,
     pub description: String,
     pub author: String,
     pub icon: String,
@@ -76,6 +82,7 @@ pub struct Community {
     vault: Arc<Vault>,
     dependency_cache: Mutex<dependencies::DependencyCache>,
     sources: Arc<crate::download_sources::SourceSelector>,
+    search_cache: search::SearchCache,
 }
 impl Community {
     pub fn new(vault: Arc<Vault>) -> Result<Self> {
@@ -87,6 +94,7 @@ impl Community {
             vault,
             dependency_cache: Mutex::new(Default::default()),
             sources: Arc::new(crate::download_sources::SourceSelector::default()),
+            search_cache: Default::default(),
         })
     }
     pub fn with_sources(mut self, sources: Arc<crate::download_sources::SourceSelector>) -> Self {
@@ -196,36 +204,29 @@ impl Community {
         )
     }
     pub async fn search(&self, q: &Query) -> Result<SearchResults> {
+        let slugs = names::search_slugs(&q.kind, &q.source, &q.query);
+        if !slugs.is_empty() {
+            return self.search_localized(q, &slugs).await;
+        }
+        let mut query = q.clone();
+        query.query = names::search_query(&q.kind, &q.source, &q.query);
+        if q.source == "curseforge" && names::contains_han(&query.query) {
+            return Ok(SearchResults {
+                items: Vec::new(),
+                total: 0,
+                offset: q.offset,
+            });
+        }
+        self.search_native(&query).await
+    }
+    async fn search_native(&self, q: &Query) -> Result<SearchResults> {
         let limit = q.limit.clamp(1, 40);
         if q.source == "modrinth" {
-            let mut facets = vec![vec![format!("project_type:{}", q.kind)]];
-            if !q.game_version.is_empty() {
-                facets.push(vec![format!("versions:{}", q.game_version)]);
-            }
-            if !q.loader.is_empty() {
-                facets.push(vec![format!("categories:{}", q.loader.to_lowercase())]);
-            }
-            if !q.category.is_empty() {
-                facets.push(vec![format!("categories:{}", q.category)]);
-            }
-            let sort = if ["relevance", "downloads", "follows", "newest", "updated"]
-                .contains(&q.sort.as_str())
-            {
-                &q.sort
-            } else {
-                "relevance"
-            };
             let value = self
                 .get(
                     &q.source,
                     "search",
-                    &[
-                        ("query".into(), q.query.clone()),
-                        ("facets".into(), serde_json::to_string(&facets)?),
-                        ("offset".into(), q.offset.to_string()),
-                        ("limit".into(), limit.to_string()),
-                        ("index".into(), sort.into()),
-                    ],
+                    &search::modrinth_params(q, limit, &[])?,
                 )
                 .await?;
             let items = value["hits"]
@@ -240,48 +241,13 @@ impl Community {
                 offset: q.offset,
             })
         } else {
-            let class = match q.kind.as_str() {
-                "resourcepack" => 12,
-                "shader" => 6552,
-                "modpack" => 4471,
-                "datapack" => 6945,
-                _ => 6,
-            };
-            let loader = match q.loader.to_lowercase().as_str() {
-                "forge" => 1,
-                "liteloader" => 3,
-                "fabric" => 4,
-                "quilt" => 5,
-                "neoforge" => 6,
-                _ => 0,
-            };
-            let mut params = vec![
-                ("gameId".into(), "432".into()),
-                ("classId".into(), class.to_string()),
-                ("searchFilter".into(), q.query.clone()),
-                ("index".into(), q.offset.to_string()),
-                ("pageSize".into(), limit.to_string()),
-                (
-                    "sortField".into(),
-                    match q.sort.as_str() {
-                        "downloads" => "6",
-                        "updated" => "3",
-                        _ => "2",
-                    }
-                    .into(),
-                ),
-                ("sortOrder".into(), "desc".into()),
-            ];
-            if !q.game_version.is_empty() {
-                params.push(("gameVersion".into(), q.game_version.clone()));
-            }
-            if loader > 0 {
-                params.push(("modLoaderType".into(), loader.to_string()));
-            }
-            if !q.category.is_empty() {
-                params.push(("categoryId".into(), q.category.clone()));
-            }
-            let value = self.get(&q.source, "mods/search", &params).await?;
+            let value = self
+                .get(
+                    &q.source,
+                    "mods/search",
+                    &search::curseforge_params(q, limit, None),
+                )
+                .await?;
             let items = value["data"]
                 .as_array()
                 .context("CurseForge 返回格式错误")?
@@ -624,6 +590,8 @@ fn modrinth_project(v: &Value) -> Project {
         id: id.clone(),
         source: "modrinth".into(),
         title: v["title"].as_str().unwrap_or(&id).into(),
+        slug: slug.into(),
+        localized_name: project_name(v, "modrinth", &id, slug),
         description: v["description"].as_str().unwrap_or("").into(),
         author: v["author"].as_str().unwrap_or("").into(),
         icon: v["icon_url"].as_str().unwrap_or("").into(),
@@ -642,6 +610,13 @@ fn curseforge_project(v: &Value) -> Project {
         id: v["id"].to_string(),
         source: "curseforge".into(),
         title: v["name"].as_str().unwrap_or("").into(),
+        slug: v["slug"].as_str().unwrap_or("").into(),
+        localized_name: project_name(
+            v,
+            "curseforge",
+            &v["id"].to_string(),
+            v["slug"].as_str().unwrap_or(""),
+        ),
         description: v["summary"].as_str().unwrap_or("").into(),
         author: v["authors"]
             .as_array()
@@ -662,6 +637,190 @@ fn curseforge_project(v: &Value) -> Project {
         versions: vec![],
         website: v["links"]["websiteUrl"].as_str().unwrap_or("").into(),
         body: String::new(),
+    }
+}
+fn project_name(v: &Value, source: &str, id: &str, slug: &str) -> Option<LocalizedName> {
+    let kind = if source == "modrinth" {
+        dependencies::modrinth_kind(v)
+    } else {
+        dependencies::curseforge_kind(v)
+    };
+    let kind = match kind {
+        ResourceKind::Mod => NameKind::Mod,
+        ResourceKind::Modpack => NameKind::Modpack,
+        _ => return None,
+    };
+    names::platform(kind, source, id, slug)
+}
+
+#[cfg(test)]
+mod project_name_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn chinese_searches_reach_both_platforms_with_filters_and_pagination() {
+        use axum::{extract::Query as Params, routing::get, Json, Router};
+        use std::collections::HashMap;
+
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = requests.clone();
+        let app = Router::new().route(
+            "/search",
+            get(move |Params(params): Params<HashMap<String, String>>| {
+                let captured = captured.clone();
+                async move {
+                    captured.lock().unwrap().push(params.clone());
+                    if params.contains_key("query") {
+                        Json(json!({
+                            "hits": [{"project_id":"AANobbMI", "slug":"sodium", "title":"Sodium", "project_type":"mod"}],
+                            "total_hits": 43
+                        }))
+                    } else {
+                        Json(json!({
+                            "data": [{"id":328085, "slug":"create", "name":"Create", "classId":6}],
+                            "pagination":{"totalCount":43}
+                        }))
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let directory = tempfile::tempdir().unwrap();
+        let sources = Arc::new(crate::download_sources::SourceSelector::default());
+        let community = Community::new(Arc::new(Vault::open(directory.path()).unwrap()))
+            .unwrap()
+            .with_sources(sources.clone());
+
+        for (source, chinese, english) in [
+            ("modrinth", "钠", "Sodium"),
+            ("curseforge", "机械动力", "Create"),
+        ] {
+            // Route both the old and corrected request to the mock, retaining
+            // the actual parameters so a regression cannot access a live API.
+            for text in [chinese, english] {
+                let (root, params) = if source == "modrinth" {
+                    (
+                        "https://api.modrinth.com/v2/search",
+                        vec![
+                            ("query", text.to_string()),
+                            (
+                                "facets",
+                                json!([
+                                    ["project_type:mod"],
+                                    ["versions:1.20.1"],
+                                    ["categories:fabric"],
+                                    ["categories:technology"]
+                                ])
+                                .to_string(),
+                            ),
+                            ("offset", "20".into()),
+                            ("limit", "20".into()),
+                            ("index", "downloads".into()),
+                        ],
+                    )
+                } else {
+                    (
+                        "https://api.curseforge.com/v1/mods/search",
+                        vec![
+                            ("gameId", "432".into()),
+                            ("classId", "6".into()),
+                            ("searchFilter", text.to_string()),
+                            ("index", "20".into()),
+                            ("pageSize", "20".into()),
+                            ("sortField", "6".into()),
+                            ("sortOrder", "desc".into()),
+                            ("gameVersion", "1.20.1".into()),
+                            ("modLoaderType", "4".into()),
+                            ("categoryId", "technology".into()),
+                        ],
+                    )
+                };
+                let mut original = reqwest::Url::parse(root).unwrap();
+                original.query_pairs_mut().extend_pairs(&params);
+                let mut mock = reqwest::Url::parse(&format!("http://{address}/search")).unwrap();
+                mock.set_query(original.query());
+                sources.register(original.as_str(), vec![mock.into()]);
+            }
+            let query = Query {
+                source: source.into(),
+                query: chinese.into(),
+                game_version: "1.20.1".into(),
+                loader: "Fabric".into(),
+                category: "technology".into(),
+                sort: "downloads".into(),
+                offset: 20,
+                limit: 20,
+                ..Query::default()
+            };
+            let result = community.search(&query).await.unwrap();
+            assert_eq!(query.query, chinese);
+            assert_eq!(result.total, 43);
+            assert_eq!(result.offset, 20);
+            assert_eq!(result.items.len(), 1);
+            assert_eq!(result.items[0].title, english);
+            assert_eq!(
+                result.items[0].localized_name.as_ref().unwrap().name,
+                chinese
+            );
+
+            let requests = requests.lock().unwrap();
+            let params = requests.last().unwrap();
+            if source == "modrinth" {
+                assert_eq!(params["query"], english);
+                assert_eq!(params["index"], "downloads");
+                assert_eq!(params["offset"], "20");
+                assert_eq!(params["limit"], "20");
+                let facets: Value = serde_json::from_str(&params["facets"]).unwrap();
+                assert_eq!(
+                    facets,
+                    json!([
+                        ["project_type:mod"],
+                        ["versions:1.20.1"],
+                        ["categories:fabric"],
+                        ["categories:technology"]
+                    ])
+                );
+            } else {
+                assert_eq!(params["searchFilter"], english);
+                assert_eq!(params["gameVersion"], "1.20.1");
+                assert_eq!(params["modLoaderType"], "4");
+                assert_eq!(params["categoryId"], "technology");
+                assert_eq!(params["sortField"], "6");
+                assert_eq!(params["index"], "20");
+                assert_eq!(params["pageSize"], "20");
+            }
+        }
+        server.abort();
+        let _ = server.await;
+    }
+
+    #[test]
+    fn translates_platform_projects_with_resource_type_boundaries() {
+        let mod_value = json!({"id":"AANobbMI","slug":"sodium","title":"Sodium","project_type":"mod","description":"Original description"});
+        let project = modrinth_project(&mod_value);
+        assert_eq!(project.title, "Sodium");
+        assert_eq!(project.slug, "sodium");
+        assert_eq!(project.description, "Original description");
+        assert_eq!(project.localized_name.unwrap().name, "钠");
+        let mut shader_value = mod_value.clone();
+        shader_value["project_type"] = json!("shader");
+        let shader = modrinth_project(&shader_value);
+        assert!(shader.localized_name.is_none());
+        let datapack = modrinth_project(
+            &json!({"id":"AANobbMI","slug":"sodium","title":"Sodium","project_type":"mod","loaders":["datapack"]}),
+        );
+        assert!(datapack.localized_name.is_none());
+        let pack = curseforge_project(
+            &json!({"id":297724,"slug":"skyfactory-4","name":"SkyFactory 4","classId":4471}),
+        );
+        assert_eq!(pack.title, "SkyFactory 4");
+        assert_eq!(pack.localized_name.unwrap().name, "天空工厂4");
+        let resourcepack = curseforge_project(
+            &json!({"id":297724,"slug":"skyfactory-4","name":"SkyFactory 4","classId":12}),
+        );
+        assert!(resourcepack.localized_name.is_none());
     }
 }
 fn modrinth_file(v: &Value) -> Result<ResourceFile> {

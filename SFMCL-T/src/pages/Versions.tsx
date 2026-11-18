@@ -22,6 +22,7 @@ import {
   gameDirectoryName,
   gameDirectoryPath,
   minecraftDirectoryPath,
+  registerGameDirectory,
 } from "../gameDirectories";
 import { useApp } from "../store";
 import { api, confirmAction, pick } from "../api";
@@ -86,20 +87,7 @@ export function Versions() {
   async function addDir() {
     const selected = await pick(true);
     if (selected) {
-      const directory = gameDirectoryPath(selected);
-      const existing = s.gameDirs.find(
-        (entry) => gameDirectoryPath(entry.path) === directory,
-      );
-      const path = existing?.path || directory;
-      const gameDirs = existing
-        ? s.gameDirs
-        : [
-            ...s.gameDirs,
-            {
-              name: path.split(/[\\/]/).filter(Boolean).pop() || "游戏目录",
-              path,
-            },
-          ];
+      const { gameDirs, path } = registerGameDirectory(s.gameDirs, selected);
       await app.save({ ...s, gameDirs, activeDir: path, activeVersion: "" });
       setShowAll(false);
     }

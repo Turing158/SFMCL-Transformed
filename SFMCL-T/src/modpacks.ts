@@ -1,7 +1,10 @@
+import type { LocalizedName } from "./types";
+
 export interface ModpackInspection {
   token: string;
   format: string;
   name: string;
+  localizedName?: LocalizedName | null;
   version: string;
   minecraft: string;
   loader: { kind: string; version: string } | null;

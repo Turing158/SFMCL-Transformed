@@ -13,6 +13,22 @@ fn modrinth(files: Value) -> Value {
 fn modrinth_file(path: &str, env: &str) -> Value {
     json!({"path":path,"env":{"client":env},"hashes":{"sha1":"0123456789012345678901234567890123456789"},"downloads":["https://example.com/file.jar","https://example.org/file.jar"],"fileSize":12})
 }
+#[test]
+fn imported_pack_has_a_display_name_separate_from_manifest_name() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut manifest = modrinth(json!([]));
+    manifest["name"] = json!("GT: New Horizons");
+    write_json(temp.path(), "modrinth.index.json", manifest.clone());
+    let pack = parser::parse(temp.path(), &CancellationToken::new()).unwrap();
+    assert_eq!(pack.info.name, "GT: New Horizons");
+    assert_eq!(pack.info.version, "1.0");
+    assert_eq!(pack.info.localized_name.unwrap().name, "格雷科技：新视野");
+    manifest["name"] = json!("SkyFactory 9999");
+    write_json(temp.path(), "modrinth.index.json", manifest);
+    let pack = parser::parse(temp.path(), &CancellationToken::new()).unwrap();
+    assert_eq!(pack.info.name, "SkyFactory 9999");
+    assert!(pack.info.localized_name.is_none());
+}
 fn zip(root: &Path, name: &str, entries: &[(&str, Vec<u8>)]) -> PathBuf {
     let path = root.join(name);
     let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());

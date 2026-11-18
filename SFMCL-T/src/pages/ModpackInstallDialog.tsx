@@ -1,9 +1,19 @@
-import { useEffect, useRef, useState } from "react";
-import { Download, FolderOpen, LoaderCircle, Package } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  Download,
+  FolderOpen,
+  LoaderCircle,
+  Package,
+  Plus,
+} from "lucide-react";
 import { api, pick } from "../api";
 import { Button, Modal, TabList, TabPanel } from "../components";
 import { Checkbox, Input, Select } from "../controls";
-import { gameDirectoryPath } from "../gameDirectories";
+import {
+  gameDirectoryName,
+  gameDirectoryPath,
+  registerGameDirectory,
+} from "../gameDirectories";
 import {
   modpackName,
   modpackNameError,
@@ -11,12 +21,15 @@ import {
   type ModpackSource,
 } from "../modpacks";
 import { useApp } from "../store";
-import type { ResourceFile } from "../types";
+import type { LocalizedName, ResourceFile } from "../types";
+import { resourceName } from "../resourceNames";
+import { useTabContentTransition } from "../useTabContentTransition";
 
 export function ModpackInstallDialog({
   resource,
   initialSource,
   title = "整合包",
+  localizedName,
   queued = [],
   onQueued,
   onClose,
@@ -24,13 +37,16 @@ export function ModpackInstallDialog({
   resource?: ResourceFile;
   initialSource?: ModpackSource;
   title?: string;
+  localizedName?: LocalizedName | null;
   queued?: string[];
   onQueued?: (key: string) => void;
   onClose: () => void;
 }) {
   const app = useApp();
   const settings = app.data.settings;
+  const rootSelectId = useId();
   const [mode, setMode] = useState("install");
+  const tabContent = useTabContentTransition(mode === "install" ? 0 : 1);
   const [root, setRoot] = useState(
     settings.activeDir || settings.gameDirs[0]?.path || "",
   );
@@ -90,6 +106,23 @@ export function ModpackInstallDialog({
         !nameError &&
         !existing &&
         (!!resource?.file || !!inspection));
+  async function addInstallDirectory() {
+    const selected = await pick(true, undefined, { title: "添加安装目录" });
+    if (!selected) return;
+    const { gameDirs, path } = registerGameDirectory(
+      settings.gameDirs,
+      selected,
+    );
+    if (gameDirs !== settings.gameDirs || !settings.activeDir) {
+      await app.autoSaveSettings(settings, {
+        ...settings,
+        gameDirs,
+        activeDir: settings.activeDir || path,
+      });
+      if (!settings.activeDir) await app.refresh();
+    }
+    setRoot(path);
+  }
   async function choose(directory: boolean) {
     const selected = await pick(
       directory,
@@ -124,7 +157,9 @@ export function ModpackInstallDialog({
   }
   return (
     <Modal
-      title={resource ? `下载 ${title}` : "导入整合包"}
+      title={
+        resource ? `下载 ${resourceName(title, localizedName)}` : "导入整合包"
+      }
       onClose={onClose}
       closeDisabled={app.busy}
       className="modpack-install-dialog"
@@ -195,13 +230,17 @@ export function ModpackInstallDialog({
                   </span>
                 )}
               </div>
-              <p className="helper">
-                支持 MRPACK、ZIP、7Z、RAR、TAR、TAR.GZ。
-              </p>
+              <p className="helper">支持 MRPACK、ZIP、7Z、RAR、TAR、TAR.GZ。</p>
             </div>
           )}
           {inspection && (
             <dl className="modpack-summary">
+              <div>
+                <dt>整合包名称</dt>
+                <dd>
+                  {resourceName(inspection.name, inspection.localizedName)}
+                </dd>
+              </div>
               <div>
                 <dt>整合包格式</dt>
                 <dd>{inspection.format}</dd>
@@ -233,7 +272,7 @@ export function ModpackInstallDialog({
               items={[
                 {
                   value: "install",
-                  label: "安装新实例",
+                  label: "安装整合包",
                   icon: <Package size={16} />,
                 },
                 {
@@ -245,6 +284,7 @@ export function ModpackInstallDialog({
             />
           )}
           <TabPanel
+            ref={tabContent}
             id="modpack-download"
             value={mode}
             aria-label={
@@ -270,28 +310,38 @@ export function ModpackInstallDialog({
                     {nameError || "此名称已存在，请使用其他名称。"}
                   </p>
                 )}
-                <label>
-                  安装目录
-                  <Select
-                    aria-label="整合包安装目录"
-                    value={root}
-                    onValueChange={setRoot}
-                    disabled={app.busy || !settings.gameDirs.length}
-                  >
-                    {!settings.gameDirs.length && (
-                      <option value="">请先在版本管理中添加游戏目录</option>
-                    )}
-                    {settings.gameDirs.map((entry) => (
-                      <option key={entry.path} value={entry.path}>
-                        {entry.name} · {gameDirectoryPath(entry.path)}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <p className="helper">
-                  自动安装包内指定的 Minecraft
-                  与加载器，并启用独立游戏目录。安装进度、重试和取消可在下载中心操作。
-                </p>
+                <div className="modpack-directory-field">
+                  <label htmlFor={rootSelectId}>安装目录</label>
+                  <div className="input-action">
+                    <Select
+                      id={rootSelectId}
+                      aria-label="整合包安装目录"
+                      value={root}
+                      onValueChange={setRoot}
+                      disabled={app.busy || !settings.gameDirs.length}
+                      truncateOptions
+                    >
+                      {!settings.gameDirs.length && (
+                        <option value="">请添加安装目录</option>
+                      )}
+                      {settings.gameDirs.map((entry) => (
+                        <option key={entry.path} value={entry.path}>
+                          {gameDirectoryName(entry)} ·{" "}
+                          {gameDirectoryPath(entry.path)}
+                        </option>
+                      ))}
+                    </Select>
+                    <Button
+                      className="icon-button"
+                      aria-label="添加安装目录"
+                      data-tooltip="添加安装目录"
+                      disabled={app.busy}
+                      onClick={() => void app.run(addInstallDirectory)}
+                    >
+                      <Plus size={18} aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
                 {(resource || !!inspection?.optionalFiles.length) && (
                   <>
                     <label className="modpack-optional">

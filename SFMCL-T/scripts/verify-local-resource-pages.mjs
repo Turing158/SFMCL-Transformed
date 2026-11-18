@@ -309,7 +309,7 @@ try {
       "Sodium 扩展 30",
       "Sodium 扩展 30",
     ]);
-    await projectPage.getByRole("tab", { name: /^可下载版本/ }).click();
+    await projectPage.getByRole("tab", { name: /^下载/ }).click();
     expect(await last("resources.files")).toMatchObject({
       source,
       id,
@@ -317,7 +317,7 @@ try {
       loader: "Fabric",
     });
     await expect(
-      projectPage.getByRole("tab", { name: /^可下载版本/ }),
+      projectPage.getByRole("tab", { name: /^下载/ }),
     ).toHaveAttribute("aria-selected", "true");
     await page.screenshot({
       path: `${evidence}/local-channel-${source}.png`,
@@ -890,7 +890,7 @@ try {
   await expect(
     otherVersionProject.getByRole("heading", { name: "Sodium", exact: true }),
   ).toBeVisible();
-  await otherVersionProject.getByRole("tab", { name: /^可下载版本/ }).click();
+  await otherVersionProject.getByRole("tab", { name: /^下载/ }).click();
   await expect(
     otherVersionProject.getByRole("textbox", { name: "筛选游戏版本" }),
   ).toHaveValue("1.21.4");

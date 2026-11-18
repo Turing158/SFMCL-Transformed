@@ -6,7 +6,7 @@
   min-height: 100%;
 }
 .resource-center-tabs {
-  margin: 0 0 20px;
+  margin: 0 0 8px;
 }
 .modpack-source {
   display: flex;
@@ -42,6 +42,9 @@
   flex-direction: column;
   height: min(760px, calc(100dvh - 48px));
 }
+.modpack-install-dialog:has(.resource-download-name) {
+  height: 480px;
+}
 .modpack-install-dialog > header {
   flex: 0 0 auto;
 }
@@ -61,6 +64,7 @@
   flex-direction: column;
   gap: 18px;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding-right: 3px;
 }
@@ -76,8 +80,10 @@
   display: grid;
   gap: 12px;
 }
-.modpack-settings > label:not(.modpack-optional) {
+.modpack-settings > label:not(.modpack-optional),
+.modpack-directory-field {
   display: grid;
+  min-width: 0;
   gap: 6px;
 }
 .modpack-optional {
@@ -624,25 +630,21 @@
   font-size: 12px;
 }
 .catalog-view {
+  border: 0;
+  background: none;
+  box-shadow: none;
   transition:
     translate 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
     transform 180ms ease,
     color 180ms ease;
 }
 .catalog-view:is(:hover, :focus-visible):not(:disabled) {
-  --surface-fill: var(--soft);
-  --surface-edge: var(--accent);
   color: var(--accent);
   translate: 0 -2px;
 }
 .catalog-view:active:not(:disabled) {
   translate: 0 0;
   transition-duration: 90ms;
-}
-.catalog-view > .surface-frame,
-.catalog-view > .surface-frame::before,
-.catalog-view > .surface-frame::after {
-  transition: background-color 180ms ease;
 }
 .catalog-view-symbol {
   display: grid;
@@ -686,12 +688,17 @@
   display: none;
 }
 .catalog-toolbar {
+  --button-height: var(--button-compact-height);
   grid-area: toolbar;
   display: flex;
   align-items: center;
   gap: 14px;
   min-width: 0;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
+}
+.catalog-toolbar .catalog-view {
+  width: var(--button-height);
+  height: var(--button-height);
 }
 .catalog-result-count {
   position: relative;
@@ -764,6 +771,7 @@
   width: 128px;
 }
 .catalog-sort .pixel-select-trigger {
+  padding-block: 2px;
   font-size: 12px;
 }
 .catalog-filters {
@@ -1209,18 +1217,9 @@
   max-width: 640px;
   gap: 12px 20px;
 }
-.project-file-filters label {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 12px;
-  min-width: 0;
-  flex: 1 1 180px;
-}
 .project-file-filters .pixel-select,
 .project-file-filters .pixel-input {
-  width: 100%;
+  flex: 1 1 180px;
   min-width: 0;
 }
 .project-file-filters .pixel-input {
@@ -1230,6 +1229,14 @@
 .project-file-toolbar > .catalog-view {
   margin-left: auto;
   flex-shrink: 0;
+}
+.project-file-loading {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+.project-file-loading .spin {
+  color: var(--accent);
 }
 .project-file-results {
   gap: 10px;
@@ -1556,7 +1563,7 @@
   max-height: none;
   overflow: visible;
 }
-@property --local-version-fill {
+@property --resource-select-fill {
   syntax: "<color>";
   inherits: false;
   initial-value: transparent;
@@ -1574,28 +1581,29 @@
   max-width: 520px;
 }
 .local-resources-header .local-version-select .pixel-select-trigger {
-  --local-version-fill: transparent;
-  --pixel-surface: var(--local-version-fill);
-  --pixel-field-border: transparent;
-  filter: none;
   font-size: 18px;
   font-weight: 650;
+}
+:is(.catalog-sort, .local-resources-header .local-version-select)
+  .pixel-select-trigger {
+  --resource-select-fill: transparent;
+  --pixel-surface: var(--resource-select-fill);
+  --pixel-field-border: transparent;
+  filter: none;
   transition:
-    --local-version-fill 220ms ease,
+    --resource-select-fill 220ms ease,
     --pixel-field-border 220ms ease,
     color 180ms ease,
     opacity 220ms ease;
 }
-.local-resources-header
-  .local-version-select
+:is(.catalog-sort, .local-resources-header .local-version-select)
   .pixel-select-trigger:is(:hover, :focus-visible, [aria-expanded="true"]):not(
     :disabled
   ) {
-  --local-version-fill: var(--pixel-well);
+  --resource-select-fill: var(--pixel-well);
   --pixel-field-border: var(--px-frame-active-color);
 }
-.local-resources-header
-  .local-version-select
+:is(.catalog-sort, .local-resources-header .local-version-select)
   .pixel-select-trigger
   > .pixel-icon {
   opacity: 0;
@@ -1605,15 +1613,13 @@
     transform 220ms ease,
     color 180ms ease;
 }
-.local-resources-header
-  .local-version-select
+:is(.catalog-sort, .local-resources-header .local-version-select)
   .pixel-select-trigger:is(:hover, :focus-visible, [aria-expanded="true"])
   > .pixel-icon {
   opacity: 1;
   transform: translateY(0);
 }
-.local-resources-header
-  .local-version-select
+:is(.catalog-sort, .local-resources-header .local-version-select)
   .pixel-select-trigger[aria-expanded="true"]
   > .pixel-icon {
   transform: rotate(180deg);

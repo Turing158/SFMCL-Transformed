@@ -1,3 +1,4 @@
+use super::names::{self, LocalizedName};
 use crate::paths::safe_join;
 use anyhow::{bail, Context, Result};
 use base64::Engine;
@@ -44,6 +45,8 @@ pub fn version_root(root: &Path, id: &str, isolation: bool) -> Result<PathBuf> {
 #[serde(rename_all = "camelCase")]
 pub struct LocalResource {
     pub name: String,
+    #[serde(default)]
+    pub localized_name: Option<LocalizedName>,
     pub path: String,
     pub kind: String,
     #[serde(default)]
@@ -177,7 +180,8 @@ pub fn scan(root: &Path, kind: &str) -> Result<Vec<LocalResource>> {
         if kind != "world"
             && !is_directory
             && !path.extension().is_some_and(|e| {
-                ["jar", "zip", "disabled"].contains(&e.to_string_lossy().to_lowercase().as_str())
+                ["jar", "zip", "litemod", "disabled"]
+                    .contains(&e.to_string_lossy().to_lowercase().as_str())
             })
         {
             continue;
@@ -203,6 +207,7 @@ pub fn scan(root: &Path, kind: &str) -> Result<Vec<LocalResource>> {
         .into_owned();
         let mut resource = LocalResource {
             name,
+            localized_name: None,
             path: path.to_string_lossy().into_owned(),
             kind: kind.into(),
             entry_type,
@@ -243,6 +248,7 @@ pub fn scan(root: &Path, kind: &str) -> Result<Vec<LocalResource>> {
 fn read_mod(path: &Path, resource: &mut LocalResource) -> Result<()> {
     let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
     let mut icon = None;
+    let mut mod_ids = vec![];
     if let Ok(bytes) = read_entry(&mut zip, "fabric.mod.json") {
         let value: Value = serde_json::from_slice(&bytes)?;
         resource.name = value["name"]
@@ -267,6 +273,9 @@ fn read_mod(path: &Path, resource: &mut LocalResource) -> Result<()> {
                 .map(str::to_owned)
         });
         resource.details = json!({"loader":"Fabric","id":value["id"]});
+        if let Some(id) = value["id"].as_str() {
+            mod_ids.push(id.to_owned());
+        }
     } else if let Ok(bytes) = read_entry(&mut zip, "quilt.mod.json") {
         let value: Value = serde_json::from_slice(&bytes)?;
         let metadata = &value["quilt_loader"]["metadata"];
@@ -281,7 +290,10 @@ fn read_mod(path: &Path, resource: &mut LocalResource) -> Result<()> {
             .map(|o| o.keys().cloned().collect::<Vec<_>>().join(", "))
             .unwrap_or_default();
         icon = metadata["icon"].as_str().map(str::to_owned);
-        resource.details = json!({"loader":"Quilt"});
+        resource.details = json!({"loader":"Quilt","id":value["quilt_loader"]["id"]});
+        if let Some(id) = value["quilt_loader"]["id"].as_str() {
+            mod_ids.push(id.to_owned());
+        }
     } else if let Ok(bytes) = read_entry(&mut zip, "META-INF/neoforge.mods.toml")
         .or_else(|_| read_entry(&mut zip, "META-INF/mods.toml"))
     {
@@ -316,6 +328,29 @@ fn read_mod(path: &Path, resource: &mut LocalResource) -> Result<()> {
             .and_then(toml::Value::as_str)
             .map(str::to_owned);
         resource.details = json!({"loader":"Forge / NeoForge"});
+        mod_ids.extend(
+            value
+                .get("mods")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|item| item.get("modId").and_then(toml::Value::as_str))
+                .map(str::to_owned),
+        );
+    } else if let Ok(bytes) = read_entry(&mut zip, "litemod.json") {
+        let value: Value = serde_json::from_slice(&bytes)?;
+        resource.name = value["displayName"]
+            .as_str()
+            .or(value["name"].as_str())
+            .unwrap_or(&resource.name)
+            .into();
+        resource.version = value["version"].as_str().unwrap_or("").into();
+        resource.description = value["description"].as_str().unwrap_or("").into();
+        resource.authors = value["author"].as_str().unwrap_or("").into();
+        resource.details = json!({"loader":"LiteLoader","id":value["name"]});
+        if let Some(id) = value["name"].as_str() {
+            mod_ids.push(id.to_owned());
+        }
     } else if let Ok(bytes) = read_entry(&mut zip, "mcmod.info") {
         let value: Value = serde_json::from_slice(&bytes)?;
         let metadata = value
@@ -334,7 +369,18 @@ fn read_mod(path: &Path, resource: &mut LocalResource) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ");
         icon = metadata["logoFile"].as_str().map(str::to_owned);
+        mod_ids.extend(
+            value
+                .as_array()
+                .or_else(|| value["modList"].as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|item| item["modid"].as_str())
+                .map(str::to_owned),
+        );
     }
+    resource.details["modIds"] = json!(mod_ids);
+    resource.localized_name = names::local_mod(&mod_ids, &resource.name);
     if resource.version.is_empty() || resource.version == "${file.jarVersion}" {
         if let Ok(bytes) = read_entry(&mut zip, "META-INF/MANIFEST.MF") {
             resource.version = String::from_utf8_lossy(&bytes)
@@ -473,6 +519,38 @@ pub fn delete_pack(root: &Path, relative: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn local_mod_names_use_loader_ids_without_changing_metadata() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let mods = dir.path().join("mods");
+        std::fs::create_dir(&mods).unwrap();
+        for (index, entry, content) in [
+            (0, "fabric.mod.json", r#"{"id":"create","name":"Create","version":"1.0","description":"Original description"}"#),
+            (1, "quilt.mod.json", r#"{"quilt_loader":{"id":"create","version":"1.0","metadata":{"name":"Create","description":"Original description"}}}"#),
+            (2, "META-INF/mods.toml", "[[mods]]\nmodId = 'create'\ndisplayName = 'Create'\nversion = '1.0'\ndescription = 'Original description'\n"),
+            (3, "META-INF/neoforge.mods.toml", "[[mods]]\nmodId = 'create'\ndisplayName = 'Create'\nversion = '1.0'\ndescription = 'Original description'\n"),
+            (4, "mcmod.info", r#"[{"modid":"create","name":"Create","version":"1.0","description":"Original description"}]"#),
+            (5, "litemod.json", r#"{"name":"create","displayName":"Create","version":"1.0","description":"Original description"}"#),
+        ] {
+            let path = mods.join(format!("{index}.{}", if index == 5 { "litemod" } else { "jar" }));
+            let mut archive = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+            archive.start_file(entry, zip::write::SimpleFileOptions::default()).unwrap();
+            archive.write_all(content.as_bytes()).unwrap();
+            archive.finish().unwrap();
+        }
+        let items = super::scan(dir.path(), "mod").unwrap();
+        assert_eq!(items.len(), 6);
+        for item in items {
+            assert!(item.error.is_none());
+            assert_eq!(item.name, "Create");
+            assert_eq!(item.version, "1.0");
+            assert_eq!(item.description, "Original description");
+            assert_eq!(item.details["modIds"], serde_json::json!(["create"]));
+            assert_eq!(item.localized_name.unwrap().name, "机械动力");
+        }
+    }
+
     use super::*;
     use std::io::Write;
 

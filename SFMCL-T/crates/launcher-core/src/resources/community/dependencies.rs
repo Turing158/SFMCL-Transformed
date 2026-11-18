@@ -261,7 +261,7 @@ fn assign_modrinth_projects(files: &mut [ResourceFile], value: &Value) {
     }
 }
 
-fn modrinth_kind(project: &Value) -> ResourceKind {
+pub(super) fn modrinth_kind(project: &Value) -> ResourceKind {
     let loaders = strings(&project["loaders"]);
     match project["project_type"].as_str() {
         Some("mod") => {
@@ -297,7 +297,7 @@ fn modrinth_kind(project: &Value) -> ResourceKind {
     }
 }
 
-fn curseforge_kind(project: &Value) -> ResourceKind {
+pub(super) fn curseforge_kind(project: &Value) -> ResourceKind {
     match project["classId"].as_u64() {
         Some(6) => ResourceKind::Mod,
         Some(12) => ResourceKind::Resourcepack,

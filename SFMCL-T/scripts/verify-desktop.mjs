@@ -164,7 +164,7 @@ try {
     .filter({ has: page.getByRole("heading", { name: /^Sodium\b/ }) })
     .first()
     .click();
-  await page.getByRole("tab", { name: /^可下载版本/ }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
   await expect(page.locator(".project-file").first()).toBeVisible({
     timeout: 45_000,
   });

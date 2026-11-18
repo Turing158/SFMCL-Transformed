@@ -5,6 +5,7 @@ import { api } from "../api";
 import { useApp } from "../store";
 import { resourceSourceNames, type ResourceSource } from "../resourceSources";
 import type { LocalResource, Project, Version } from "../types";
+import { resourceName } from "../resourceNames";
 
 export function LocalModChannels({
   item,
@@ -48,6 +49,7 @@ export function LocalModChannels({
             id: match.id,
             source,
             title: item.name,
+            localizedName: item.localizedName,
             description: item.description,
             author: item.authors,
             icon: item.icon,
@@ -68,7 +70,7 @@ export function LocalModChannels({
     <div
       className="local-mod-channels has-surface"
       role="group"
-      aria-label={`${item.name} 的模组详情渠道`}
+      aria-label={`${resourceName(item.name, item.localizedName)} 的模组详情渠道`}
     >
       <PixelFrame />
       <div className="local-mod-channel-buttons">
@@ -78,7 +80,7 @@ export function LocalModChannels({
             type="button"
             className="local-mod-channel resource-source"
             data-source={source}
-            aria-label={`${item.name} 的 ${resourceSourceNames[source]} 详情`}
+            aria-label={`${resourceName(item.name, item.localizedName)} 的 ${resourceSourceNames[source]} 详情`}
             aria-busy={pending === source}
             disabled={app.busy || !!pending}
             onClick={(event) => open(source, event.currentTarget)}
