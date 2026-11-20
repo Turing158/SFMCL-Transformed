@@ -47,6 +47,7 @@ export function ContextMenu({
   title,
   description,
   showHeading = true,
+  presentation = false,
   className = "",
   ariaLabel,
   menuId,
@@ -58,6 +59,8 @@ export function ContextMenu({
   title: string;
   description?: string;
   showHeading?: boolean;
+  /** Keep a non-interactive menu visible beneath the onboarding dialog. */
+  presentation?: boolean;
   className?: string;
   ariaLabel?: string;
   menuId?: string;
@@ -171,11 +174,13 @@ export function ContextMenu({
     }
   }
   useLayoutEffect(() => {
-    layer.current?.showPopover();
+    if (!presentation) layer.current?.showPopover();
     position();
-    buttons(root.current)[0]?.focus({ preventScroll: true });
-    return () => layer.current?.hidePopover();
-  }, []);
+    if (!presentation) buttons(root.current)[0]?.focus({ preventScroll: true });
+    return () => {
+      if (!presentation) layer.current?.hidePopover();
+    };
+  }, [presentation]);
   useLayoutEffect(() => {
     position();
     if (!submenu && focusParent.current) {
@@ -188,6 +193,19 @@ export function ContextMenu({
     }
   }, [submenu, compact, items, anchor]);
   useEffect(() => {
+    if (presentation) {
+      // The tutorial opens this menu during the page's slide-in. Keep its
+      // anchor aligned with the moving login button, including resize/scroll.
+      let frame = 0;
+      const followAnchor = () => {
+        position();
+        frame = requestAnimationFrame(followAnchor);
+      };
+      frame = requestAnimationFrame(followAnchor);
+      return () => {
+        cancelAnimationFrame(frame);
+      };
+    }
     const outside = (event: PointerEvent) => {
       if (!layer.current?.contains(event.target as Node)) close(false);
     };
@@ -218,7 +236,7 @@ export function ContextMenu({
       window.removeEventListener("blur", blur);
       window.visualViewport?.removeEventListener("resize", position);
     };
-  }, [anchor]);
+  }, [anchor, presentation]);
   function keyDown(event: KeyboardEvent<HTMLDivElement>) {
     const panel = (event.target as HTMLElement).closest<HTMLElement>(
       '[role="menu"]',
@@ -317,8 +335,9 @@ export function ContextMenu({
   return createPortal(
     <div
       ref={layer}
-      popover="manual"
-      className={`pixel-context-layer${closing ? " closing" : ""}`}
+      popover={presentation ? undefined : "manual"}
+      inert={presentation}
+      className={`pixel-context-layer${closing ? " closing" : ""}${presentation ? " onboarding-menu-layer" : ""}`}
       onKeyDown={keyDown}
       onContextMenu={(event) => event.preventDefault()}
     >

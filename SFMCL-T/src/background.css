@@ -1,0 +1,57 @@
+.workspace-content {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: clip;
+}
+.workspace-content > main {
+  position: relative;
+  z-index: 1;
+}
+.content-background {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  background: var(--bg);
+  pointer-events: none;
+}
+.content-background-image,
+.content-background-overlay {
+  position: absolute;
+  inset: 0;
+}
+.content-background-image {
+  background-size: cover;
+  background-position: center;
+}
+.content-background-overlay {
+  background: var(--bg);
+}
+.background-effect-hint {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.background-settings-controls {
+  min-width: 0;
+}
+.background-settings .background-settings-controls > .field:first-child {
+  margin-top: 0;
+}
+.background-effect-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.background-effect-label output {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.background-settings-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}

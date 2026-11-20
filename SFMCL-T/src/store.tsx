@@ -1,3 +1,4 @@
+import { useSessionState } from "./windowSession";
 import {
   createContext,
   useCallback,
@@ -22,6 +23,7 @@ import {
 import { withJavaPaths, launchSettingDefaults } from "./gameSettings";
 import { changedValues, flushAutoSaves } from "./autoSave";
 import { playerPreviewDefaults } from "./playerPreview";
+import { backgroundDefaults } from "./background";
 import { useAllVersions } from "./useAllVersions";
 import type { Notification, NotificationKind } from "./notifications";
 import type {
@@ -64,6 +66,7 @@ const fallback: Settings = {
   accent: "forest",
   backgroundType: "none",
   background: "",
+  ...backgroundDefaults,
   hardwareAcceleration: true,
   homeCleanMode: false,
   homeNoticeLayout: "masonry",
@@ -71,6 +74,7 @@ const fallback: Settings = {
   downloadTaskDisplay: "always",
   minecraftDownloadSource: "auto",
   downloadConcurrency: 8,
+  downloadConnectionLimit: 16,
   downloadCacheDir: "",
   microsoftClientId: "",
   closeOnLaunch: false,
@@ -149,7 +153,10 @@ export function Provider({ children }: { children: ReactNode }) {
   });
   const [versions, setVersions] = useState<Version[]>([]);
   const [versionsRevision, setVersionsRevision] = useState(0);
-  const [showAllVersions, setShowAllVersions] = useState(false);
+  const [showAllVersions, setShowAllVersions] = useSessionState(
+    "store.showAllVersions",
+    false,
+  );
   const allVersions = useAllVersions(
     initialized && showAllVersions,
     data.settings.gameDirs,
@@ -160,7 +167,10 @@ export function Provider({ children }: { children: ReactNode }) {
   const dataRef = useRef(data);
   dataRef.current = data;
   const [favorites, setFavorites] = useState<FavoriteVersion[]>([]);
-  const [navigation, setNavigation] = useState(initialNavigation);
+  const [navigation, setNavigation] = useSessionState(
+    "store.navigation",
+    initialNavigation,
+  );
   const { route } = navigation;
   const page = navigationPage(route);
   const navigationRef = useRef(navigation);
@@ -226,6 +236,7 @@ export function Provider({ children }: { children: ReactNode }) {
       value.settings = {
         ...{ homeCleanMode: false, homeNoticeLayout: "masonry" as const },
         ...playerPreviewDefaults,
+        ...backgroundDefaults,
         ...launchSettingDefaults,
         ...value.settings,
         downloadTaskDisplay:
@@ -450,11 +461,25 @@ export function Provider({ children }: { children: ReactNode }) {
         });
         const settings = {
           ...playerPreviewDefaults,
+          ...backgroundDefaults,
           ...launchSettingDefaults,
           ...saved,
         };
+        // Resolve bg.png/bg.jpg again when switching back to the config directory.
+        const backgroundPath =
+          settings.backgroundType === "default"
+            ? "backgroundType" in changes
+              ? (await api<Bootstrap>("bootstrap")).backgroundPath || ""
+              : undefined
+            : ["local", "remote"].includes(settings.backgroundType)
+              ? settings.background
+              : "";
         settingsRef.current = settings;
-        setData((current) => ({ ...current, settings }));
+        setData((current) => ({
+          ...current,
+          settings,
+          ...(backgroundPath !== undefined ? { backgroundPath } : {}),
+        }));
         return settings;
       });
       if ("isolation" in changes)

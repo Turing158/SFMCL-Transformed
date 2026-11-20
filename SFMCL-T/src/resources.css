@@ -275,7 +275,6 @@
   --surface-fill: var(--panel);
   --surface-depth: 2px;
   min-width: 0;
-  transition: translate 180ms ease;
 }
 .install-component > .surface-frame::before,
 .install-component > .surface-frame::after,
@@ -285,7 +284,6 @@
 }
 .install-component:hover {
   --surface-edge: var(--surface-strong-line);
-  translate: 0 -2px;
 }
 .install-component.is-selected {
   --surface-edge: var(--accent);
@@ -447,7 +445,6 @@
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  transition: translate 180ms ease;
 }
 .install-component-option strong {
   min-width: 0;
@@ -482,9 +479,6 @@
 .install-component-option:is(:hover, :focus-visible) {
   --surface-fill: var(--panel);
   --surface-edge: var(--surface-strong-line);
-}
-.install-component-option:hover > span {
-  translate: 2px 0;
 }
 .install-component-option:active > svg {
   transform: scale(0.85);
@@ -634,17 +628,11 @@
   background: none;
   box-shadow: none;
   transition:
-    translate 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
     transform 180ms ease,
     color 180ms ease;
 }
 .catalog-view:is(:hover, :focus-visible):not(:disabled) {
   color: var(--accent);
-  translate: 0 -2px;
-}
-.catalog-view:active:not(:disabled) {
-  translate: 0 0;
-  transition-duration: 90ms;
 }
 .catalog-view-symbol {
   display: grid;
@@ -915,7 +903,6 @@
   --surface-edge: var(--line);
   --surface-fill: var(--panel);
   --surface-depth: 1px;
-  transition: translate 180ms ease;
 }
 .catalog-project > .surface-frame::before,
 .catalog-project > .surface-frame::after {
@@ -925,7 +912,6 @@
 .catalog-project:has(:focus-visible) {
   --surface-edge: var(--accent);
   --surface-fill: color-mix(in srgb, var(--panel), var(--soft) 55%);
-  translate: 0 -2px;
 }
 .catalog-project-info {
   display: flex;
@@ -990,7 +976,6 @@
     color 180ms ease;
 }
 .catalog-tags .badge:hover {
-  transform: translateY(-2px);
   color: var(--accent);
 }
 .catalog-project-footer {
@@ -1251,9 +1236,7 @@
   padding: 16px 18px;
   text-align: left;
   width: 100%;
-  transition:
-    translate 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
-    filter 180ms ease;
+  transition: filter 180ms ease;
 }
 .project-file:is(:hover, :focus-visible):not(:disabled) {
   filter: drop-shadow(
@@ -1261,7 +1244,6 @@
   );
 }
 .project-file:active:not(:disabled) {
-  translate: 0 0;
   filter: none;
   transition-duration: 90ms;
 }
@@ -1467,7 +1449,6 @@
   color: var(--ink);
   font-size: 11px;
   transition:
-    translate 180ms cubic-bezier(0.22, 0.8, 0.25, 1),
     color 180ms ease,
     filter 180ms ease;
 }
@@ -1479,11 +1460,9 @@
   --surface-edge: var(--accent);
   --surface-fill: var(--soft);
   color: var(--accent);
-  translate: 0 -2px;
   filter: drop-shadow(0 2px 0 var(--surface-shadow));
 }
 .resource-dependency-tag:active:not(:disabled) {
-  translate: 0 0;
   filter: none;
 }
 .resource-dependency-tag:disabled {
@@ -1607,7 +1586,6 @@
   .pixel-select-trigger
   > .pixel-icon {
   opacity: 0;
-  transform: translateY(-3px);
   transition:
     opacity 220ms ease,
     transform 220ms ease,
@@ -1617,7 +1595,6 @@
   .pixel-select-trigger:is(:hover, :focus-visible, [aria-expanded="true"])
   > .pixel-icon {
   opacity: 1;
-  transform: translateY(0);
 }
 :is(.catalog-sort, .local-resources-header .local-version-select)
   .pixel-select-trigger[aria-expanded="true"]

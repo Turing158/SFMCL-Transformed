@@ -65,20 +65,6 @@
     background-color 180ms ease,
     opacity 180ms ease;
 }
-.players-page
-  button:is(:hover, :focus-visible):not(:disabled, [data-player-login-trigger]),
-.players-page
-  .players-split-button:has(button:is(:hover, :focus-visible):not(:disabled)) {
-  transform: translateY(-2px);
-}
-.players-page button:active:not(:disabled),
-.players-page .players-split-button:has(button:active:not(:disabled)) {
-  transform: translateY(2px);
-  transition-duration: 90ms;
-}
-.players-page .players-split-button:has(button:active:not(:disabled)) {
-  --surface-depth: 0px;
-}
 .players-page .players-split-button > button,
 .players-page
   .players-split-button
@@ -597,11 +583,9 @@
   min-width: 0;
   margin-inline-start: 0;
   opacity: 0;
-  transform: translateX(-4px);
   transition:
     grid-template-columns 240ms cubic-bezier(0.22, 0.8, 0.25, 1),
     margin-inline-start 240ms cubic-bezier(0.22, 0.8, 0.25, 1),
-    transform 240ms cubic-bezier(0.22, 0.8, 0.25, 1),
     opacity 160ms ease;
 }
 .players-action-label > span {
@@ -620,7 +604,6 @@
   grid-template-columns: 1fr;
   margin-inline-start: 6px;
   opacity: 1;
-  transform: translateX(0);
 }
 .players-collection {
   min-width: 0;

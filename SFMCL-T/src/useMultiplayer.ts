@@ -1,3 +1,4 @@
+import { useSessionState } from "./windowSession";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, desktop } from "./api";
 import { usePageActive } from "./PageActivity";
@@ -56,17 +57,32 @@ const initial: MultiplayerSnapshot = {
 export function useMultiplayer() {
   const active = usePageActive();
   const { notify, reportError } = useApp();
-  const [mode, setMode] = useState<"create" | "join">("create");
-  const [service, setService] = useState<"official" | "custom">("official");
-  const [roomName, setRoomName] = useState("");
-  const [port, setPort] = useState("");
-  const [connectionMode, setConnectionMode] = useState<"tunnel" | "shared">(
-    "shared",
+  const [mode, setMode] = useSessionState<"create" | "join">(
+    "useMultiplayer.mode",
+    "create",
   );
-  const [server, setServer] = useState("");
-  const [hostLaunchId, setHostLaunchId] = useState("");
+  const [service, setService] = useSessionState<"official" | "custom">(
+    "useMultiplayer.service",
+    "official",
+  );
+  const [roomName, setRoomName] = useSessionState(
+    "useMultiplayer.roomName",
+    "",
+  );
+  const [port, setPort] = useSessionState("useMultiplayer.port", "");
+  const [connectionMode, setConnectionMode] = useSessionState<
+    "tunnel" | "shared"
+  >("useMultiplayer.connectionMode", "shared");
+  const [server, setServer] = useSessionState("useMultiplayer.server", "");
+  const [hostLaunchId, setHostLaunchId] = useSessionState(
+    "useMultiplayer.hostLaunchId",
+    "",
+  );
   // Credentials stay in memory; never persist or log the draft.
-  const [invitation, setInvitation] = useState("");
+  const [invitation, setInvitation] = useSessionState(
+    "useMultiplayer.invitation",
+    "",
+  );
   const invitationDrafts = useRef({ official: "", custom: "" });
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
   const [snapshot, setSnapshot] = useState(initial);

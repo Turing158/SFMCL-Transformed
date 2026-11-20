@@ -48,6 +48,7 @@ export function pixelAppFixture({
     downloadTaskDisplay: components ? "always" : "off",
     minecraftDownloadSource: "auto",
     downloadConcurrency: 8,
+    downloadConnectionLimit: 16,
     downloadCacheDir: "",
     microsoftClientId: "",
     closeOnLaunch: false,

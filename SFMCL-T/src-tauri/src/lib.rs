@@ -6,6 +6,7 @@ mod launch_window;
 mod local_data;
 mod window_frame;
 mod window_motion;
+mod window_session;
 #[cfg(windows)]
 mod window_shadow;
 use std::sync::Arc;
@@ -33,8 +34,10 @@ async fn startup_window(window: tauri::WebviewWindow, phase: StartupPhase) -> Re
                 window.set_resizable(false)?;
                 window.set_min_size(None::<tauri::LogicalSize<f64>>)?;
                 // Keep the real viewport while the invisible React tree lays out.
-                window.set_size(tauri::LogicalSize::new(864.0, 591.0))?;
-                window.center()?;
+                if !window_session::restoring(window.app_handle()) {
+                    window.set_size(tauri::LogicalSize::new(864.0, 591.0))?;
+                    window.center()?;
+                }
             }
             StartupPhase::Error => {
                 window_frame::set_visible(&window, false)?;
@@ -42,22 +45,101 @@ async fn startup_window(window: tauri::WebviewWindow, phase: StartupPhase) -> Re
                 window.set_min_size(None::<tauri::LogicalSize<f64>>)?;
                 window.set_size(tauri::LogicalSize::new(400.0, 332.0))?;
                 window.center()?;
+                if window_session::restoring(window.app_handle()) {
+                    window.show()?;
+                }
             }
             StartupPhase::Ready => {
                 window_frame::set_visible(&window, false)?;
                 window.set_resizable(true)?;
                 // Enabling resize changes the Win32 client inset. Restore the
                 // intended viewport before the frontend's final layout check.
-                window.set_size(tauri::LogicalSize::new(864.0, 591.0))?;
                 window.set_min_size(Some(tauri::LogicalSize::new(850.0, 591.0)))?;
+                if window_session::restoring(window.app_handle()) {
+                    window_session::restore_geometry(&window)?;
+                } else {
+                    window.set_size(tauri::LogicalSize::new(864.0, 591.0))?;
+                }
             }
             StartupPhase::Shown => {
+                if window_session::restoring(window.app_handle()) {
+                    window.show()?;
+                    window.unminimize()?;
+                }
                 window_motion::finish(&window, None)?;
+                if window_session::restoring(window.app_handle()) {
+                    window_session::restored(&window)?;
+                }
             }
         }
         Ok(())
     };
     update().map_err(|error| error.to_string())
+}
+
+pub(crate) fn create_main_window(
+    app: &tauri::AppHandle,
+    saved: Option<&window_session::SavedWindow>,
+) -> tauri::Result<()> {
+    let runtime = app.state::<Arc<commands::Runtime>>();
+    let settings = runtime.settings.get();
+    let hardware = settings.hardware_acceleration;
+    let appearance = serde_json::json!({ "theme": settings.theme, "accent": settings.accent });
+    let session = saved
+        .map(|saved| saved.ui.clone())
+        .unwrap_or(serde_json::Value::Null);
+    let webview_directory = runtime.directory.join("webview");
+    let restoring = saved.is_some();
+    window_frame::reset(app);
+    let mut window =
+        tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+            .title(format!(
+                "{} · {}",
+                sfmcl_t_core::brand::PRODUCT_NAME,
+                sfmcl_t_core::brand::PRODUCT_FULL_NAME
+            ))
+            .decorations(false)
+            .transparent(true)
+            .background_color(tauri::window::Color(0, 0, 0, 0))
+            .shadow(false)
+            .resizable(false)
+            // Show the webview only after its small startup document is ready.
+            // The React application loads behind that screen and reveals itself later.
+            .visible(false)
+            .initialization_script(format!(
+        "window.__SFMCL_T_APPEARANCE__ = {appearance}; window.__SFMCL_T_SESSION__ = {session};"
+    ))
+            .on_page_load(move |window, payload| {
+                if !restoring && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
+                {
+                    if let Err(error) = window_frame::set_visible(&window, false) {
+                        eprintln!("Cannot prepare startup window frame: {error}");
+                    }
+                    if let Err(error) = window.show() {
+                        eprintln!("Cannot show startup window: {error}");
+                    }
+                }
+            })
+            .data_directory(webview_directory)
+            .inner_size(864.0, 591.0)
+            .center();
+    if !hardware {
+        window = window.additional_browser_args("--disable-gpu");
+    }
+    // Wry's Windows file drop target swallows browser text/card drags.
+    // Our OLE target supports both and retains Tauri's file event format.
+    #[cfg(windows)]
+    {
+        window = window.disable_drag_drop_handler();
+    }
+    let main_window = window.build()?;
+    if saved.is_some() {
+        window_session::restore_geometry(&main_window)?;
+    }
+    #[cfg(windows)]
+    drag_drop::install(&main_window)?;
+    window_frame::set_visible(&main_window, false)?;
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -121,66 +203,19 @@ pub fn run() {
                 &default_directory,
                 &directory,
             )?);
-            let webview_directory = directory.join("webview");
             let runtime = commands::Runtime::new(directory)?;
-            let settings = runtime.settings.get();
-            let hardware = settings.hardware_acceleration;
-            let appearance =
-                serde_json::json!({ "theme": settings.theme, "accent": settings.accent });
             app.manage(Arc::new(runtime));
             app.manage(window_motion::WindowMotion::default());
             app.manage(window_frame::WindowFrame::default());
-            let mut window = tauri::WebviewWindowBuilder::new(
-                app,
-                "main",
-                tauri::WebviewUrl::App("index.html".into()),
-            )
-            .title(format!(
-                "{} · {}",
-                sfmcl_t_core::brand::PRODUCT_NAME,
-                sfmcl_t_core::brand::PRODUCT_FULL_NAME
-            ))
-            .decorations(false)
-            .transparent(true)
-            .background_color(tauri::window::Color(0, 0, 0, 0))
-            .shadow(false)
-            .resizable(false)
-            // Show the webview only after its small startup document is ready.
-            // The React application loads behind that screen and reveals itself later.
-            .visible(false)
-            .initialization_script(format!("window.__SFMCL_T_APPEARANCE__ = {appearance};"))
-            .on_page_load(|window, payload| {
-                if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
-                    if let Err(error) = window_frame::set_visible(&window, false) {
-                        eprintln!("Cannot prepare startup window frame: {error}");
-                    }
-                    if let Err(error) = window.show() {
-                        eprintln!("Cannot show startup window: {error}");
-                    }
-                }
-            })
-            .data_directory(webview_directory)
-            .inner_size(864.0, 591.0)
-            .center();
-            if !hardware {
-                window = window.additional_browser_args("--disable-gpu");
-            }
-            // Wry's Windows file drop target swallows browser text/card drags.
-            // Our OLE target supports both and retains Tauri's file event format.
-            #[cfg(windows)]
-            {
-                window = window.disable_drag_drop_handler();
-            }
-            let main_window = window.build()?;
-            #[cfg(windows)]
-            drag_drop::install(&main_window)?;
-            window_frame::set_visible(&main_window, false)?;
+            app.manage(window_session::WindowSession::default());
+            create_main_window(app.handle(), None)?;
             launch_window::setup(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::request,
             startup_window,
+            window_session::suspend_launcher_window,
             launch_window::resolve_launcher_quit,
             window_motion::minimize_window,
             window_motion::complete_window_transition,
@@ -190,9 +225,13 @@ pub fn run() {
             if window.label() != "main" {
                 return;
             }
-            #[cfg(windows)]
             if matches!(event, tauri::WindowEvent::Destroyed) {
-                drag_drop::uninstall();
+                #[cfg(windows)]
+                {
+                    drag_drop::uninstall();
+                    window_shadow::reset();
+                }
+                window_session::destroyed(window.app_handle());
             }
             if matches!(
                 event,
@@ -212,6 +251,16 @@ pub fn run() {
                 launch_window::quit(app);
             }
         })
-        .run(context)
-        .expect("无法启动 SFMCL-T");
+        .build(context)
+        .expect("无法启动 SFMCL-T")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested {
+                api, code: None, ..
+            } = event
+            {
+                if window_session::keep_alive(app) {
+                    api.prevent_exit();
+                }
+            }
+        });
 }

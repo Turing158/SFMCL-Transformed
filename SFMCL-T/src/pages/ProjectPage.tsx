@@ -1,3 +1,4 @@
+import { useSessionChangeEffect, useSessionState } from "../windowSession";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, LoaderCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -53,13 +54,20 @@ export function ProjectPage({
   const app = useApp();
   const [detail, setDetail] = useState(project);
   const [files, setFiles] = useState<ResourceFile[]>([]);
-  const [filePage, setFilePage] = useState(0);
+  const [filePage, setFilePage] = useSessionState("ProjectPage.filePage", 0);
   const fileResults = useRef<HTMLDivElement>(null);
-  const [tab, setTab] = useState<string>(initialTab);
+  const [tab, setTab] = useSessionState<string>("ProjectPage.tab", initialTab);
   const tabContent = useTabContentTransition(tab === "description" ? 0 : 1);
-  const [versionInput, setVersionInput] = useState(gameVersion);
-  const [fileVersion, setFileVersion] = useState(gameVersion);
-  const [fileLoader, setFileLoader] = useState(
+  const [versionInput, setVersionInput] = useSessionState(
+    "ProjectPage.versionInput",
+    gameVersion,
+  );
+  const [fileVersion, setFileVersion] = useSessionState(
+    "ProjectPage.fileVersion",
+    gameVersion,
+  );
+  const [fileLoader, setFileLoader] = useSessionState(
+    "ProjectPage.fileLoader",
     kind === "datapack"
       ? "datapack"
       : kind === "mod" || kind === "modpack"
@@ -102,7 +110,6 @@ export function ProjectPage({
     setLoading(true);
     setError("");
     setFiles([]);
-    setFilePage(0);
     void api<ResourceFile[]>("resources.files", {
       source: project.source,
       id: project.id,
@@ -121,6 +128,9 @@ export function ProjectPage({
     return () => {
       active = false;
     };
+  }, [project.id, project.source, fileVersion, fileLoader, retry]);
+  useSessionChangeEffect(() => {
+    setFilePage(0);
   }, [project.id, project.source, fileVersion, fileLoader, retry]);
   const filePages = Math.max(1, Math.ceil(files.length / filePageSize));
   const currentFilePage = Math.min(filePage, filePages - 1);

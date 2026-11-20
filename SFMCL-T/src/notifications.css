@@ -107,9 +107,6 @@
   outline-color: var(--notification-tone);
   outline-offset: 3px;
 }
-.notification-deck .toast:active {
-  transform: translateY(2px);
-}
 .notification-body {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);

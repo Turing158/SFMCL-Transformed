@@ -4,6 +4,11 @@ import { isTauri } from "@tauri-apps/api/core";
 import { setStartupWindow } from "./startupWindow";
 import { startupTimeout } from "./startupTimeout";
 import { surfaceMotionFrames, visibleSurface } from "./surfaceMotion";
+import {
+  isRestoringInterface,
+  restoreInterfaceFocus,
+  restoreInterfaceLayout,
+} from "./windowSession";
 
 // Startup has a more deliberate entrance than restoring an existing window.
 const startupRevealDuration = 480;
@@ -17,7 +22,6 @@ const failure = new AbortController();
 
 export function initializeStartupScreen() {
   const element = document.getElementById("startup-screen")!;
-  animation = new StartupAnimation(element);
   cancelTimeout = startupTimeout(
     () => failStartup(new Error("准备界面超时，请重试启动。")),
     30_000,
@@ -25,6 +29,11 @@ export function initializeStartupScreen() {
   document
     .getElementById("startup-retry")!
     .addEventListener("click", () => location.reload());
+  if (isRestoringInterface()) {
+    element.style.visibility = "hidden";
+    return;
+  }
+  animation = new StartupAnimation(element);
   // The original icon is already in the document, so no React code is needed.
   void Promise.all(
     [...element.querySelectorAll("img")].map((image) =>
@@ -45,6 +54,7 @@ export function failStartup(error: unknown) {
   document.getElementById("startup-status")!.textContent =
     "启动未完成，可以重试。";
   document.getElementById("startup-screen")!.dataset.state = "error";
+  document.getElementById("startup-screen")!.style.visibility = "";
   document.getElementById("startup-close")!.hidden = !isTauri();
   document.getElementById("startup-retry")!.focus();
   void setStartupWindow("error").catch(console.error);
@@ -62,6 +72,25 @@ export async function revealStartup(root: HTMLElement, signal: AbortSignal) {
   // State or an image can change while the last word is being written.
   await waitForStartupPaint(root, signal);
   signal.throwIfAborted();
+  restoreInterfaceLayout();
+  if (isRestoringInterface()) {
+    // Lay out and paint the restored content while its native window stays hidden.
+    document.documentElement.dataset.startup = "restoring";
+    await waitForStartupPaint(root, signal);
+    signal.throwIfAborted();
+    if (revealing || failed) return;
+    revealing = true;
+    cancelTimeout();
+    closeStartupWork();
+    delete document.documentElement.dataset.startup;
+    root.inert = false;
+    root.removeAttribute("aria-hidden");
+    root.removeAttribute("aria-busy");
+    document.getElementById("startup-screen")!.remove();
+    restoreInterfaceFocus();
+    await setStartupWindow("shown");
+    return;
+  }
   if (revealing || failed) return;
   revealing = true;
   cancelTimeout();
@@ -99,6 +128,7 @@ export async function revealStartup(root: HTMLElement, signal: AbortSignal) {
   exit.cancel();
   animation?.dispose();
   splash.remove();
+  restoreInterfaceFocus();
   // Wait until the transparent reveal finishes before restoring the native
   // shadow, so the full window frame does not appear behind the splash.
   await setStartupWindow("shown").catch(console.error);

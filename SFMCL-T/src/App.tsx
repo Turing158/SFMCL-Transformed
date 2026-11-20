@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import {
   Box,
   ChevronLeft,
@@ -37,12 +37,15 @@ import { appIcon } from "./branding";
 import { BrandWordmark } from "./BrandWordmark";
 import { PageHeader } from "./PageHeader";
 import { PageActivity } from "./PageActivity";
+import { ContentBackground } from "./ContentBackground";
+import { backgroundSource } from "./background";
 import { SidebarDownloads } from "./SidebarDownloads";
 import { useTaskSelector } from "./tasks";
 import { HomeLandscape } from "./HomeLandscape";
 import { useHomeScrollPadding } from "./useHomeScrollPadding";
 import { handleWindowDrag } from "./windowDrag";
 import { useLauncherQuit } from "./useLauncherQuit";
+import { useSessionState, useWindowSession } from "./windowSession";
 import "./home.css";
 const navigation = [
   { id: "home", name: pageNames.home, icon: House },
@@ -63,8 +66,9 @@ const pages = {
 export default function App() {
   const app = useApp();
   useLauncherQuit(app.reportError);
+  useWindowSession(app.reportError);
   const { workspace, pageKey } = useNavigationTransition(app.route);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSessionState("sidebar.collapsed", false);
   const [narrow, setNarrow] = useState(
     () => window.matchMedia("(max-width: 850px)").matches,
   );
@@ -81,10 +85,7 @@ export default function App() {
   );
   const playerCaption = usePlayerCaption(pageKey, player?.name);
   const background = useImage(
-    app.data.backgroundPath ||
-      (["none", "default"].includes(app.data.settings.backgroundType)
-        ? ""
-        : app.data.settings.background),
+    backgroundSource(app.data.settings, app.data.backgroundPath),
   );
   return (
     <div
@@ -98,13 +99,6 @@ export default function App() {
           event.preventDefault();
         }
       }}
-      style={
-        background
-          ? ({
-              "--app-background-image": `linear-gradient(var(--background-overlay),var(--background-overlay)),url("${background}")`,
-            } as CSSProperties)
-          : undefined
-      }
     >
       <aside className={`sidebar ${railCollapsed ? "rail-collapsed" : ""}`}>
         <div className="brand">
@@ -145,6 +139,7 @@ export default function App() {
               className={`has-surface ${app.page === n.id ? "active" : ""}`}
               aria-current={app.page === n.id ? "page" : undefined}
               aria-label={n.name}
+              data-tour={n.id === "versions" ? "versions-entry" : undefined}
               onClick={() => app.setPage(n.id)}
               data-tooltip={railCollapsed ? n.name : undefined}
               data-tooltip-placement="right"
@@ -160,6 +155,7 @@ export default function App() {
           <SidebarDownloads railCollapsed={railCollapsed} />
           <button
             className="profile-button has-surface"
+            data-tour="players-entry"
             onClick={() => app.setPage("players")}
             aria-label={player ? `管理角色：${player.name}` : "添加你的角色"}
             data-tooltip={
@@ -188,30 +184,37 @@ export default function App() {
       </aside>
       <div className="workspace" ref={workspace}>
         <Titlebar />
-        {Object.values(app.pageRoutes).flatMap((route) => {
-          const owner = navigationPage(route);
-          return pageViews(route).map((view) => {
-            const Page = pages[view.page];
-            return (
-              <PageActivity
-                key={`${owner}:${view.page}`}
-                page={owner}
-                view={view.page}
-                active={app.page === owner && route.page === view.page}
-              >
-                <PageRouteProvider route={view}>
-                  {!desktop && (
-                    <div className="preview-banner has-surface">
-                      <PixelFrame />
-                      浏览器界面预览 · 文件、账号和游戏操作请在桌面应用运行
-                    </div>
-                  )}
-                  <Page />
-                </PageRouteProvider>
-              </PageActivity>
-            );
-          });
-        })}
+        <div className="workspace-content">
+          <ContentBackground
+            image={background}
+            opacity={app.data.settings.backgroundOverlayOpacity}
+            blur={app.data.settings.backgroundBlur}
+          />
+          {Object.values(app.pageRoutes).flatMap((route) => {
+            const owner = navigationPage(route);
+            return pageViews(route).map((view) => {
+              const Page = pages[view.page];
+              return (
+                <PageActivity
+                  key={`${owner}:${view.page}`}
+                  page={owner}
+                  view={view.page}
+                  active={app.page === owner && route.page === view.page}
+                >
+                  <PageRouteProvider route={view}>
+                    {!desktop && (
+                      <div className="preview-banner has-surface">
+                        <PixelFrame />
+                        浏览器界面预览 · 文件、账号和游戏操作请在桌面应用运行
+                      </div>
+                    )}
+                    <Page />
+                  </PageRouteProvider>
+                </PageActivity>
+              );
+            });
+          })}
+        </div>
         <WorkspaceFooter kind={app.page === "home" ? "launch" : "status"}>
           <LaunchDock
             active={app.page === "home"}
@@ -263,8 +266,10 @@ function Home() {
       )}
       {showContent && <HomeContent notices={notices} />}
       {!showContent &&
-        !app.data.backgroundPath &&
-        ["none", "default"].includes(s.backgroundType) && <HomeLandscape />}
+        (s.backgroundType === "none" ||
+          (s.backgroundType === "default" && !app.data.backgroundPath)) && (
+          <HomeLandscape />
+        )}
     </div>
   );
 }

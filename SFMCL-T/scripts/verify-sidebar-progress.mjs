@@ -31,6 +31,7 @@ await page.addInitScript(() => {
 const slot = page.locator(".sidebar-progress-motion");
 const progress = page.locator(".sidebar-progress");
 const button = page.locator(".sidebar-task");
+const entry = page.locator(".sidebar-downloads");
 const ready = async (mode = "always") => {
   await page.goto(`${url}?mode=${mode}`);
   await expect(page.locator("html")).not.toHaveAttribute("data-startup");
@@ -76,6 +77,58 @@ const finishMotion = () =>
   slot.evaluate((element) => {
     for (const animation of element.getAnimations()) animation.finish();
   });
+const pauseEntry = async (direction, fraction = 0.5) => {
+  const id = `sfmcl-t-sidebar-task-${direction}`;
+  await page.waitForFunction((id) => {
+    const animation = document
+      .getAnimations()
+      .find((motion) => motion.id === id);
+    if (!animation) return false;
+    animation.pause();
+    return true;
+  }, id);
+  return entry.evaluate(
+    (element, { id, fraction }) => {
+      const animation = element
+        .getAnimations()
+        .find((motion) => motion.id === id);
+      const duration = animation.effect.getTiming().duration;
+      animation.currentTime = duration * fraction;
+      const style = getComputedStyle(element);
+      const cardStyle = getComputedStyle(
+        element.querySelector(".sidebar-task"),
+      );
+      const transform = new DOMMatrix(cardStyle.transform);
+      return {
+        duration,
+        opacity: Number(style.opacity),
+        height: element.getBoundingClientRect().height,
+        fullHeight: parseFloat(cardStyle.height),
+        margin: parseFloat(style.marginBottom),
+        scale: transform.a,
+        offset: transform.f,
+      };
+    },
+    { id, fraction },
+  );
+};
+const finishEntry = () =>
+  entry.evaluate((element) => {
+    for (const animation of element.getAnimations()) animation.finish();
+  });
+const entryIntermediate = (sample) => {
+  expect(sample.duration).toBe(300);
+  expect(sample.opacity).toBeGreaterThan(0);
+  expect(sample.opacity).toBeLessThan(1);
+  expect(sample.height).toBeGreaterThan(0);
+  expect(sample.height).toBeLessThan(sample.fullHeight);
+  expect(sample.margin).toBeGreaterThan(0);
+  expect(sample.margin).toBeLessThan(12);
+  expect(sample.scale).toBeGreaterThan(0.96);
+  expect(sample.scale).toBeLessThan(1);
+  expect(sample.offset).toBeGreaterThan(0);
+  expect(sample.offset).toBeLessThan(8);
+};
 const intermediate = (sample) => {
   expect(sample.scale).toBeGreaterThan(0.84);
   expect(sample.scale).toBeLessThan(1);
@@ -208,6 +261,57 @@ try {
   await expect(button).toHaveCount(0);
   checks.push(
     "Failed and cancelled work stops the indicator; active-only mode waits for the exit animation before removing its entry",
+  );
+
+  for (const preference of ["no-preference", "reduce"]) {
+    await page.emulateMedia({ reducedMotion: preference });
+    await ready("active");
+    if (preference === "reduce") {
+      await page.locator(".brand-logo").hover();
+      await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
+      await page.mouse.move(500, 300);
+      await expect(page.locator(".sidebar")).toHaveClass(/rail-collapsed/);
+      await page.waitForTimeout(320);
+    }
+    await page.evaluate(() => {
+      window.__pixelTest.downloadTemplate.title = "26.1.2 · 启动检查";
+    });
+    await start("download");
+    entryIntermediate(await pauseEntry("enter"));
+    await shot(`card-enter-${preference}`);
+    await finishEntry();
+    await expect(entry).toHaveCSS("opacity", "1");
+    await expect(entry).toHaveCSS("margin-bottom", "12px");
+    await expect(entry).not.toHaveAttribute("inert");
+    await page.evaluate(() => {
+      window.__pixelTest.tasks.downloads[0].status = "completed";
+    });
+    const exiting = await pauseEntry("exit");
+    entryIntermediate(exiting);
+    await expect(entry).toHaveAttribute("inert", "");
+    await expect(entry).toHaveAttribute("aria-hidden", "true");
+    await expect(slot).toHaveCount(0);
+    await expect(button).toContainText("26.1.2 · 启动检查");
+    await expect(button).toContainText("已完成");
+    await shot(`card-exit-${preference}`);
+    await start("download", "paused");
+    const reversing = await pauseEntry("enter", 0);
+    for (const field of ["opacity", "height", "margin", "scale", "offset"])
+      expect(reversing[field]).toBeCloseTo(exiting[field], 2);
+    await finishEntry();
+    await expect(entry).not.toHaveAttribute("inert");
+    await expect(progress).toHaveAttribute("aria-valuenow", "64");
+    await page.evaluate(() => {
+      window.__pixelTest.tasks.downloads[0].status = "completed";
+    });
+    entryIntermediate(await pauseEntry("exit"));
+    await finishEntry();
+    await expect(entry).toHaveCount(0);
+    await expect(slot).toHaveCount(0);
+  }
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  checks.push(
+    "The whole startup-check card fades, slides and scales for 300ms while its height and gap animate; reduced-motion and collapsed mode retain full motion, exiting content stays intact and inert, and new work reverses smoothly",
   );
 
   await ready("off");

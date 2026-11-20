@@ -1,3 +1,4 @@
+import { useSessionState } from "../windowSession";
 import { useEffect, useRef, useState } from "react";
 import { api, pick } from "../api";
 import { Button, Modal } from "../components";
@@ -17,11 +18,13 @@ export function PlayerSkinDialog({
   onClose: () => void;
 }) {
   const app = useApp();
-  const [draft, setDraft] = useState<{ path: string; url: string } | null>(
-    null,
-  );
-  const [slim, setSlim] = useState(player.slim);
-  const [mode, setMode] = useState(
+  const [draft, setDraft] = useSessionState<{
+    path: string;
+    url: string;
+  } | null>("PlayerSkinDialog.draft", null);
+  const [slim, setSlim] = useSessionState("PlayerSkinDialog.slim", player.slim);
+  const [mode, setMode] = useSessionState(
+    "PlayerSkinDialog.mode",
     initialMode || app.data.settings.playerPreviewMode,
   );
   const [saving, setSaving] = useState(false);

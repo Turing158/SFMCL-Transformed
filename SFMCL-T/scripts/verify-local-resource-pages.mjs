@@ -782,7 +782,7 @@ try {
         .first()
         .evaluate((element) => getComputedStyle(element).translate),
     )
-    .toBe("0px -2px");
+    .toBe("none");
   await expect(details).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(shaderRows).toHaveCount(3);
@@ -798,7 +798,7 @@ try {
     ),
   ).toBe(folderRequestCount);
   checks.push(
-    "Shader rows only display names and sizes, stay 44px tall at all tested widths and themes, ignore cached metadata/errors, retain hover animation and directory actions, and do not open a dialog or subpage when clicked.",
+    "Shader rows only display names and sizes, stay 44px tall at all tested widths and themes, ignore cached metadata/errors, retain hover colors and directory actions, and do not open a dialog or subpage when clicked.",
   );
   await page.getByRole("tab", { name: /^材质包/ }).click();
   await expect(modPagination).toHaveCount(0);
@@ -821,7 +821,7 @@ try {
     .poll(() =>
       packRow.evaluate((element) => getComputedStyle(element).translate),
     )
-    .toBe("0px -2px");
+    .toBe("none");
   for (const theme of ["light", "dark"]) {
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value;

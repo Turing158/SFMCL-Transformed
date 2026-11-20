@@ -11,16 +11,20 @@ import "./tooltip.css";
 import "./window-motion.css";
 import "./scrollbars.css";
 import App from "./App";
+import { OnboardingProvider } from "./Onboarding";
 import { ConfirmationDialogHost } from "./ConfirmationDialog";
 import { Provider } from "./store";
 import { StartupBoundary, StartupErrorBoundary } from "./StartupBoundary";
 import { TooltipHost } from "./Tooltip";
 import { initializeWindowMotion } from "./windowMotion";
 import { initializeScrollbars } from "./scrollbars";
+import { initializeWindowSession } from "./windowSession";
+const disposeWindowSession = initializeWindowSession();
 const disposeWindowMotion = initializeWindowMotion();
 const disposeScrollbars = initializeScrollbars();
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
+    disposeWindowSession();
     disposeWindowMotion();
     disposeScrollbars();
   });
@@ -29,7 +33,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <StartupErrorBoundary>
       <Provider>
         <StartupBoundary>
-          <App />
+          <OnboardingProvider>
+            <App />
+          </OnboardingProvider>
           <ConfirmationDialogHost />
           <TooltipHost />
         </StartupBoundary>

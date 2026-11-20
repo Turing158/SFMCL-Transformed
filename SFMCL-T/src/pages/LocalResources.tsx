@@ -1,3 +1,4 @@
+import { useSessionState } from "../windowSession";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -84,13 +85,16 @@ export function LocalResources({
       ? resource.kind
       : undefined;
   const detail = listOnlyKind ? undefined : resource;
-  const [kind, setKind] = useState(listOnlyKind ?? "mod");
+  const [kind, setKind] = useSessionState(
+    "LocalResources.kind",
+    listOnlyKind ?? "mod",
+  );
   const tabContent = useTabContentTransition(
     kinds.findIndex((item) => item.value === kind),
     !detail,
   );
-  const [query, setQuery] = useState("");
-  const [modPage, setModPage] = useState(0);
+  const [query, setQuery] = useSessionState("LocalResources.query", "");
+  const [modPage, setModPage] = useSessionState("LocalResources.modPage", 0);
   const [resources, setResources] = useState<Record<string, ListedResource[]>>(
     {},
   );

@@ -1,15 +1,17 @@
+import { useSessionState } from "../windowSession";
 import { Input, Select, Switch } from "../controls";
-import { useState } from "react";
-import { Check, FolderOpen, RefreshCw, Settings2 } from "lucide-react";
+import { useEffect } from "react";
+import { Check, FolderOpen, Settings2 } from "lucide-react";
+import { BackgroundSettings } from "../BackgroundSettings";
 import { PageHeader } from "../PageHeader";
 import { useApp } from "../store";
+import { useOnboarding } from "../Onboarding";
 import { invalidateImages } from "../images";
 import { api, pick } from "../api";
 import { Button, TabList, TabPanel, PixelFrame } from "../components";
 import { GameSettingsFields } from "./GameSettingsFields";
 import type { HomeNoticeLayout, Settings } from "../types";
 import { useTabContentTransition } from "../useTabContentTransition";
-import { useButtonPressFeedback } from "../useButtonPressFeedback";
 import {
   absoluteSettingsPath,
   prepareSettings,
@@ -30,8 +32,11 @@ import "../settings.css";
 
 export function SettingsPage() {
   const app = useApp();
-  const pressFeedback = useButtonPressFeedback("sfmcl-t-settings-press");
-  const [tab, setTab] = useState("launcher");
+  const [tab, setTab] = useSessionState("Settings.tab", "launcher");
+  const onboarding = useOnboarding();
+  useEffect(() => {
+    if (onboarding.step === "java") setTab("game");
+  }, [onboarding.step]);
   const updateCheck = useUpdateCheck();
   const tabContent = useTabContentTransition(
     ["launcher", "game", "about"].indexOf(tab),
@@ -69,11 +74,7 @@ export function SettingsPage() {
     </div>
   );
   return (
-    <div
-      className="settings-page"
-      onClickCapture={pressFeedback}
-      data-saving={autoSave.saving}
-    >
+    <div className="settings-page" data-tab={tab} data-saving={autoSave.saving}>
       <PageHeader icon={<Settings2 />} eyebrow="MAKE IT YOURS" title="设置" />
       <TabList
         id="settings"
@@ -147,73 +148,18 @@ export function SettingsPage() {
                   <option value="sift">筛界配色</option>
                 </Select>
               </label>
-              <label className="field">
-                背景来源
-                <Select
-                  value={draft.backgroundType}
-                  onValueChange={(value) => change("backgroundType", value)}
-                >
-                  <option value="none">纯色背景</option>
-                  <option value="default">配置目录中的 bg.png / bg.jpg</option>
-                  <option value="local">本地图片</option>
-                  <option value="remote">网络图片</option>
-                </Select>
-              </label>
-              {["local", "remote"].includes(draft.backgroundType) && (
-                <label className="field">
-                  图片路径或 URL
-                  <div className="input-action">
-                    <Input
-                      value={draft.background}
-                      onChange={(e) => change("background", e.target.value)}
-                      placeholder={
-                        draft.backgroundType === "local"
-                          ? "选择 JPG / PNG 图片"
-                          : "https://…"
-                      }
-                    />
-                    {draft.backgroundType === "local" && (
-                      <Button
-                        onClick={() =>
-                          void app.run(async () => {
-                            const path = await pick(false, [
-                              "png",
-                              "jpg",
-                              "jpeg",
-                            ]);
-                            if (path) {
-                              invalidateImages([path]);
-                              change("background", path);
-                            }
-                          })
-                        }
-                      >
-                        <FolderOpen size={16} />
-                        选择
-                      </Button>
-                    )}
-                  </div>
-                </label>
-              )}
               {toggle(
                 "hardwareAcceleration",
                 "硬件加速",
                 "使用 GPU 渲染界面，修改后重新启动应用生效。",
               )}
-              <div className="row-actions">
-                <Button
-                  onClick={() =>
-                    void app.run(
-                      () => app.refresh("backgrounds"),
-                      "背景图片已刷新",
-                    )
-                  }
-                >
-                  <RefreshCw size={16} />
-                  刷新背景图片
-                </Button>
-              </div>
             </section>
+            <BackgroundSettings
+              draft={draft}
+              onChange={(changes) =>
+                setDraft((current) => ({ ...current, ...changes }))
+              }
+            />
             <section className="panel settings-section has-surface">
               <PixelFrame />
               <h2>开始游戏界面</h2>
@@ -414,7 +360,7 @@ export function SettingsPage() {
                     <option value="bmclapi">镜像优先</option>
                   </Select>
                 </div>
-                <label className="field">
+                <label className="field download-count-field">
                   同时下载数
                   <Input
                     type="number"
@@ -438,6 +384,30 @@ export function SettingsPage() {
                     }
                   />
                 </label>
+                <label className="field download-count-field">
+                  同时连接数
+                  <Input
+                    type="number"
+                    min={1}
+                    max={32}
+                    value={draft.downloadConnectionLimit ?? 16}
+                    onChange={(e) =>
+                      change("downloadConnectionLimit", Number(e.target.value))
+                    }
+                    onBlur={() =>
+                      change(
+                        "downloadConnectionLimit",
+                        Math.min(
+                          32,
+                          Math.max(
+                            1,
+                            Math.round(draft.downloadConnectionLimit) || 1,
+                          ),
+                        ),
+                      )
+                    }
+                  />
+                </label>
                 <label className="field download-task-display">
                   侧栏下载任务
                   <Select
@@ -453,8 +423,21 @@ export function SettingsPage() {
                   </Select>
                 </label>
               </div>
+              <p className="muted">
+                同时下载数限制文件数量；同时连接数限制所有下载请求。较大文件会自动使用多路连接。
+              </p>
             </section>
             <LocalDataSettings />
+            <section className="panel settings-section has-surface">
+              <PixelFrame />
+              <div className="setting-row setting-row-compact">
+                <div>
+                  <strong>新手引导</strong>
+                  <p>跟随指引认识登录、游戏目录、Java 和启动入口。</p>
+                </div>
+                <Button onClick={onboarding.start}>重新查看引导</Button>
+              </div>
+            </section>
           </div>
         )}
         {tab === "about" && <About updateCheck={updateCheck} />}

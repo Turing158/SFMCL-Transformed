@@ -4,7 +4,9 @@ import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { downloadsFixture } from "./fixtures/downloads.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 
-const evidence = runtimePath("evidence/downloads-motion");
+const evidence =
+  process.env.SFMCL_T_TEST_ARTIFACT_DIR ||
+  runtimePath("evidence/downloads-motion");
 await mkdir(evidence, { recursive: true });
 const browser = await chromium.launch({
   ...(process.platform === "win32" ? { channel: "msedge" } : {}),
@@ -144,15 +146,15 @@ try {
   for (let i = 0; i < (await buttons.count()); i++) {
     const button = buttons.nth(i);
     await button.hover();
-    await expect(button).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, -2)");
+    await expect(button).toHaveCSS("transform", "none");
     await page.mouse.down();
-    await expect(button).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 2)");
+    await expect(button).toHaveCSS("transform", "none");
     await page.mouse.move(0, 0);
     await page.mouse.up();
   }
   const badge = page.locator(".job-header > .badge").first();
   await badge.hover();
-  await expect(badge).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, -1)");
+  await expect(badge).toHaveCSS("transform", "none");
   const fullHeight = await body.evaluate(
     (node) => node.getBoundingClientRect().height,
   );
@@ -178,7 +180,7 @@ try {
   await expect
     .poll(() => body.evaluate((node) => node.getBoundingClientRect().height))
     .toBeCloseTo(fullHeight, 1);
-  expect(await page.evaluate(() => window.__presses.length)).toBeGreaterThan(1);
+  expect(await page.evaluate(() => window.__presses.length)).toBe(0);
   checks.push({
     name: "buttons-badges-and-reversible-collapse",
     fullHeight,
@@ -219,7 +221,7 @@ try {
   await expect(dialog.locator("tbody tr")).toHaveCount(100);
   const startBounds = await pagerBounds();
   expect(startBounds.barBottom).toBeCloseTo(startBounds.bodyBottom, 1);
-  await dialog.locator(".modal-body").evaluate((node) => {
+  await dialog.locator(".download-file-table-viewport").evaluate((node) => {
     node.scrollTop = node.scrollHeight;
   });
   const endBounds = await pagerBounds();
@@ -232,6 +234,11 @@ try {
   );
   expect(
     await dialog.locator(".modal-body").evaluate((node) => node.scrollTop),
+  ).toBe(0);
+  expect(
+    await dialog
+      .locator(".download-file-table-viewport")
+      .evaluate((node) => node.scrollTop),
   ).toBe(0);
   await dialog.getByRole("button", { name: "下一页", exact: true }).click();
   await expect(dialog.locator("tbody tr")).toHaveCount(5);
@@ -308,7 +315,7 @@ try {
   await dialog.getByRole("button", { name: "复制日志", exact: true }).hover();
   await expect(
     dialog.getByRole("button", { name: "复制日志", exact: true }),
-  ).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, -2)");
+  ).toHaveCSS("transform", "none");
   await closeModal("escape");
 
   for (const width of [375, 768, 1120]) {

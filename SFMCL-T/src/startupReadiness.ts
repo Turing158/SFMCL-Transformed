@@ -38,14 +38,20 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal) {
 function frame(signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     aborted(signal);
+    const hidden = document.hidden;
     const onAbort = () => {
-      cancelAnimationFrame(id);
+      if (hidden) window.clearTimeout(id);
+      else cancelAnimationFrame(id);
       reject(signal.reason);
     };
-    const id = requestAnimationFrame(() => {
+    const complete = () => {
       signal.removeEventListener("abort", onAbort);
       resolve();
-    });
+    };
+    // WebView2 can suspend animation frames while a rebuilt window is hidden.
+    const id = hidden
+      ? window.setTimeout(complete, 16)
+      : requestAnimationFrame(complete);
     signal.addEventListener("abort", onAbort, { once: true });
   });
 }

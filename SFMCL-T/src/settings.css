@@ -33,7 +33,19 @@
   margin-top: 12px;
 }
 .settings-section .download-options-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+}
+.download-options-grid > .field {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.download-options-grid > .download-count-field {
+  flex: 0 0 96px;
+}
+.download-options-grid > .download-task-display {
+  flex-basis: 120px;
 }
 .window-size-row {
   display: grid;
@@ -92,12 +104,6 @@
   .launch-behavior-groups {
     grid-template-columns: minmax(0, 1fr);
   }
-  .settings-section .download-options-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .download-options-grid > .download-task-display {
-    grid-column: 1 / -1;
-  }
 }
 
 /* Tabs keep their shared indicator; switches animate their own track. */
@@ -112,14 +118,7 @@
     filter 180ms ease,
     --pixel-field-border 180ms ease;
 }
-.settings-page
-  button:not([role="tab"], .pixel-switch):is(:hover, :focus-visible):not(
-    :disabled
-  ) {
-  transform: translateY(-2px);
-}
 .settings-page button:not([role="tab"], .pixel-switch):active:not(:disabled) {
-  transform: translateY(2px);
   scale: 0.98;
   transition-duration: 90ms;
 }
@@ -149,15 +148,26 @@
 .settings-page .theme-preview {
   transition: transform 180ms cubic-bezier(0.22, 0.8, 0.25, 1);
 }
-.settings-page .theme-option:is(:hover, :focus-visible) .theme-preview {
-  transform: translateY(-1px);
-}
 .settings-page .theme-option:active .theme-preview {
   transform: scale(0.98);
 }
 
 .update-check-button {
   min-width: 138px;
+}
+.update-check-content {
+  display: grid;
+  width: 100%;
+}
+.update-check-content > span {
+  grid-area: 1 / 1;
+  justify-content: center;
+}
+.update-check-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 .update-check[data-update-state="latest"] .update-check-button {
   --surface-edge: var(--surface-success);

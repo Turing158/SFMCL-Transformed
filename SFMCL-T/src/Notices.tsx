@@ -1,3 +1,4 @@
+import { useSessionState } from "./windowSession";
 import {
   useEffect,
   useId,
@@ -101,8 +102,14 @@ export function NoticePanel({
 }) {
   const app = useApp();
   const id = useId();
-  const [open, setOpen] = useState(false);
-  const [visited, setVisited] = useState(false);
+  const [open, setOpen] = useSessionState(
+    `Notices.${item.id ?? item.source ?? item.title}.open`,
+    false,
+  );
+  const [visited, setVisited] = useSessionState(
+    `Notices.${item.id ?? item.source ?? item.title}.visited`,
+    false,
+  );
   const canDelete = !item.preset && !!item.id;
   const [removePreview, setRemovePreview] = useState(false);
   const [removeHovered, setRemoveHovered] = useState(false);
@@ -606,7 +613,7 @@ export function NoticeActions({
 }: {
   notices: ReturnType<typeof useNotices>;
 }) {
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useSessionState("Notices.adding", false);
   return (
     <div className="notice-actions">
       <button
@@ -638,10 +645,10 @@ function NoticeEditor({
   onClose: () => void;
 }) {
   const id = useId();
-  const [tab, setTab] = useState("presets");
+  const [tab, setTab] = useSessionState("Notices.editorTab", "presets");
   const tabContent = useTabContentTransition(tab === "presets" ? 0 : 1);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const [title, setTitle] = useSessionState("Notices.editorTitle", "");
+  const [content, setContent] = useSessionState("Notices.editorContent", "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);

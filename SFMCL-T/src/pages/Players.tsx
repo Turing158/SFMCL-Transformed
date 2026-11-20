@@ -1,3 +1,4 @@
+import { useSessionChangeEffect, useSessionState } from "../windowSession";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   Check,
@@ -15,6 +16,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useApp } from "../store";
+import { useOnboarding } from "../Onboarding";
 import { usePageActive } from "../PageActivity";
 import { usePlayerViewTransition } from "../usePlayerViewTransition";
 import { usePointerReorder } from "../usePointerReorder";
@@ -170,6 +172,7 @@ function RefreshLoginButton({ player }: { player: Player }) {
 
 export function Players() {
   const app = useApp();
+  const { step: onboardingStep } = useOnboarding();
   const pageActive = usePageActive();
   const loginKind = app.route.page === "players" ? app.route.login : undefined;
   const loginMenuId = useId();
@@ -204,7 +207,7 @@ export function Players() {
     loginKind === "microsoft" || littleSkinActive,
     browserAuth,
   );
-  const [view, setView] = useState<PlayerView>(() => {
+  const [view, setView] = useSessionState<PlayerView>("Players.view", () => {
     try {
       return localStorage.getItem(viewKey) === "gallery" ? "gallery" : "grove";
     } catch {
@@ -212,7 +215,10 @@ export function Players() {
     }
   });
   const viewSwitchLabel = `切换为${view === "grove" ? "方块展台" : "林间营地"}`;
-  const [modal, setModal] = useState<PlayerProfileAction | null>(null);
+  const [modal, setModal] = useSessionState<PlayerProfileAction | null>(
+    "Players.modal",
+    null,
+  );
   const cardsRoot = useRef<HTMLDivElement>(null);
   const playerKeys = app.data.players.map((player) => player.uuid);
   const {
@@ -233,11 +239,19 @@ export function Players() {
     .map((id) => playersById.get(id))
     .filter((player): player is Player => !!player);
   const defaultPreviewMode = app.data.settings.playerPreviewMode;
-  const [previewMode, setPreviewMode] =
-    useState<PlayerPreviewMode>(defaultPreviewMode);
-  const [offlineName, setOfflineName] = useState("");
+  const [previewMode, setPreviewMode] = useSessionState<PlayerPreviewMode>(
+    "Players.previewMode",
+    defaultPreviewMode,
+  );
+  const [offlineName, setOfflineName] = useSessionState(
+    "Players.offlineName",
+    "",
+  );
   const [loginPreviewMode, setLoginPreviewMode] =
-    useState<PlayerPreviewMode>(defaultPreviewMode);
+    useSessionState<PlayerPreviewMode>(
+      "Players.loginPreviewMode",
+      defaultPreviewMode,
+    );
   const mode = loginKind ? loginPreviewMode : previewMode;
   // The authorization stage shows no scenery, so it must not resolve images.
   const backgroundType =
@@ -280,7 +294,7 @@ export function Players() {
     mode,
     loginKind !== "offline",
   );
-  useEffect(() => {
+  useSessionChangeEffect(() => {
     setPreviewMode(defaultPreviewMode);
     setLoginPreviewMode(defaultPreviewMode);
   }, [defaultPreviewMode]);
@@ -325,6 +339,16 @@ export function Players() {
       placement: "bottom-end",
     });
   };
+
+  useEffect(() => {
+    if (onboardingStep !== "players" || !pageActive || loginKind || app.busy)
+      return;
+    const trigger = root.current?.querySelector<HTMLButtonElement>(
+      "[data-player-login-trigger]",
+    );
+    if (trigger) openLoginMenu(trigger);
+    return () => setLoginMenuAnchor(null);
+  }, [onboardingStep, pageActive, loginKind, app.busy]);
 
   return (
     <div
@@ -403,7 +427,8 @@ export function Players() {
           ariaLabel="登录方式"
           menuId={loginMenuId}
           showHeading={false}
-          className="favorite-context-menu"
+          presentation={onboardingStep === "players"}
+          className="favorite-context-menu onboarding-login-menu"
           items={loginMethods
             .filter(
               (method) =>

@@ -33,7 +33,8 @@ multiplayer-nodes.json.*
 /docs/internal/
 
 # Local diagnostic tools
-/SFMCL-T/crates/launcher-core/examples/
+/SFMCL-T/crates/launcher-core/examples/*
+!/SFMCL-T/crates/launcher-core/examples/benchmark_segmented_downloads.rs
 /SFMCL-T/scripts/probe-services.mjs
 AGENTS.md
 RELEASE.md

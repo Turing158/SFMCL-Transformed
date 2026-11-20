@@ -46,14 +46,11 @@
   animation: multiplayer-control-in 320ms var(--multiplayer-motion-easing);
 }
 .multiplayer-page button:is(:hover, :focus-visible):not(:disabled) {
-  transform: translateY(-3px);
   filter: drop-shadow(
     0 4px 0 color-mix(in srgb, var(--accent), transparent 82%)
   );
 }
 .multiplayer-page button:active:not(:disabled) {
-  --surface-depth: 0px;
-  transform: translateY(1px);
   scale: 0.97;
   transition-duration: 90ms;
 }
@@ -70,16 +67,11 @@
 .multiplayer-page
   button:is(:hover, :focus-visible):not(:disabled)
   > svg:not(.pixel-icon, .spin) {
-  transform: translateY(-1px) rotate(-6deg) scale(1.1);
+  transform: rotate(-6deg) scale(1.1);
 }
 .multiplayer-page button > svg:not(.pixel-icon, .spin),
 .multiplayer-page .tab-content > svg {
   transition: transform 220ms var(--multiplayer-motion-easing);
-}
-.multiplayer-page
-  button:is(:hover, :focus-visible):not(:disabled)
-  > .lucide-arrow-right {
-  transform: translateX(3px);
 }
 .multiplayer-page button:active:not(:disabled) > svg:not(.pixel-icon, .spin) {
   transform: scale(0.94);
@@ -95,7 +87,6 @@
 }
 .multiplayer-page
   :is(.pixel-input, .pixel-select-trigger):hover:not(:disabled) {
-  transform: translateY(-1px);
   filter: drop-shadow(2px 3px 0 var(--pixel-shadow));
 }
 .multiplayer-page
@@ -103,18 +94,14 @@
     :focus,
     [aria-expanded="true"]
   ):not(:disabled) {
-  transform: translateY(-2px);
   filter: drop-shadow(2px 3px 0 var(--pixel-shadow))
     drop-shadow(0 2px 0 var(--accent))
     drop-shadow(0 0 5px color-mix(in srgb, var(--accent), transparent 75%));
 }
 .multiplayer-page .pixel-input:focus:not(:disabled) {
-  animation:
-    multiplayer-control-in 320ms var(--multiplayer-motion-easing),
-    multiplayer-field-focus 280ms var(--multiplayer-motion-easing);
+  animation: multiplayer-field-focus 280ms var(--multiplayer-motion-easing);
 }
 .multiplayer-page .pixel-select-trigger:active:not(:disabled) {
-  transform: translateY(1px);
   scale: 0.98;
   transition-duration: 90ms;
 }
@@ -148,21 +135,12 @@
 .multiplayer-page .tab-items > button:disabled .tab-content {
   opacity: 0.46;
 }
-.multiplayer-page
-  .tab-items
-  > button:is(:hover, :focus-visible):not(:disabled)
-  .tab-content {
-  transform: translateY(-2px);
-}
 .multiplayer-page .tab-items > button:active:not(:disabled) .tab-content {
-  transform: translateY(1px);
   scale: 0.97;
   transition-duration: 90ms;
 }
 .multiplayer-page .tab-items > button[aria-selected="true"] .tab-content {
-  animation:
-    multiplayer-control-in 320ms var(--multiplayer-motion-easing),
-    multiplayer-field-focus 280ms var(--multiplayer-motion-easing);
+  animation: multiplayer-field-focus 280ms var(--multiplayer-motion-easing);
 }
 .multiplayer-page .pixel-select-value.is-changing {
   animation: multiplayer-control-in 240ms var(--multiplayer-motion-easing);
@@ -308,7 +286,6 @@
 .multiplayer-invite-cell:hover,
 .multiplayer-invite-cell[data-active="true"] {
   --pixel-field-border: var(--px-frame-active-color);
-  transform: translateY(-2px);
   filter: drop-shadow(2px 2px 0 var(--pixel-shadow))
     drop-shadow(0 2px 0 var(--accent));
 }
@@ -586,7 +563,6 @@
 }
 .multiplayer-field:focus-within label {
   color: var(--accent);
-  transform: translateX(3px);
 }
 .multiplayer-field :is(input, textarea) {
   width: 100%;

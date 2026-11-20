@@ -12,6 +12,9 @@ use std::sync::Mutex;
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub schema_version: u32,
+    // Existing configurations predate the tour; only fresh defaults opt in.
+    #[serde(default = "existing_onboarding_version")]
+    pub onboarding_version: u32,
     pub game_dirs: Vec<GameDirectory>,
     pub active_dir: String,
     pub active_version: String,
@@ -46,6 +49,8 @@ pub struct Settings {
     pub accent: String,
     pub background_type: String,
     pub background: String,
+    pub background_overlay_opacity: u8,
+    pub background_blur: u8,
     pub hardware_acceleration: bool,
     pub home_clean_mode: bool,
     pub home_notice_layout: String,
@@ -57,6 +62,7 @@ pub struct Settings {
     pub download_task_display: String,
     pub minecraft_download_source: MinecraftDownloadSource,
     pub download_concurrency: usize,
+    pub download_connection_limit: usize,
     pub download_cache_dir: String,
     pub microsoft_client_id: String,
     pub close_on_launch: bool,
@@ -67,6 +73,10 @@ pub struct Settings {
 pub struct GameDirectory {
     pub name: String,
     pub path: String,
+}
+
+fn existing_onboarding_version() -> u32 {
+    1
 }
 
 impl Default for Settings {
@@ -84,6 +94,7 @@ impl Default for Settings {
         let path = default_dir.to_string_lossy().into_owned();
         Self {
             schema_version: 1,
+            onboarding_version: 0,
             game_dirs: vec![GameDirectory {
                 name: "默认游戏目录".into(),
                 path: path.clone(),
@@ -121,6 +132,8 @@ impl Default for Settings {
             accent: "forest".into(),
             background_type: "none".into(),
             background: String::new(),
+            background_overlay_opacity: 65,
+            background_blur: 0,
             hardware_acceleration: true,
             home_clean_mode: false,
             home_notice_layout: "masonry".into(),
@@ -132,6 +145,7 @@ impl Default for Settings {
             download_task_display: "always".into(),
             minecraft_download_source: MinecraftDownloadSource::Auto,
             download_concurrency: 8,
+            download_connection_limit: 16,
             download_cache_dir: String::new(),
             microsoft_client_id: crate::brand::environment("MICROSOFT_CLIENT_ID")
                 .and_then(|value| value.into_string().ok())
@@ -175,6 +189,9 @@ impl Settings {
         if !(1..=32).contains(&self.download_concurrency) {
             bail!("下载并发必须在 1–32 之间");
         }
+        if !(1..=32).contains(&self.download_connection_limit) {
+            bail!("同时连接数必须在 1–32 之间");
+        }
         if !self.download_cache_dir.is_empty() && !Path::new(&self.download_cache_dir).is_absolute()
         {
             bail!("下载缓存文件夹必须是绝对路径");
@@ -187,6 +204,12 @@ impl Settings {
         }
         if !["none", "default", "local", "remote"].contains(&self.background_type.as_str()) {
             bail!("未知背景类型");
+        }
+        if self.background_overlay_opacity > 100 {
+            bail!("背景遮罩不透明度必须在 0–100 之间");
+        }
+        if self.background_blur > 30 {
+            bail!("背景虚化程度必须在 0–30 之间");
         }
         if !["active", "always", "off"].contains(&self.download_task_display.as_str()) {
             bail!("未知下载任务显示方式");
@@ -276,7 +299,10 @@ impl ConfigStore {
 
 /// Parse old settings without opening any referenced game files or altering them.
 pub fn import_legacy(value: &Value, base: &Path) -> Settings {
-    let mut s = Settings::default();
+    let mut s = Settings {
+        onboarding_version: existing_onboarding_version(),
+        ..Settings::default()
+    };
     let game = &value["gameArgs"];
     s.auto_memory = game["memory"]["auto"].as_bool().unwrap_or(true);
     s.memory_mb = game["memory"]["value"]
@@ -373,6 +399,97 @@ pub fn import_legacy(value: &Value, base: &Path) -> Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn onboarding_only_prompts_fresh_configs_and_persists_dismissal() {
+        let directory = match std::env::var_os("SFMCL_T_TEST_ARTIFACT_DIR") {
+            Some(root) => tempfile::Builder::new()
+                .prefix("onboarding-config-")
+                .tempdir_in(root)
+                .unwrap(),
+            None => tempfile::tempdir().unwrap(),
+        };
+        let store = ConfigStore::open(directory.path()).unwrap();
+        let mut settings = store.get();
+        assert_eq!(settings.onboarding_version, 0);
+        store.save(settings.clone()).unwrap();
+        assert_eq!(
+            ConfigStore::open(directory.path())
+                .unwrap()
+                .get()
+                .onboarding_version,
+            0
+        );
+        settings.onboarding_version = 1;
+        store.save(settings).unwrap();
+        assert_eq!(
+            ConfigStore::open(directory.path())
+                .unwrap()
+                .get()
+                .onboarding_version,
+            1
+        );
+        // An upgraded user can have no players, versions or explicit game directory.
+        std::fs::write(directory.path().join("settings.json"), "{}").unwrap();
+        assert_eq!(
+            ConfigStore::open(directory.path())
+                .unwrap()
+                .get()
+                .onboarding_version,
+            1
+        );
+        assert_eq!(
+            import_legacy(&serde_json::json!({}), directory.path()).onboarding_version,
+            1
+        );
+    }
+    #[test]
+    fn background_effects_keep_old_defaults_persist_and_validate() {
+        let mut settings: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(settings.background_overlay_opacity, 65);
+        assert_eq!(settings.background_blur, 0);
+        let directory = match std::env::var_os("SFMCL_T_TEST_ARTIFACT_DIR") {
+            Some(root) => tempfile::Builder::new()
+                .prefix("background-config-")
+                .tempdir_in(root)
+                .unwrap(),
+            None => tempfile::tempdir().unwrap(),
+        };
+        let store = ConfigStore::open(directory.path()).unwrap();
+        for (opacity, blur) in [(0, 0), (100, 30), (42, 12)] {
+            settings.background_overlay_opacity = opacity;
+            settings.background_blur = blur;
+            store.save(settings.clone()).unwrap();
+            let loaded = ConfigStore::open(directory.path()).unwrap().get();
+            assert_eq!(loaded.background_overlay_opacity, opacity);
+            assert_eq!(loaded.background_blur, blur);
+        }
+        for (opacity, blur) in [(101, 0), (65, 31)] {
+            settings.background_overlay_opacity = opacity;
+            settings.background_blur = blur;
+            assert!(store.save(settings.clone()).is_err());
+        }
+        assert_eq!(store.get().background_overlay_opacity, 42);
+        assert_eq!(store.get().background_blur, 12);
+    }
+    #[test]
+    fn connection_budget_defaults_persists_and_validates_separately() {
+        let mut settings: Settings = serde_json::from_str("{\"downloadConcurrency\":2}").unwrap();
+        assert_eq!(settings.download_connection_limit, 16);
+        let directory = tempfile::tempdir().unwrap();
+        let store = ConfigStore::open(directory.path()).unwrap();
+        for limit in [1, 2, 4, 8, 10, 16, 32] {
+            settings.download_connection_limit = limit;
+            store.save(settings.clone()).unwrap();
+            let loaded = ConfigStore::open(directory.path()).unwrap().get();
+            assert_eq!(loaded.download_connection_limit, limit);
+            assert_eq!(loaded.download_concurrency, 2);
+        }
+        for limit in [0, 33] {
+            settings.download_connection_limit = limit;
+            assert!(store.save(settings.clone()).is_err());
+        }
+        assert_eq!(store.get().download_connection_limit, 32);
+    }
     #[test]
     fn fresh_settings_use_the_package_default_game_directory() {
         let expected = if cfg!(feature = "single-file") {

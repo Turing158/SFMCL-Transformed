@@ -52,6 +52,7 @@ export type GameSettingGroup = keyof GameSettingGroups;
 export type HomeNoticeLayout = "single" | "parallel" | "masonry";
 export interface Settings extends GameSettings {
   schemaVersion: number;
+  onboardingVersion?: number;
   gameDirs: { name: string; path: string }[];
   activeDir: string;
   activeVersion: string;
@@ -60,6 +61,8 @@ export interface Settings extends GameSettings {
   accent: string;
   backgroundType: string;
   background: string;
+  backgroundOverlayOpacity: number;
+  backgroundBlur: number;
   hardwareAcceleration: boolean;
   homeCleanMode: boolean;
   homeNoticeLayout: HomeNoticeLayout;
@@ -71,6 +74,7 @@ export interface Settings extends GameSettings {
   downloadTaskDisplay: string;
   minecraftDownloadSource: "auto" | "official" | "bmclapi";
   downloadConcurrency: number;
+  downloadConnectionLimit: number;
   downloadCacheDir: string;
   microsoftClientId: string;
   closeOnLaunch: boolean;

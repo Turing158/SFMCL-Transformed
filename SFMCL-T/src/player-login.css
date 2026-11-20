@@ -414,11 +414,8 @@
 :is(.players-microsoft-form, .players-littleskin-form)
   .device-code:is(:hover, :focus-visible)
   .players-device-code-text {
-  transform: translateY(-1px) scale(1.025);
+  transform: scale(1.025);
   text-shadow: 0 2px 0 color-mix(in srgb, var(--accent), transparent 85%);
-}
-.players-auth-open:is(:hover, :focus-visible) > span {
-  transform: translateX(2px);
 }
 .players-login-status {
   display: flex;
@@ -452,7 +449,6 @@
   isolation: isolate;
   min-width: 0;
   flex-direction: column;
-  transition: transform 180ms ease;
 }
 .players-login-steps .steps li::before {
   content: "";
@@ -470,9 +466,6 @@
     transform 180ms ease,
     color 180ms ease;
 }
-.players-login-steps .steps li:hover {
-  transform: translateY(-2px);
-}
 .players-login-steps .steps li:hover::before {
   opacity: 1;
 }
@@ -482,7 +475,6 @@
 }
 .players-login-steps .steps li:hover :is(strong, small) {
   color: var(--accent);
-  transform: translateX(2px);
 }
 .players-login-steps .steps li.failed:hover {
   --soft: var(--surface-danger-bg);

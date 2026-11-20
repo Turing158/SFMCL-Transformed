@@ -44,10 +44,25 @@ const shot = async (name, target = page) => {
 const press = async (name, button) => {
   await page.mouse.move(0, 0);
   await button.evaluate((element) => element.blur());
-  // Measure from rest after navigation, since player buttons also animate on hover.
-  await page.waitForTimeout(300);
-  const before = await button.boundingBox();
+  // Check the control's own translation; its parent may still scale on hover.
+  const motion = (element) => {
+    const style = getComputedStyle(element);
+    const matrix = new DOMMatrix(style.transform);
+    return {
+      x: matrix.m41,
+      y: matrix.m42,
+      translate: style.translate,
+      scale: style.scale === "none" ? 1 : Number(style.scale),
+    };
+  };
   await button.hover();
+  await expect
+    .poll(() => button.evaluate(motion))
+    .toMatchObject({
+      x: 0,
+      y: 0,
+      translate: "none",
+    });
   await page.mouse.down();
   const animated = await button.evaluate(
     (el) =>
@@ -55,19 +70,14 @@ const press = async (name, button) => {
         ".version-management, .version-settings-page, .local-resources",
       ),
   );
-  // Launch controls return to their resting size while held (launch-dock spec).
-  const launchControl = await button.evaluate(
-    (el) => !!el.closest(".launch-actions"),
-  );
   await expect
-    .poll(async () => (await button.boundingBox()).y)
-    .toBeCloseTo(
-      before.y + (launchControl ? 0 : animated ? 1 + before.height * 0.02 : 2),
-      1,
-    );
-  const after = await button.boundingBox();
-  expect(after.width).toBeCloseTo(before.width * (animated ? 0.96 : 1), 1);
-  expect(after.height).toBeCloseTo(before.height * (animated ? 0.96 : 1), 1);
+    .poll(() => button.evaluate(motion))
+    .toEqual({
+      x: 0,
+      y: 0,
+      translate: "none",
+      scale: animated ? 0.96 : 1,
+    });
   await shot(`pressed-${name}`, button);
   await page.mouse.move(0, 0);
   await page.mouse.up();
@@ -163,7 +173,7 @@ try {
     fabric.getByRole("button", { name: "选择 1.20.1-Fabric", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   checks.push(
-    "Buttons retain press feedback; version controls animate scale and travel; player and version selection still update the app",
+    "Buttons stay in place on press; version controls retain scale feedback; player and version selection still update the app",
   );
 
   await nav("设置");

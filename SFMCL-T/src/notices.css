@@ -135,7 +135,7 @@ body[data-notice-dragging="true"] * {
   transform: scale(1.06);
 }
 .icon-button.notice-refresh:active:not(:disabled) {
-  transform: translateY(2px) scale(0.96);
+  transform: scale(0.96);
   transition-duration: 90ms;
 }
 .notice-refresh > .surface-frame::before,
@@ -194,7 +194,7 @@ body[data-notice-dragging="true"] * {
 .notice-remove-motion {
   display: flex;
   opacity: 0;
-  transform: translateY(3px) scale(0.72);
+  transform: scale(0.72);
   pointer-events: none;
   transition:
     opacity 180ms ease,
@@ -202,7 +202,7 @@ body[data-notice-dragging="true"] * {
 }
 .notice-heading[data-remove-visible="true"] .notice-remove-motion {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: scale(1);
   pointer-events: auto;
 }
 .notice-control .notice-remove {

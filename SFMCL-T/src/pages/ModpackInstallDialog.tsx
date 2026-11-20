@@ -1,3 +1,4 @@
+import { useSessionState } from "../windowSession";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   Download,
@@ -45,23 +46,38 @@ export function ModpackInstallDialog({
   const app = useApp();
   const settings = app.data.settings;
   const rootSelectId = useId();
-  const [mode, setMode] = useState("install");
+  const [mode, setMode] = useSessionState(
+    "ModpackInstallDialog.mode",
+    "install",
+  );
   const tabContent = useTabContentTransition(mode === "install" ? 0 : 1);
-  const [root, setRoot] = useState(
+  const [root, setRoot] = useSessionState(
+    "ModpackInstallDialog.root",
     settings.activeDir || settings.gameDirs[0]?.path || "",
   );
-  const [name, setName] = useState(
+  const [name, setName] = useSessionState(
+    "ModpackInstallDialog.name",
     modpackName(
       initialSource?.inspection.name ?? title,
       initialSource?.inspection.version ?? resource?.version,
     ),
   );
-  const [path, setPath] = useState(initialSource?.path ?? "");
-  const [directory, setDirectory] = useState("");
-  const [inspection, setInspection] = useState<ModpackInspection | null>(
+  const [path, setPath] = useSessionState(
+    "ModpackInstallDialog.path",
+    initialSource?.path ?? "",
+  );
+  const [directory, setDirectory] = useSessionState(
+    "ModpackInstallDialog.directory",
+    "",
+  );
+  const [inspection, setInspection] = useSessionState<ModpackInspection | null>(
+    "ModpackInstallDialog.inspection",
     initialSource?.inspection ?? null,
   );
-  const [includeOptional, setIncludeOptional] = useState(false);
+  const [includeOptional, setIncludeOptional] = useSessionState(
+    "ModpackInstallDialog.includeOptional",
+    false,
+  );
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
   const token = useRef<string | null>(initialSource?.inspection.token ?? null);

@@ -413,12 +413,12 @@ try {
     exact: true,
   });
   await option.hover();
-  await expect(option.locator("span")).toHaveCSS("translate", /^2px(?: 0px)?$/);
-  await expect(card("OptiFine")).toHaveCSS("translate", "0px -2px");
+  await expect(option.locator("span")).toHaveCSS("translate", "none");
+  await expect(card("OptiFine")).toHaveCSS("translate", "none");
   await settle();
   await page.screenshot({ path: `${evidence}/optifine-expanded.png` });
   checks.push(
-    "375/850/1120/1440px 明暗主题无横向溢出，组件卡片与已选版本都有 hover 动画",
+    "375/850/1120/1440px 明暗主题无横向溢出，组件卡片与已选版本 hover 时位置稳定",
   );
   expect(errors).toEqual([]);
   await writeFile(

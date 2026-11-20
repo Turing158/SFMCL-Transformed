@@ -1,3 +1,4 @@
+import { useSessionState } from "../windowSession";
 import { useEffect, useRef, useState } from "react";
 import { Globe, LoaderCircle } from "lucide-react";
 import { api } from "../api";
@@ -20,15 +21,27 @@ export function PlayerYggdrasilLogin({
 }) {
   const app = useApp();
   const pageActive = usePageActive();
-  const [server, setServer] = useState(importedServer ?? "");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [login, setLogin] = useState<Login | null>(null);
+  const [server, setServer] = useSessionState(
+    "PlayerYggdrasilLogin.server",
+    importedServer ?? "",
+  );
+  const [username, setUsername] = useSessionState(
+    "PlayerYggdrasilLogin.username",
+    "",
+  );
+  const [password, setPassword] = useSessionState(
+    "PlayerYggdrasilLogin.password",
+    "",
+  );
+  const [login, setLogin] = useSessionState<Login | null>(
+    "PlayerYggdrasilLogin.login",
+    null,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const generation = useRef(0);
   const running = useRef(false);
-  const session = useRef("");
+  const session = useRef(login?.sessionId ?? "");
   const visible = useRef(pageActive);
   visible.current = pageActive;
   const discard = (id: string) => {
@@ -36,9 +49,16 @@ export function PlayerYggdrasilLogin({
       void api("players.yggdrasil.cancel", { sessionId: id }).catch(() => {});
   };
 
+  const previousLoginView = useRef({ pageActive, method });
   useEffect(() => {
-    setPassword("");
-    setLogin(null);
+    if (
+      previousLoginView.current.pageActive !== pageActive ||
+      previousLoginView.current.method !== method
+    ) {
+      setPassword("");
+      setLogin(null);
+    }
+    previousLoginView.current = { pageActive, method };
     setSaving(false);
     setError("");
     running.current = false;

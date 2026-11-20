@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useSessionChangeEffect, useSessionState } from "../windowSession";
+import { useEffect, useRef } from "react";
 import { Download, FolderOpen } from "lucide-react";
 import { Input, Select } from "../controls";
 import { Button, PixelFrame } from "../components";
@@ -79,13 +80,22 @@ export function MinecraftInstallPage({
 }) {
   const app = useApp();
   const settings = app.data.settings;
-  const [directory, setDirectory] = useState<string | null>(null);
+  const [directory, setDirectory] = useSessionState<string | null>(
+    "MinecraftInstallPage.directory",
+    null,
+  );
   const root =
     directory ?? (settings.activeDir || settings.gameDirs[0]?.path || "");
-  const [name, setName] = useState(version.id);
-  const [selection, setSelection] = useState(emptyInstallSelection);
+  const [name, setName] = useSessionState(
+    "MinecraftInstallPage.name",
+    version.id,
+  );
+  const [selection, setSelection] = useSessionState(
+    "MinecraftInstallPage.selection",
+    emptyInstallSelection,
+  );
   const automaticName = installVersionName(version.id, selection);
-  useEffect(() => {
+  useSessionChangeEffect(() => {
     setName(automaticName);
   }, [automaticName]);
   const { catalogs, retry } = useInstallCatalog(version.id);

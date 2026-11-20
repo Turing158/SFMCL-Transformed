@@ -47,8 +47,10 @@ impl WindowState {
 }
 
 pub fn show(app: &tauri::AppHandle) -> tauri::Result<()> {
-    if let Some(window) = app.get_webview_window("main") {
-        crate::window_motion::request(&window, crate::window_motion::Action::Show)?;
+    if !crate::window_session::show(app)? {
+        if let Some(window) = app.get_webview_window("main") {
+            crate::window_motion::request(&window, crate::window_motion::Action::Show)?;
+        }
     }
     app.state::<LaunchWindows>()
         .0
@@ -79,6 +81,9 @@ pub fn quit(app: tauri::AppHandle) {
 
 fn notify_quit(app: &tauri::AppHandle, event: QuitEvent) -> tauri::Result<()> {
     // Tray exits must restore the window before showing the in-app dialog.
+    if crate::window_session::queue_quit(app, serde_json::to_value(&event)?) {
+        return show(app);
+    }
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| tauri::Error::AssetNotFound("启动器主窗口".into()))?;
@@ -179,21 +184,26 @@ pub fn event(app: &tauri::AppHandle, id: &str, event: LaunchEvent) -> tauri::Res
             if action == "keep" {
                 return Ok(());
             }
-            let Some(window) = app.get_webview_window("main") else {
-                return Ok(());
-            };
-            let mut state = state.0.lock().unwrap_or_else(|e| e.into_inner());
             if action == "tray" {
                 let tray = app
                     .tray_by_id("launcher")
                     .ok_or_else(|| tauri::Error::AssetNotFound("启动器托盘".into()))?;
-                // Never hide the only window before a recoverable tray icon exists.
+                // Keep a recovery entry before releasing the main WebView.
                 tray.set_visible(true)?;
-                crate::window_motion::request(&window, crate::window_motion::Action::Hide)?;
-            } else {
+                state
+                    .0
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .started(id, restore);
+                crate::window_session::suspend(app)?;
+            } else if let Some(window) = app.get_webview_window("main") {
                 crate::window_motion::request(&window, crate::window_motion::Action::Minimize)?;
+                state
+                    .0
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .started(id, restore);
             }
-            state.started(id, restore);
         }
         LaunchEvent::Exited => {
             let restore = {

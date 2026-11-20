@@ -1,3 +1,4 @@
+import { useSessionState } from "./windowSession";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
@@ -140,7 +141,10 @@ function CustomAnnouncement({
 }: {
   widget: Extract<HomeWidget, { type: "announcement" }>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useSessionState(
+    `HomeContent.announcement.${widget.id}`,
+    false,
+  );
   const id = useId();
   return (
     <article
@@ -297,8 +301,8 @@ export function HomeContent({
   const app = useApp();
   const active = usePageActive();
   const saved = useHomeContent(active);
-  const [editing, setEditing] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useSessionState("HomeContent.editing", false);
+  const [adding, setAdding] = useSessionState("HomeContent.adding", false);
   const migrated = useRef("");
   const previousOrder = useMemo(() => {
     try {
@@ -624,11 +628,11 @@ function ComponentLibrary({
   onClose: () => void;
 }) {
   const id = useId();
-  const [tab, setTab] = useState("components");
+  const [tab, setTab] = useSessionState("HomeContent.libraryTab", "components");
   const tabContent = useTabContentTransition(
     ["components", "announcement", "info"].indexOf(tab),
   );
-  const [drafts, setDrafts] = useState({
+  const [drafts, setDrafts] = useSessionState("HomeContent.libraryDrafts", {
     announcement: { title: "", content: "", note: "" },
     info: { title: "", content: "", note: "" },
   });
@@ -815,7 +819,9 @@ function ComponentLibrary({
                     value={draft.title}
                     maxLength={120}
                     disabled={content.saving}
-                    onChange={(event) => setDraft({ title: event.target.value })}
+                    onChange={(event) =>
+                      setDraft({ title: event.target.value })
+                    }
                   />
                 </label>
                 {customType === "info" && (
@@ -825,7 +831,9 @@ function ComponentLibrary({
                       value={draft.note}
                       maxLength={120}
                       disabled={content.saving}
-                      onChange={(event) => setDraft({ note: event.target.value })}
+                      onChange={(event) =>
+                        setDraft({ note: event.target.value })
+                      }
                     />
                   </label>
                 )}

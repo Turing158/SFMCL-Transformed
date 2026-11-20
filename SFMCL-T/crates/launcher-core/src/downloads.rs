@@ -1,5 +1,7 @@
 use crate::paths::{atomic_write, safe_join};
 mod concurrency;
+pub(crate) mod connections;
+mod segmented;
 use anyhow::{anyhow, bail, Context, Result};
 use futures_util::{stream, StreamExt};
 use reqwest::{header, Client, StatusCode};
@@ -14,7 +16,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     sync::Mutex as AsyncMutex,
     task::JoinHandle,
 };
@@ -226,6 +228,10 @@ impl DownloadManager {
 
     pub fn set_concurrency(&self, concurrency: usize) {
         self.concurrency.set_limit(concurrency);
+    }
+
+    pub fn set_connection_limit(&self, limit: usize) {
+        self.sources.connections.set_limit(limit);
     }
 
     /// Applies only to new batches; changing this never relocates active partials.
@@ -604,7 +610,8 @@ impl DownloadManager {
                         return Ok(());
                     }
                     let candidates = manager.sources.candidates(&spec.url);
-                    let ordered = match manager.sources.order(&manager.client, &candidates, &cancel).await {
+                    let group = format!("{batch_id}:{index}");
+                    let ordered = match manager.sources.order_for(&manager.client, &candidates, &cancel, &group).await {
                         Ok(urls) => urls,
                         Err(_) => vec![spec.url.clone()],
                     };
@@ -615,7 +622,8 @@ impl DownloadManager {
                         batch.change(|s| { s.files[index].attempts += 1; });
                         let mut selected = spec.clone();
                         selected.url = ordered[attempt % ordered.len()].clone();
-                        outcome = transfer(&manager.client, &root, cache_dir.as_deref(), &batch_id, &selected, &cancel, |bytes, total| {
+                        let transfer = Transfer { client: &manager.client, connections: &manager.sources.connections, group: &group, root: &root, cache: cache_dir.as_deref(), id: &batch_id, spec: &selected, cancel: &cancel };
+                        outcome = segmented::transfer(&transfer, &|bytes, total| {
                             batch.change(|s| { s.files[index].downloaded = bytes; s.files[index].total = total; });
                         }).await;
                         if outcome.is_ok() || cancel.is_cancelled() { break; }
@@ -680,14 +688,20 @@ fn clear_temporary_files(snapshot: &DownloadSnapshot) -> Result<()> {
     for f in &snapshot.files {
         let part = temporary_relative_path(snapshot.cache_dir.is_some(), &snapshot.id, &f.spec);
         let cache_root = snapshot.cache_dir.as_deref().unwrap_or(&snapshot.root);
-        for (root, path) in [
+        let mut paths = vec![
             (cache_root, part.clone()),
             (cache_root, part.with_extension("part.json")),
             (
                 snapshot.root.as_path(),
                 staging_relative_path(&snapshot.id, &f.spec),
             ),
-        ] {
+        ];
+        paths.extend(
+            segmented::relative_paths(&part)
+                .into_iter()
+                .map(|path| (cache_root, path)),
+        );
+        for (root, path) in paths {
             directories
                 .entry((
                     root.to_path_buf(),
@@ -875,21 +889,42 @@ async fn reuse_local_file(
         cancel_check(&cancel)?;
         let _ = std::fs::remove_file(part);
         let _ = std::fs::remove_file(meta);
+        segmented::clear(&root, cache.as_deref(), &id, &spec)?;
         Ok(Some(bytes))
     })
     .await
     .context("本地文件校验任务失败")?
 }
 
-async fn transfer(
-    client: &Client,
-    root: &Path,
-    cache: Option<&Path>,
-    id: &str,
-    spec: &DownloadSpec,
-    cancel: &CancellationToken,
+struct Transfer<'a> {
+    client: &'a Client,
+    connections: &'a Arc<connections::Connections>,
+    group: &'a str,
+    root: &'a Path,
+    cache: Option<&'a Path>,
+    id: &'a str,
+    spec: &'a DownloadSpec,
+    cancel: &'a CancellationToken,
+}
+impl Transfer<'_> {
+    async fn permit(&self) -> Result<connections::Permit> {
+        tokio::select! { biased; _ = self.cancel.cancelled() => bail!("已暂停"), permit = self.connections.acquire(self.group) => Ok(permit) }
+    }
+}
+async fn transfer_plain(
+    transfer: &Transfer<'_>,
+    supplied: Option<(reqwest::Response, connections::Permit)>,
     progress: impl Fn(u64, Option<u64>),
 ) -> Result<()> {
+    let Transfer {
+        client,
+        root,
+        cache,
+        id,
+        spec,
+        cancel,
+        ..
+    } = *transfer;
     let target = safe_join(root, &spec.path)?;
     // Validate launcher-owned temporary paths as well as the final target.
     let (part, meta) = temporary_paths(root, cache, id, spec)?;
@@ -930,13 +965,20 @@ async fn transfer(
             request = request.header(header::IF_RANGE, validator);
         }
     }
-    let response = tokio::select! { biased; _ = cancel.cancelled() => bail!("已暂停"), r = request.send() => r? };
+    let (response, permit) = if let Some(supplied) = supplied {
+        supplied
+    } else {
+        let permit = transfer.permit().await?;
+        let response = tokio::select! { biased; _ = cancel.cancelled() => bail!("已暂停"), r = request.send() => r? };
+        (response, permit)
+    };
     if response.status() == StatusCode::RANGE_NOT_SATISFIABLE && offset > 0 {
         tokio::fs::remove_file(&part).await?;
         let _ = tokio::fs::remove_file(&meta).await;
         bail!("服务器拒绝断点，将重新下载");
     }
     let response = response.error_for_status()?;
+    segmented::identity(&response)?;
     let total = if response.status() == StatusCode::PARTIAL_CONTENT {
         let header = response
             .headers()
@@ -944,7 +986,13 @@ async fn transfer(
             .and_then(|h| h.to_str().ok())
             .context("断点响应缺少 Content-Range")?;
         let (start, end, total) = parse_content_range(header)?;
-        if start != offset || end < start || end >= total {
+        if start != offset
+            || end < start
+            || end.checked_add(1) != Some(total)
+            || response
+                .content_length()
+                .is_some_and(|length| length != end - start + 1)
+        {
             bail!("服务器返回了错误的断点范围");
         }
         if let Some(size) = spec.size {
@@ -1003,6 +1051,8 @@ async fn transfer(
             bail!("响应数据超过预期长度");
         }
     }
+    drop(body);
+    drop(permit);
     file.flush().await?;
     file.sync_all().await?;
     drop(file);

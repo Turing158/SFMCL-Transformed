@@ -823,19 +823,13 @@ input.pixel-range-input:focus-visible::-moz-range-thumb {
 .pixel-search:not([data-disabled]):not(:has(input:disabled)):hover,
 .catalog-search:not(:has(input:disabled)):hover {
   --pixel-field-border: var(--px-frame-active-color);
-  transform: translateY(-1px);
   --pixel-search-shadow: drop-shadow(2px 3px 0 var(--pixel-shadow));
 }
 .pixel-search:not([data-disabled]):not(:has(input:disabled)):focus-within,
 .catalog-search:not(:has(input:disabled)):focus-within {
   --pixel-field-border: var(--px-frame-active-color);
-  transform: translateY(-1px);
   --pixel-search-shadow: drop-shadow(2px 2px 0 var(--pixel-shadow))
     drop-shadow(0 2px 0 var(--accent));
-}
-.pixel-search:not([data-disabled]):not(:has(input:disabled)):active,
-.catalog-search:not(:has(input:disabled)):active {
-  transform: translateY(1px);
 }
 .pixel-search-symbol {
   --pixel-background: var(--pixel-background-badge);
@@ -917,7 +911,6 @@ input.pixel-range-input:focus-visible::-moz-range-thumb {
 }
 :is(.pixel-search-clear, .catalog-search-submit):active:not(:disabled) {
   scale: 0.96;
-  transform: translateY(1px);
 }
 :is(.pixel-search-clear, .catalog-search-submit) > svg {
   transition: transform 180ms ease;

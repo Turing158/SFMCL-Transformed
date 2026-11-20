@@ -328,6 +328,7 @@ struct Measurement {
 type Measurements = HashMap<String, Measurement>;
 
 pub struct SourceSelector {
+    pub(crate) connections: Arc<crate::downloads::connections::Connections>,
     mode: Mutex<MinecraftDownloadSource>,
     cache: AsyncMutex<HashMap<String, Arc<AsyncMutex<Measurements>>>>,
     alternatives: Mutex<HashMap<String, Vec<String>>>,
@@ -335,6 +336,7 @@ pub struct SourceSelector {
 impl Default for SourceSelector {
     fn default() -> Self {
         Self {
+            connections: crate::downloads::connections::Connections::new(16),
             mode: Mutex::new(MinecraftDownloadSource::Auto),
             cache: AsyncMutex::new(HashMap::new()),
             alternatives: Mutex::new(HashMap::new()),
@@ -431,6 +433,16 @@ impl SourceSelector {
         self.order_with(urls, cancel, |url| Ok(client.get(url)))
             .await
     }
+    pub(crate) async fn order_for(
+        &self,
+        client: &Client,
+        urls: &[String],
+        cancel: &CancellationToken,
+        group: &str,
+    ) -> Result<Vec<String>> {
+        self.order_requests(urls, cancel, |url| Ok(client.get(url)), group)
+            .await
+    }
     /// Probe with the same method, payload and host-specific credentials as the
     /// real API request, so authentication failures do not skew source ranking.
     pub async fn order_with(
@@ -438,6 +450,16 @@ impl SourceSelector {
         urls: &[String],
         cancel: &CancellationToken,
         request: impl Fn(&str) -> Result<RequestBuilder> + Sync,
+    ) -> Result<Vec<String>> {
+        let group = format!("source:{}", urls.join("|"));
+        self.order_requests(urls, cancel, request, &group).await
+    }
+    async fn order_requests(
+        &self,
+        urls: &[String],
+        cancel: &CancellationToken,
+        request: impl Fn(&str) -> Result<RequestBuilder> + Sync,
+        group: &str,
     ) -> Result<Vec<String>> {
         let mut urls = urls.to_vec();
         let mut seen = std::collections::HashSet::new();
@@ -485,6 +507,8 @@ impl SourceSelector {
             .map(|url| {
                 let request = &request;
                 async move {
+                    // Queuing time must not count as source latency or timeout.
+                    let _permit = self.connections.acquire(group).await;
                     let score = tokio::time::timeout(Duration::from_secs(4), async {
                         probe(request(&url)?).await
                     })
@@ -542,6 +566,7 @@ impl SourceSelector {
         let mut error = None;
         for url in ordered {
             let request = async {
+                let _permit = self.connections.acquire(&format!("source:{url}")).await;
                 let response = client
                     .get(&url)
                     .timeout(Duration::from_secs(12))

@@ -1,5 +1,6 @@
+import { useSessionState } from "../windowSession";
 import { SearchField, Select } from "../controls";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId } from "react";
 import {
   Box,
   Download,
@@ -45,10 +46,19 @@ const allDirectories = "__all_directories__";
 export function Versions() {
   const app = useApp();
   const selectionId = useId();
-  const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [loaderFilter, setLoaderFilter] = useState("");
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [query, setQuery] = useSessionState("Versions.query", "");
+  const [typeFilter, setTypeFilter] = useSessionState(
+    "Versions.typeFilter",
+    "all",
+  );
+  const [loaderFilter, setLoaderFilter] = useSessionState(
+    "Versions.loaderFilter",
+    "",
+  );
+  const [favoritesOnly, setFavoritesOnly] = useSessionState(
+    "Versions.favoritesOnly",
+    false,
+  );
   const showAll = app.showAllVersions;
   const setShowAll = app.setShowAllVersions;
   const s = app.data.settings;
@@ -59,13 +69,16 @@ export function Versions() {
         ...version,
         directory: version.directory ?? s.activeDir,
       }));
-  const [view, setView] = useState<"grid" | "list">(() => {
-    try {
-      return localStorage.getItem(viewKey) === "list" ? "list" : "grid";
-    } catch {
-      return "grid";
-    }
-  });
+  const [view, setView] = useSessionState<"grid" | "list">(
+    "Versions.view",
+    () => {
+      try {
+        return localStorage.getItem(viewKey) === "list" ? "list" : "grid";
+      } catch {
+        return "grid";
+      }
+    },
+  );
   useEffect(() => {
     try {
       localStorage.setItem(viewKey, view);
@@ -73,7 +86,10 @@ export function Versions() {
       /* Keep switching available when webview storage is unavailable. */
     }
   }, [view]);
-  const [importPack, setImportPack] = useState(false);
+  const [importPack, setImportPack] = useSessionState(
+    "Versions.importPack",
+    false,
+  );
   const current = app.route;
   const currentVersion = current.detail
     ? (versions.find(
@@ -214,6 +230,7 @@ export function Versions() {
           <button
             className="icon-button has-surface"
             aria-label="添加游戏目录"
+            data-tour="add-directory"
             onClick={() => void app.run(addDir)}
           >
             <PixelFrame />

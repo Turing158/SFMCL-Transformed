@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { failStartup, initializeStartupScreen } from "./startupScreen";
 import { setStartupWindow } from "./startupWindow";
 import { migrateLegacyPreferences } from "./legacyPreferences";
+import { isRestoringInterface } from "./windowSession";
 
 try {
   migrateLegacyPreferences(localStorage);
@@ -48,6 +49,10 @@ if (isTauri()) {
 // the application/CSS. The splash never waits for the main module graph.
 void setStartupWindow("loading")
   .then(() => {
+    if (isRestoringInterface()) {
+      void import("./main").catch(failStartup);
+      return;
+    }
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         void import("./main").catch(failStartup);

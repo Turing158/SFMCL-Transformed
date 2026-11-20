@@ -97,6 +97,7 @@ impl Runtime {
             settings.get().download_concurrency,
         )?;
         downloads.set_cache_directory(&settings.get().download_cache_directory(&directory))?;
+        downloads.set_connection_limit(settings.get().download_connection_limit);
         downloads
             .sources()
             .set_mode(settings.get().minecraft_download_source);
@@ -358,6 +359,8 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             r.downloads
                 .set_concurrency(r.settings.get().download_concurrency);
             r.downloads
+                .set_connection_limit(r.settings.get().download_connection_limit);
+            r.downloads
                 .sources()
                 .set_mode(r.settings.get().minecraft_download_source);
             r.downloads.set_cache_directory(&cache)?;
@@ -381,6 +384,8 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             r.settings.save(settings)?;
             r.downloads
                 .set_concurrency(r.settings.get().download_concurrency);
+            r.downloads
+                .set_connection_limit(r.settings.get().download_connection_limit);
             r.downloads
                 .sources()
                 .set_mode(r.settings.get().minecraft_download_source);

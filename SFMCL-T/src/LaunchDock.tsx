@@ -1,3 +1,4 @@
+import { useSessionState } from "./windowSession";
 import {
   useCallback,
   useEffect,
@@ -108,10 +109,13 @@ export function LaunchDock({
   const app = useApp();
   const tasks = useTasks();
   const settings = app.data.settings;
-  const [collapsedGames, setCollapsedGames] = useState<
+  const [collapsedGames, setCollapsedGames] = useSessionState<
     Record<string, { icon: string; startedAt: number }>
-  >({});
-  const [processesOpen, setProcessesOpen] = useState(false);
+  >("LaunchDock.collapsedGames", {});
+  const [processesOpen, setProcessesOpen] = useSessionState(
+    "LaunchDock.processesOpen",
+    false,
+  );
   const [dragHeight, setDragHeight] = useState<number | null>(null);
   const cardDrag = useRef<CardDrag | null>(null);
   const suppressDragClick = useRef(false);
@@ -130,7 +134,10 @@ export function LaunchDock({
   const player = app.data.players.find(
     (item) => item.uuid === settings.activePlayer,
   );
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useSessionState(
+    "LaunchDock.pickerOpen",
+    false,
+  );
   const [pickerPresent, setPickerPresent] = useState(false);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [progressSnapshot, setProgressSnapshot] = useState({
@@ -959,11 +966,10 @@ function VersionPicker({
   onInstall: () => void;
 }) {
   const app = useApp();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useSessionState("VersionPicker.query", "");
   const panel = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
-  const actionFeedback = useRef<Animation | null>(null);
   const needle = query.trim().toLowerCase();
   const settings = app.data.settings;
   const showAll = app.showAllVersions;
@@ -1025,30 +1031,6 @@ function VersionPicker({
       ?.querySelector<HTMLInputElement>("input")
       ?.focus({ preventScroll: true });
   }, [open]);
-
-  useEffect(() => () => actionFeedback.current?.cancel(), []);
-
-  function activateAction(button: HTMLButtonElement, action: () => void) {
-    if (actionFeedback.current) return;
-    // Finish the short press before navigation unmounts the picker.
-    const animation = button.animate(
-      [
-        { transform: "translateY(0)", easing: "steps(2, end)" },
-        {
-          transform: "translateY(2px)",
-          offset: 1 / 3,
-          easing: "steps(2, end)",
-        },
-        { transform: "translateY(0)" },
-      ],
-      { duration: 180 },
-    );
-    actionFeedback.current = animation;
-    animation.onfinish = () => {
-      actionFeedback.current = null;
-      action();
-    };
-  }
 
   useEffect(() => {
     if (!open) return;
@@ -1227,10 +1209,7 @@ function VersionPicker({
               ? "换一个关键词，或安装一个新版本。"
               : "添加已有游戏目录，或安装一个全新的世界。"}
           </p>
-          <Button
-            disabled={disabled}
-            onClick={(event) => activateAction(event.currentTarget, onInstall)}
-          >
+          <Button disabled={disabled} onClick={onInstall}>
             <Plus size={15} />
             安装新版本
           </Button>

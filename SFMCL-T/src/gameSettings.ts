@@ -123,9 +123,22 @@ export function prepareSettings(draft: Settings, saved: Settings): Settings {
     serverPort: 25565,
     quickPlayEnabled: false,
     quickPlayWorld: "",
+    backgroundOverlayOpacity: validInteger(
+      draft.backgroundOverlayOpacity,
+      0,
+      100,
+    )
+      ? draft.backgroundOverlayOpacity
+      : saved.backgroundOverlayOpacity,
+    backgroundBlur: validInteger(draft.backgroundBlur, 0, 30)
+      ? draft.backgroundBlur
+      : saved.backgroundBlur,
     downloadConcurrency: validInteger(draft.downloadConcurrency, 1, 32)
       ? draft.downloadConcurrency
       : saved.downloadConcurrency,
+    downloadConnectionLimit: validInteger(draft.downloadConnectionLimit, 1, 32)
+      ? draft.downloadConnectionLimit
+      : saved.downloadConnectionLimit,
     downloadCacheDir: absoluteSettingsPath(draft.downloadCacheDir)
       ? draft.downloadCacheDir.trim()
       : saved.downloadCacheDir,

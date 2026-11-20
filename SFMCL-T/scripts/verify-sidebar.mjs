@@ -635,14 +635,14 @@ try {
   await ready();
   await unselected.hover();
   await page.mouse.down();
-  await expect(unselected).toHaveCSS("translate", "0px 2px");
+  await expect(unselected).toHaveCSS("translate", "none");
   expect(
     await unselected.evaluate((el) =>
       getComputedStyle(el).getPropertyValue("--surface-depth").trim(),
     ),
   ).toBe("0px");
   await page.mouse.up();
-  extraChecks.push("选中外观只认 aria-current；按下位移 2px 并收起底座");
+  extraChecks.push("选中外观只认 aria-current；按下保持原位置与底座厚度");
 
   // Eight theme/accent combinations; the current page uses a steady accent fill.
   await ready();

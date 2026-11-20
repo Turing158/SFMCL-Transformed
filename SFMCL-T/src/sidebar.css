@@ -144,8 +144,7 @@
   transition:
     --surface-depth 160ms cubic-bezier(0.32, 0.72, 0, 1),
     color 180ms,
-    opacity 220ms ease,
-    translate 160ms cubic-bezier(0.32, 0.72, 0, 1);
+    opacity 220ms ease;
 }
 .sidebar nav button.has-surface {
   --surface-edge: transparent;
@@ -199,12 +198,6 @@
   --surface-edge: var(--accent-hover);
   --surface-fill: var(--accent-hover);
   color: var(--on-accent);
-}
-.sidebar nav button.has-surface:active,
-.sidebar
-  :is(.profile-button, .sidebar-collapse, .sidebar-task):active:not(:disabled) {
-  --surface-depth: 0px;
-  translate: 0 2px;
 }
 .sidebar nav button:nth-child(2) {
   animation-delay: 35ms;
@@ -453,14 +446,31 @@
   /* Together with the sidebar's 10px gap this leaves the normal 12px spacing. */
   padding-top: 2px;
 }
+@property --sidebar-task-open {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
 .sidebar-downloads {
+  --sidebar-task-open: 1;
   display: grid;
+  grid-template-rows: minmax(
+    0,
+    calc(
+      (var(--button-height) + 4px * var(--rail-open)) * var(--sidebar-task-open)
+    )
+  );
   gap: 0;
   min-width: 0;
-  margin-bottom: 12px;
+  margin-bottom: calc(12px * var(--sidebar-task-open));
+  opacity: var(--sidebar-task-open);
+}
+.sidebar-downloads[data-visible="false"] {
+  pointer-events: none;
 }
 .sidebar .sidebar-task {
   --surface-depth: 0px;
+  align-self: end;
   height: calc(var(--button-height) + 4px * var(--rail-open));
   min-height: calc(var(--button-height) + 4px * var(--rail-open));
   width: calc(
@@ -469,6 +479,9 @@
   margin-inline: auto;
   padding: calc(4px + 2px * var(--rail-open));
   gap: calc(7px * var(--rail-open));
+  transform: translateY(calc(8px * (1 - var(--sidebar-task-open))))
+    scale(calc(0.96 + 0.04 * var(--sidebar-task-open)));
+  transform-origin: center bottom;
 }
 .sidebar .task-copy {
   min-width: 0;

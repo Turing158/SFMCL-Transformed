@@ -1,10 +1,15 @@
 import {
   BookOpen,
+  Box,
   Cloud,
   CodeXml,
   ExternalLink,
   Languages,
   Layers,
+  Network,
+  ShieldCheck,
+  Type,
+  UserRound,
 } from "lucide-react";
 import { external } from "../api";
 import {
@@ -23,14 +28,14 @@ const acknowledgements = [
   {
     name: "Turing158",
     description: "感谢 @Turing158 把我创造出来",
-    url: "https://turing158.github.io/",
+    url: "https://blog.turing158.cc.cd/",
     tone: "blue",
     icon: <CodeXml size={18} />,
   },
   {
     name: "HMCL",
     description: "感谢 @HMCL 提供的模组与整合包中文名称数据",
-    url: "https://github.com/HMCL-dev/HMCL",
+    url: "https://hmcl.huangyuhui.net/",
     tone: "amber",
     icon: <Languages size={17} />,
   },
@@ -47,6 +52,13 @@ const acknowledgements = [
     url: "https://us-west-01.mc-mirror.com/#guide",
     tone: "teal",
     icon: <Layers size={17} />,
+  },
+  {
+    name: "MCIM",
+    description: "感谢 @MCIM 提供的 Modrinth 与 CurseForge 镜像服务",
+    url: "https://www.mcimirror.top/",
+    tone: "teal",
+    icon: <Cloud size={17} />,
   },
   {
     name: "Minecraft中文Wiki",
@@ -68,6 +80,48 @@ const acknowledgements = [
     url: "https://www.curseforge.com/minecraft",
     tone: "orange",
     icon: <img src="/assets/DefaultGameIcon/curseForge.png" alt="" />,
+  },
+  {
+    name: "EasyTier",
+    description: "感谢 @EasyTier 提供的联机组网与代理支持",
+    url: "https://easytier.cn/",
+    tone: "teal",
+    icon: <Network size={17} />,
+  },
+  {
+    name: "Cloudflare / cloudflared",
+    description: "感谢 @Cloudflare 提供的 Cloudflare Tunnel 隧道服务",
+    url: "https://www.cloudflare.com/zh-cn/products/tunnel/",
+    tone: "orange",
+    icon: <Cloud size={17} />,
+  },
+  {
+    name: "LittleSkin",
+    description: "感谢 @LittleSkin 提供的角色授权与外置登录服务",
+    url: "https://littleskin.cn/",
+    tone: "amber",
+    icon: <UserRound size={17} />,
+  },
+  {
+    name: "authlib-injector",
+    description: "感谢 @authlib-injector 提供的第三方账号认证支持",
+    url: "https://authlib-injector.yushi.moe/",
+    tone: "purple",
+    icon: <ShieldCheck size={17} />,
+  },
+  {
+    name: "skinview3d",
+    description: "感谢 @skinview3d 提供的皮肤与披风 3D 预览支持",
+    url: "https://skinview3d-demo.vercel.app/",
+    tone: "green",
+    icon: <Box size={17} />,
+  },
+  {
+    name: "Pixelify Sans",
+    description: "感谢 @Pixelify Sans 提供的像素字体",
+    url: "https://github.com/eifetx/Pixelify-Sans",
+    tone: "blue",
+    icon: <Type size={17} />,
   },
 ];
 

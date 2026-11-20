@@ -1,6 +1,7 @@
 import { createContext, useContext, useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import type { Page } from "./types";
+import { InterfaceScope, restorePageScroll } from "./windowSession";
 
 const PageActivityContext = createContext(true);
 
@@ -26,6 +27,7 @@ export function PageActivity({
 
   useLayoutEffect(() => {
     if (!active) return;
+    if (root.current) restorePageScroll(root.current);
     for (const [element, position] of positions.current) {
       if (!root.current?.contains(element)) {
         positions.current.delete(element);
@@ -54,7 +56,9 @@ export function PageActivity({
           });
         }}
       >
-        {children}
+        <InterfaceScope.Provider value={`${page}:${view}`}>
+          {children}
+        </InterfaceScope.Provider>
       </main>
     </PageActivityContext.Provider>
   );

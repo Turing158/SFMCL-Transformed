@@ -162,23 +162,13 @@ try {
   ).toBeDisabled();
 
   await tag.hover();
-  const hover = await tag.evaluate((element) => {
-    const motion = element
+  await expect(tag).toHaveCSS("translate", "none");
+  const hover = await tag.evaluate((element) =>
+    element
       .getAnimations()
-      .find((animation) => animation.transitionProperty === "translate");
-    if (!motion) throw new Error("Missing tag hover transition");
-    motion.pause();
-    const duration = motion.effect.getTiming().duration;
-    const frames = [0, duration / 2, duration - 0.01].map((time) => {
-      motion.currentTime = time;
-      return getComputedStyle(element).translate;
-    });
-    motion.finish();
-    return frames;
-  });
-  expect(hover[0]).toBe("0px");
-  expect(hover[1]).not.toBe(hover[2]);
-  expect(hover[2]).toBe("0px -2px");
+      .some((animation) => animation.transitionProperty === "translate"),
+  );
+  expect(hover).toBe(false);
 
   const initialWidth = (await tag.boundingBox()).width;
   const expanding = await beginRequest();
@@ -278,7 +268,7 @@ try {
     JSON.stringify({ measurements, errors }, null, 2),
   );
   console.log(
-    "Passed grouped dependency tags, hover motion, spinner presence, gradual expansion and collapse, duplicate prevention, failure/retry, navigation after collapse, long names, light/dark layouts and keyboard navigation with animations preserved under the system reduced-motion preference.",
+    "Passed grouped dependency tags, stable hover position, spinner presence, gradual expansion and collapse, duplicate prevention, failure/retry, navigation after collapse, long names, light/dark layouts and keyboard navigation with animations preserved under the system reduced-motion preference.",
   );
 } catch (error) {
   await page.screenshot({

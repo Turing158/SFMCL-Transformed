@@ -240,6 +240,13 @@ fn update_frame(
     Ok(())
 }
 
+pub fn reset(app: &tauri::AppHandle) {
+    *app.state::<WindowFrame>()
+        .0
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Default::default();
+}
+
 pub fn set_visible(window: &tauri::WebviewWindow, enabled: bool) -> tauri::Result<()> {
     let minimized = window.is_minimized()?;
     let maximized = window.is_maximized()?;

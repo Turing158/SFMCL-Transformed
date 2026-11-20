@@ -1,12 +1,40 @@
+.page[data-page="settings"]:has(.settings-page[data-tab="about"]) {
+  display: flex;
+  flex-direction: column;
+  overflow: clip;
+}
+
+.settings-page[data-tab="about"] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.settings-page[data-tab="about"] > :is(.page-heading, .settings-tabs) {
+  flex-shrink: 0;
+}
+
+.settings-page[data-tab="about"] > .tab-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
 .settings-stack.about-container {
-  container-type: inline-size;
+  container-type: size;
+  flex: 1;
+  min-height: 0;
   width: 100%;
   max-width: 740px;
 }
 
 .about-card.about-layout {
   display: grid;
+  flex: 1;
   grid-template-columns: 218px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
   padding: 0;
 }
 
@@ -15,8 +43,17 @@
   flex-direction: column;
   align-items: center;
   min-width: 0;
-  min-height: 380px;
+  min-height: 0;
   padding: 36px 12px 20px;
+}
+
+.about-brand > * {
+  flex-shrink: 0;
+}
+
+.about-brand > .about-mark {
+  flex-shrink: 1;
+  min-height: 24px;
 }
 
 .about-brand-footer {
@@ -40,8 +77,12 @@
   align-content: start;
   gap: 8px;
   min-width: 0;
-  margin: 20px 0;
-  padding: 0 18px;
+  min-height: 0;
+  margin: 16px 0;
+  padding: 4px 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   border-left: 1px solid var(--line);
   list-style: none;
   text-align: left;
@@ -199,14 +240,72 @@
 
 @container (max-width: 520px) {
   .about-card.about-layout {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 168px minmax(0, 1fr);
+  }
+
+  .about-brand {
+    padding-inline: 8px;
   }
 
   .about-credits {
-    margin: 0 16px 20px;
-    padding: 18px 0 0;
-    border-left: 0;
-    border-top: 1px solid var(--line);
+    padding-inline: 12px;
+  }
+}
+
+@container (max-height: 380px) {
+  .about-brand {
+    padding-top: 20px;
+    padding-bottom: 16px;
+  }
+
+  .about-mark {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 12px;
+  }
+
+  .about-remade-kicker {
+    margin-bottom: 8px;
+  }
+
+  .about-brand-footer {
+    gap: 12px;
+    padding-top: 16px;
+  }
+}
+
+@container (max-height: 300px) {
+  .about-brand {
+    padding-block: 8px;
+  }
+
+  .about-mark {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 6px;
+  }
+
+  .about-remade-kicker {
+    margin-bottom: 4px;
+  }
+
+  .about-brand > .about-full-name {
+    margin-block: 4px;
+  }
+
+  .about-brand-footer {
+    gap: 6px;
+    padding-top: 8px;
+  }
+}
+
+@media (max-height: 560px) {
+  .page[data-page="settings"]:has(.settings-page[data-tab="about"]) {
+    padding-block: 14px;
+  }
+
+  .settings-page[data-tab="about"] > :is(.page-heading, .settings-tabs) {
+    margin-bottom: 14px;
   }
 }
 

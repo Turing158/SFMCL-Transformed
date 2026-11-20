@@ -347,6 +347,8 @@ impl Drop for PendingLaunch {
     }
 }
 
+// Keep the process-launch API aligned with the Java runner's inputs.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_game(
     data: &Path,
     java: &str,

@@ -1,3 +1,4 @@
+import { useSessionState } from "../windowSession";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -83,25 +84,43 @@ export function Resources() {
       ? (app.route.tab ?? "minecraft")
       : "minecraft";
   const isMinecraft = tab === "minecraft";
-  const [filters, setFilters] = useState(initialFilters);
-  const [query, setQuery] = useState("");
-  const [minecraftQuery, setMinecraftQuery] = useState("");
-  const [versionInput, setVersionInput] = useState("");
-  const [view, setView] = useState<ResourceView>(() => {
-    try {
-      return localStorage.getItem(viewKey) === "grid" ? "grid" : "list";
-    } catch {
-      return "list";
-    }
-  });
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useSessionState(
+    "Resources.filters",
+    initialFilters,
+  );
+  const [query, setQuery] = useSessionState("Resources.query", "");
+  const [minecraftQuery, setMinecraftQuery] = useSessionState(
+    "Resources.minecraftQuery",
+    "",
+  );
+  const [versionInput, setVersionInput] = useSessionState(
+    "Resources.versionInput",
+    "",
+  );
+  const [view, setView] = useSessionState<ResourceView>(
+    "Resources.view",
+    () => {
+      try {
+        return localStorage.getItem(viewKey) === "grid" ? "grid" : "list";
+      } catch {
+        return "list";
+      }
+    },
+  );
+  const [filtersOpen, setFiltersOpen] = useSessionState(
+    "Resources.filtersOpen",
+    false,
+  );
   const [categories, setCategories] = useState<{ id: string; name: string }[]>(
     [],
   );
   const [categoryError, setCategoryError] = useState("");
   const [categoryRetry, setCategoryRetry] = useState(0);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [total, setTotal] = useState(0);
+  const [projects, setProjects] = useSessionState<Project[]>(
+    "Resources.projects",
+    [],
+  );
+  const [total, setTotal] = useSessionState("Resources.total", 0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);

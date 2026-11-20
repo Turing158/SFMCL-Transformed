@@ -275,6 +275,12 @@ pub fn update(window: &tauri::WebviewWindow, enabled: bool) -> tauri::Result<()>
     })
 }
 
+pub fn reset() {
+    SHADOW.with(|state| {
+        state.borrow_mut().take();
+    });
+}
+
 pub fn schedule(window: &tauri::WebviewWindow, enabled: bool) -> tauri::Result<()> {
     let owner = window.clone();
     window.run_on_main_thread(move || {

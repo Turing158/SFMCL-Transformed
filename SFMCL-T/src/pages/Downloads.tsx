@@ -1,3 +1,4 @@
+import { useSessionState } from "../windowSession";
 import {
   useEffect,
   useId,
@@ -8,8 +9,11 @@ import {
 } from "react";
 import {
   ArrowDownToLine,
+  Check,
   CheckCircle2,
   ChevronDown,
+  CircleAlert,
+  Clock3,
   FileText,
   Pause,
   Play,
@@ -21,7 +25,6 @@ import { PageHeader } from "../PageHeader";
 import { DownloadMining } from "../DownloadMining";
 import { AnimatedSwap } from "../AnimatedSwap";
 import { useTabContentTransition } from "../useTabContentTransition";
-import { useButtonPressFeedback } from "../useButtonPressFeedback";
 import { useApp } from "../store";
 import { useTasks, useDownloadActions } from "../tasks";
 import { api, bytes, confirmAction, pick, statusLabel } from "../api";
@@ -58,16 +61,42 @@ function JobBadge({ job }: { job: Job }) {
   return <DownloadBadge status={status} label={label} />;
 }
 
+function DownloadFileStatus({ status }: { status: Status }) {
+  const Icon = {
+    completed: Check,
+    running: ArrowDownToLine,
+    pausing: Pause,
+    paused: Pause,
+    failed: CircleAlert,
+    queued: Clock3,
+    cancelled: X,
+  }[status];
+  const label =
+    status === "running"
+      ? "下载中"
+      : status === "failed"
+        ? "失败"
+        : statusLabel[status];
+  return (
+    <span className={`download-file-status ${status}`}>
+      <Icon size={13} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
 export function Downloads() {
   const app = useApp();
   const tasks = useTasks();
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useSessionState("Downloads.filter", "all");
   const tabContent = useTabContentTransition(
     ["all", "active", "completed", "failed"].indexOf(filter),
   );
-  const [fileId, setFileId] = useState<string | null>(null);
-  const [log, setLog] = useState<string | null>(null);
-  const pressFeedback = useButtonPressFeedback("sfmcl-t-download-press");
+  const [fileId, setFileId] = useSessionState<string | null>(
+    "Downloads.fileId",
+    null,
+  );
+  const [log, setLog] = useSessionState<string | null>("Downloads.log", null);
   const active = tasks.downloads.filter((d) =>
     ["running", "paused", "pausing", "queued"].includes(d.status),
   );
@@ -86,7 +115,7 @@ export function Downloads() {
     [tasks.downloads, filter],
   );
   return (
-    <div className="downloads-page" onClickCapture={pressFeedback}>
+    <div className="downloads-page">
       <PageHeader
         icon={<ArrowDownToLine />}
         eyebrow="EVERY BYTE COUNTS"
@@ -428,7 +457,7 @@ function DownloadCard({
           <h3>{d.title}</h3>
           <p>
             {d.completed.toLocaleString()} / {d.fileCount.toLocaleString()}{" "}
-            个文件 · {d.workers} 个工作线程
+            个文件 · {d.workers} 个文件正在下载
             {d.failed > 0 && ` · ${d.failed} 个失败`}
           </p>
         </div>
@@ -548,6 +577,9 @@ function FileDialog({ id, onClose }: { id: string; onClose: () => void }) {
     setError("");
     setOffset(next);
     content.current?.closest(".modal-body")?.scrollTo({ top: 0 });
+    content.current
+      ?.querySelector(".download-file-table-viewport")
+      ?.scrollTo({ top: 0 });
   }
   useEffect(() => {
     let active = true;
@@ -583,72 +615,151 @@ function FileDialog({ id, onClose }: { id: string; onClose: () => void }) {
     >
       <div className="download-file-content" ref={content}>
         {error && <p className="inline-error">{error}</p>}
-        <div className="file-table" aria-busy={loading}>
-          <table>
-            <thead>
-              <tr>
-                <th>文件</th>
-                <th>状态</th>
-                <th>大小 / 进度</th>
-                <th>尝试</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
+        <div
+          className="download-file-table-viewport"
+          role="region"
+          aria-label="文件列表"
+          tabIndex={0}
+        >
+          <div className="file-table" aria-busy={loading}>
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={4} className="file-placeholder" role="status">
-                    正在加载文件…
-                  </td>
+                  <th scope="col" className="download-file-name-column">
+                    文件
+                  </th>
+                  <th scope="col" className="download-file-status-column">
+                    状态
+                  </th>
+                  <th scope="col" className="download-file-size-column">
+                    大小 / 进度
+                  </th>
+                  <th scope="col" className="download-file-attempts-column">
+                    尝试
+                  </th>
                 </tr>
-              )}
-              {!loading && !files.length && (
-                <tr>
-                  <td colSpan={4} className="file-placeholder">
-                    {error ? "暂时无法读取文件，将自动重试。" : "暂无文件"}
-                  </td>
-                </tr>
-              )}
-              {files.map((f) => (
-                <tr key={f.spec.path}>
-                  <td>
-                    <span className="path-text">{f.spec.path}</span>
-                    {f.error && (
-                      <small className="danger-text">{f.error}</small>
-                    )}
-                    {packDownload &&
-                      f.status === "failed" &&
-                      (f.spec.sha1 || f.spec.sha512) && (
-                        <Button
-                          disabled={app.busy}
-                          onClick={() =>
-                            void app.run(async () => {
-                              const source = await pick(false, undefined, {
-                                title: `选择 ${f.spec.path.split(/[\\/]/).pop()} 的原始文件`,
-                              });
-                              if (source)
-                                await api("modpacks.supplyFile", {
-                                  id,
-                                  path: f.spec.path,
-                                  source,
-                                });
-                            })
-                          }
-                        >
-                          补选已下载文件
-                        </Button>
-                      )}
-                  </td>
-                  <td>
-                    <DownloadBadge status={f.status} />
-                  </td>
-                  <td>
-                    {bytes(f.downloaded)} / {f.total ? bytes(f.total) : "未知"}
-                  </td>
-                  <td>{f.attempts}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr>
+                    <td colSpan={4} className="file-placeholder" role="status">
+                      正在加载文件…
+                    </td>
+                  </tr>
+                )}
+                {!loading && !files.length && (
+                  <tr>
+                    <td colSpan={4} className="file-placeholder">
+                      {error ? "暂时无法读取文件，将自动重试。" : "暂无文件"}
+                    </td>
+                  </tr>
+                )}
+                {files.map((f) => {
+                  const parts = f.spec.path.split(/[\\/]/);
+                  const name = parts.pop() || f.spec.path;
+                  const directory = parts.join("/");
+                  const extension = name.includes(".")
+                    ? `${name.split(".").pop()?.toUpperCase()} 文件`
+                    : "资源文件";
+                  const progress =
+                    f.total && f.total > 0
+                      ? Math.max(0, Math.min(1, f.downloaded / f.total))
+                      : null;
+                  return (
+                    <tr key={f.spec.path}>
+                      <td>
+                        <div className="download-file-identity">
+                          <span
+                            className="download-file-icon"
+                            aria-hidden="true"
+                          >
+                            <FileText size={17} />
+                          </span>
+                          <div className="download-file-label">
+                            <div
+                              className="download-file-name"
+                              title={f.spec.path}
+                            >
+                              {name}
+                            </div>
+                            <div className="download-file-meta">
+                              {directory || extension}
+                            </div>
+                            {f.error && (
+                              <small className="download-file-error">
+                                <CircleAlert size={12} aria-hidden="true" />
+                                <span>{f.error}</span>
+                              </small>
+                            )}
+                            {packDownload &&
+                              f.status === "failed" &&
+                              (f.spec.sha1 || f.spec.sha512) && (
+                                <Button
+                                  disabled={app.busy}
+                                  onClick={() =>
+                                    void app.run(async () => {
+                                      const source = await pick(
+                                        false,
+                                        undefined,
+                                        {
+                                          title: `选择 ${f.spec.path.split(/[\\/]/).pop()} 的原始文件`,
+                                        },
+                                      );
+                                      if (source)
+                                        await api("modpacks.supplyFile", {
+                                          id,
+                                          path: f.spec.path,
+                                          source,
+                                        });
+                                    })
+                                  }
+                                >
+                                  补选已下载文件
+                                </Button>
+                              )}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <DownloadFileStatus status={f.status} />
+                      </td>
+                      <td>
+                        <div className="download-file-size">
+                          <strong>{bytes(f.downloaded)}</strong> /{" "}
+                          {f.total ? bytes(f.total) : "未知大小"}
+                        </div>
+                        {!["completed", "queued"].includes(f.status) && (
+                          <div
+                            className={`download-file-progress ${f.status}${progress === null ? " unknown" : ""}`}
+                            role="progressbar"
+                            aria-label={`${name} 下载进度${progress === null ? "，大小未知" : ""}`}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={
+                              progress === null
+                                ? undefined
+                                : Math.round(progress * 100)
+                            }
+                          >
+                            {progress !== null && (
+                              <span
+                                style={{ transform: `scaleX(${progress})` }}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="download-file-attempts-column">
+                        <span className="download-file-attempts">
+                          {f.attempts}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
         <nav
           className="pagination download-file-pagination"

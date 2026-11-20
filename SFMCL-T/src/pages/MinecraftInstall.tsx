@@ -1,3 +1,4 @@
+import { useSessionChangeEffect, useSessionState } from "../windowSession";
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Badge, Button, Empty, PixelFrame, TabList } from "../components";
@@ -35,8 +36,11 @@ export function MinecraftInstall({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
-  const [filter, setFilter] = useState("release");
-  const [page, setPage] = useState(0);
+  const [filter, setFilter] = useSessionState(
+    "MinecraftInstall.filter",
+    "release",
+  );
+  const [page, setPage] = useSessionState("MinecraftInstall.page", 0);
   const results = useTabContentTransition(
     versionTypes.findIndex((type) => type.value === filter),
   );
@@ -58,7 +62,7 @@ export function MinecraftInstall({
       active = false;
     };
   }, [revision, source]);
-  useEffect(() => {
+  useSessionChangeEffect(() => {
     setPage(0);
   }, [query, filter]);
   const list = versions

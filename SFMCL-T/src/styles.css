@@ -23,7 +23,6 @@
   --danger: #b23e43;
   --shadow-color: color-mix(in srgb, var(--sidebar), transparent 84%);
   --shadow: 0 5px 22px color-mix(in srgb, var(--shadow-color), transparent 75%);
-  --background-overlay: color-mix(in srgb, var(--bg) 93%, transparent);
   --sidebar: #173e2e;
   --sidebar-muted: color-mix(in srgb, var(--sidebar), white 76%);
   --chrome-ink: #fff;
@@ -311,17 +310,13 @@ pre {
   transition: --rail-open 240ms cubic-bezier(0.32, 0.72, 0, 1);
   background: var(--bg);
   /* Keep the backdrop beneath the stepped corners in the window chrome color. */
-  background-image:
-    linear-gradient(
-      to bottom,
-      var(--sidebar) var(--window-chrome-inset),
-      transparent var(--window-chrome-inset)
-        calc(100% - var(--window-chrome-inset)),
-      var(--sidebar) calc(100% - var(--window-chrome-inset))
-    ),
-    var(--app-background-image, none);
-  background-size: cover;
-  background-position: center;
+  background-image: linear-gradient(
+    to bottom,
+    var(--sidebar) var(--window-chrome-inset),
+    transparent var(--window-chrome-inset)
+      calc(100% - var(--window-chrome-inset)),
+    var(--sidebar) calc(100% - var(--window-chrome-inset))
+  );
   border-radius: 0;
   clip-path: var(--window-corner-shape);
   overflow: clip;
@@ -432,11 +427,8 @@ pre {
   transition: transform 160ms ease;
   pointer-events: none;
 }
-.breadcrumb-back:hover svg {
-  transform: translateX(-2px);
-}
 .breadcrumb-back:active svg {
-  transform: translateX(-3px) scale(0.9);
+  transform: scale(0.9);
 }
 .breadcrumb-separator {
   color: var(--muted);

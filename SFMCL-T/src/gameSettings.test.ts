@@ -305,6 +305,7 @@ describe("per-card game settings", () => {
       serverHost: "global.example.com",
       serverPort: 25566,
       downloadConcurrency: 8,
+      downloadConnectionLimit: 16,
       downloadCacheDir: "",
     } as Settings;
     expect(
@@ -317,6 +318,37 @@ describe("per-card game settings", () => {
       quickPlayEnabled: false,
       quickPlayWorld: "",
     });
+  });
+  it("keeps saved background effects while other valid edits save", () => {
+    const saved = {
+      ...global,
+      backgroundOverlayOpacity: 65,
+      backgroundBlur: 12,
+      downloadConcurrency: 8,
+      downloadConnectionLimit: 16,
+      downloadCacheDir: "",
+    } as Settings;
+    expect(
+      prepareSettings(
+        {
+          ...saved,
+          backgroundOverlayOpacity: 101,
+          backgroundBlur: -1,
+          windowTitle: "Updated",
+        },
+        saved,
+      ),
+    ).toMatchObject({
+      backgroundOverlayOpacity: 65,
+      backgroundBlur: 12,
+      windowTitle: "Updated",
+    });
+    expect(
+      prepareSettings(
+        { ...saved, backgroundOverlayOpacity: 0, backgroundBlur: 30 },
+        saved,
+      ),
+    ).toMatchObject({ backgroundOverlayOpacity: 0, backgroundBlur: 30 });
   });
   it("does not reorder settings and schedule redundant version auto-saves", () => {
     const prepared = {
