@@ -3653,7 +3653,7 @@ dependencies = [
 
 [[package]]
 name = "sfmcl-t"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3674,7 +3674,7 @@ dependencies = [
 
 [[package]]
 name = "sfmcl-t-core"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "axum",

@@ -586,22 +586,12 @@ export function Notices({
             // Sorting remains available if webview storage is unavailable.
           }
         }}
-        items={
-          items.length
-            ? entries
-            : !loading && !error
-              ? [{ key: "empty", item: null }]
-              : []
-        }
+        items={entries}
       >
         {(item) =>
           item ? (
             <NoticePanel item={item} onDelete={onDelete} deleting={deleting} />
-          ) : (
-            <p className="helper" role="status">
-              暂无公告
-            </p>
-          )
+          ) : null
         }
       </AnimatedNoticeList>
     </section>

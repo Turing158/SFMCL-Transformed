@@ -377,21 +377,17 @@ export function HomeContent({
   );
   const listItems = useMemo(
     () =>
-      visible.length
-        ? visible.map((widget) => ({
-            key: widget.id,
-            item: {
-              widget,
-              notice:
-                widget.type === "notice"
-                  ? catalog.get(widget.noticeKey)
-                  : undefined,
-            },
-          }))
-        : !notices.loading && !notices.error
-          ? [{ key: "empty", item: null }]
-          : [],
-    [visible, catalog, notices.loading, notices.error],
+      visible.map((widget) => ({
+        key: widget.id,
+        item: {
+          widget,
+          notice:
+            widget.type === "notice"
+              ? catalog.get(widget.noticeKey)
+              : undefined,
+        },
+      })),
+    [visible, catalog],
   );
   const keys = visible.map((item) => item.id);
   const options = useMemo(
@@ -600,11 +596,7 @@ export function HomeContent({
                   </button>
                 )}
               </div>
-            ) : (
-              <p className="helper" role="status">
-                暂无公告
-              </p>
-            );
+            ) : null;
           }}
         </AnimatedNoticeList>
       </section>

@@ -66,7 +66,7 @@ export function pixelAppFixture({
     ],
     dataDir: "C:/Pixel-Test",
     defaultDownloadCacheDir: "C:/Pixel-Test/downloads/cache",
-    version: "1.0.2",
+    version: "1.0.3",
   };
   const versions = ["1.21.4", "1.20.1-Fabric"].map((id) => ({
     id,

@@ -1,0 +1,45 @@
+.error-banner {
+  display: grid;
+  grid-template-rows: 0fr;
+  flex: 0 0 auto;
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(-10px);
+  visibility: hidden;
+  transition:
+    grid-template-rows 300ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    opacity 220ms ease,
+    transform 300ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    visibility 0s 300ms;
+}
+.error-banner[hidden] {
+  display: none;
+}
+.error-banner[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+/* Newly mounted or previously hidden banners also animate their first appearance. */
+@starting-style {
+  .error-banner[data-open="true"] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+.error-banner-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.error-banner-message {
+  min-width: 0;
+}
+.error-banner .inline-error > :is(.button, .icon-button) {
+  flex: 0 0 auto;
+}
+.modal-body:has(> .error-banner) {
+  flex-direction: column;
+}

@@ -149,7 +149,7 @@ export function Provider({ children }: { children: ReactNode }) {
     settings: fallback,
     players: [],
     dataDir: "",
-    version: "1.0.2",
+    version: "1.0.3",
   });
   const [versions, setVersions] = useState<Version[]>([]);
   const [versionsRevision, setVersionsRevision] = useState(0);

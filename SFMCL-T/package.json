@@ -1,7 +1,7 @@
 {
   "name": "sfmcl-t",
   "description": "StarFall Minecraft Launcher-Transformed",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -74,6 +74,7 @@
     "test:download-mining": "node scripts/verify-download-mining.mjs",
     "test:download-clear": "node scripts/verify-download-clear.mjs",
     "test:notifications": "node scripts/verify-notifications.mjs",
+    "test:error-banners": "node scripts/verify-error-banners.mjs",
     "test:sidebar": "node scripts/verify-sidebar.mjs",
     "test:sidebar-progress": "node scripts/verify-sidebar-progress.mjs",
     "test:favorites": "node scripts/verify-favorites.mjs",

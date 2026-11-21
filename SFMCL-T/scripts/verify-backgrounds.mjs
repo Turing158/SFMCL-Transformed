@@ -161,7 +161,7 @@ try {
     card.getByRole("img", { name: "背景效果预览", exact: true }),
   ).toHaveCount(0);
   await expect(
-    card.getByRole("combobox", { name: "背景来源", exact: true }),
+    card.getByRole("combobox", { name: "背景", exact: true }),
   ).toHaveCount(1);
   const transparency = card.getByRole("slider", {
     name: "遮罩透明度",
@@ -212,7 +212,9 @@ try {
   await scoped();
   await shot("narrow");
   await nav("设置");
-  const source = page.getByRole("combobox", { name: "背景来源", exact: true });
+  const source = card.getByRole("combobox", { name: "背景", exact: true });
+  const options = card.locator(".background-settings-options");
+  const imageField = card.locator(".background-settings-image");
   await card.scrollIntoViewIfNeeded();
   await shot("settings-narrow");
   await page.setViewportSize({ width: 375, height: 800 });
@@ -222,17 +224,106 @@ try {
   await card.scrollIntoViewIfNeeded();
   await shot("settings-compact");
   await page.setViewportSize({ width: 780, height: 650 });
-  const select = async (name) => {
+  const motionChecks = [];
+  const select = async (name, disclosure, opening) => {
     await source.click();
     await page.getByRole("option", { name, exact: true }).click();
+    if (disclosure) {
+      const motion = await disclosure.evaluate((element) => {
+        const animations = element.getAnimations();
+        const height = animations.find(
+          (animation) => animation.transitionProperty === "grid-template-rows",
+        );
+        if (!height) throw new Error("Missing background disclosure animation");
+        const moving = animations.filter(
+          (animation) => animation.effect.getTiming().duration > 0,
+        );
+        const times = moving.map((animation) => animation.currentTime);
+        // Inspect real intermediate geometry instead of merely checking CSS rules.
+        moving.forEach((animation) => animation.pause());
+        const samples = [0, 0.5, 1].map((progress) => {
+          moving.forEach((animation) => {
+            animation.currentTime =
+              animation.effect.getTiming().duration * progress;
+          });
+          return {
+            height: element.getBoundingClientRect().height,
+            opacity: Number(getComputedStyle(element).opacity),
+          };
+        });
+        moving.forEach((animation, index) => {
+          animation.currentTime = times[index];
+          animation.play();
+        });
+        return { duration: height.effect.getTiming().duration, samples };
+      });
+      expect(motion.duration).toBe(300);
+      const [start, middle, end] = opening
+        ? motion.samples
+        : [...motion.samples].reverse();
+      expect(start.height).toBeLessThanOrEqual(1);
+      expect(middle.height).toBeGreaterThan(start.height);
+      expect(middle.height).toBeLessThan(end.height);
+      expect(start.opacity).toBe(0);
+      expect(middle.opacity).toBeGreaterThan(0);
+      expect(middle.opacity).toBeLessThan(1);
+      expect(end.opacity).toBe(1);
+      motionChecks.push({ name, opening, ...motion });
+      await disclosure.evaluate((element) =>
+        Promise.allSettled(
+          element.getAnimations().map((animation) => animation.finished),
+        ),
+      );
+    }
     await waitForAutoSave(page);
   };
-  await select("纯色背景");
+  await select("纯色背景", options, false);
   await expect(imageLayer).toHaveCount(0);
   await expect(overlay).toHaveCSS("opacity", "0");
-  await expect(transparency).toBeDisabled();
-  await expect(blur).toBeDisabled();
-  await select("配置目录中的 bg.png / bg.jpg");
+  await expect(options).toBeHidden();
+  await expect(options).toHaveCSS("height", "0px");
+  await expect(options).toHaveAttribute("inert", "");
+  await expect(card.getByRole("slider")).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "刷新背景图片" })).toHaveCount(
+    0,
+  );
+  await expect(card.getByRole("button", { name: "重置效果" })).toHaveCount(0);
+  expect(
+    await options.evaluate((element) => {
+      element.querySelector("input").focus();
+      return element.contains(document.activeElement);
+    }),
+  ).toBe(false);
+  await shot("settings-solid");
+  await page.reload();
+  await page.waitForFunction(
+    () => !document.documentElement.hasAttribute("data-startup"),
+  );
+  await nav("设置");
+  await expect(options).toBeHidden();
+  await expect(source).toContainText("纯色背景");
+  await select("配置目录中的 bg.png / bg.jpg", options, true);
+  await expect(transparency).toHaveValue("37");
+  await expect(blur).toHaveValue("12");
+  await expect(imageField).toBeHidden();
+  await select("本地图片", imageField, true);
+  await expect(
+    card.getByRole("textbox", { name: "图片路径或 URL" }),
+  ).toHaveValue("C:/Pixel-Test/background.png");
+  await select("配置目录中的 bg.png / bg.jpg", imageField, false);
+  await expect(imageField).toBeHidden();
+  await select("网络图片", imageField, true);
+  await expect(
+    card.getByRole("textbox", { name: "图片路径或 URL" }),
+  ).toHaveAttribute("placeholder", "https://…");
+  await expect(card.getByRole("button", { name: "选择背景图片" })).toHaveCount(
+    0,
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await select("纯色背景", options, false);
+  await expect(options).toBeHidden();
+  await select("配置目录中的 bg.png / bg.jpg", options, true);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await expect.poll(visibleImage).toBe(true);
   await page.getByRole("button", { name: "刷新背景图片", exact: true }).click();
   await expect.poll(visibleImage).toBe(true);
@@ -256,11 +347,14 @@ try {
         passed: true,
         imageCharacters: image.length,
         decoded,
+        motionChecks,
         checks: [
           "Large PNG displays after startup and page navigation",
           "Light/dark themes and narrow windows retain the image",
           "Image stays in content; inactive pages and chrome have no image",
           "Solid mode removes image/shade; default mode and refresh restore it",
+          "Solid mode collapses all options and excludes them from keyboard focus; reload stays collapsed",
+          "Options and image fields animate height and opacity in both directions, including reduced-motion mode",
           "Background card saves transparency/blur without a preview; content stays crisp",
           "Background remains fixed during scroll; effects persist after restart and reset",
         ],

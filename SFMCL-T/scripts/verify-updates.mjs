@@ -60,7 +60,7 @@ const shot = async (name) => {
 };
 const available = {
   status: "available",
-  currentVersion: "1.0.2",
+  currentVersion: "1.0.3",
   latestVersion: "1.1.0",
   htmlUrl: "https://github.com/Turing158/SFMCL-Transformed/releases/tag/v1.1.0",
 };
@@ -90,8 +90,8 @@ try {
   await page.getByRole("tab", { name: "启动器设置", exact: true }).click();
   await finish({
     status: "latest",
-    currentVersion: "1.0.2",
-    latestVersion: "1.0.2",
+    currentVersion: "1.0.3",
+    latestVersion: "1.0.3",
   });
   await page.getByRole("tab", { name: "关于", exact: true }).click();
   await expect(button).toHaveAccessibleName("无需更新");
@@ -108,8 +108,8 @@ try {
   await expect(state).toHaveAttribute("data-update-state", "checking");
   await finish({
     status: "latest",
-    currentVersion: "1.0.2",
-    latestVersion: "1.0.2",
+    currentVersion: "1.0.3",
+    latestVersion: "1.0.3",
   });
   await expect(state).toHaveAttribute("data-update-state", "latest");
   await expect(button).toHaveAccessibleName("无需更新");
@@ -148,8 +148,8 @@ try {
   await expect(button).toBeDisabled();
   await finish({
     status: "latest",
-    currentVersion: "1.0.2",
-    latestVersion: "1.0.2",
+    currentVersion: "1.0.3",
+    latestVersion: "1.0.3",
   });
   await page.getByRole("tab", { name: "关于", exact: true }).focus();
   await expect(button).toHaveAccessibleName("无需更新");
@@ -163,7 +163,7 @@ try {
   await expect(button).toHaveAccessibleName("重新检测");
   await button.click();
   await expect(state).toHaveAttribute("data-update-state", "checking");
-  await finish({ status: "unpublished", currentVersion: "1.0.2" });
+  await finish({ status: "unpublished", currentVersion: "1.0.3" });
   await expect(button).toHaveAccessibleName("暂无发布");
   await expectSwapMotion();
   await page.mouse.move(0, 0);

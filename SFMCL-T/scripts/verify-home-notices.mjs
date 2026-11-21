@@ -5,7 +5,8 @@ import { pixelAppFixture } from "./fixtures/pixel-app.mjs";
 import { runtimePath } from "./lib/paths.mjs";
 
 const url = process.env.SFMCL_T_UI_URL || "http://127.0.0.1:4180";
-const evidence = runtimePath("evidence/home-notices");
+const evidence =
+  process.env.SFMCL_T_TEST_ARTIFACT_DIR || runtimePath("evidence/home-notices");
 await mkdir(evidence, { recursive: true });
 const edge = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const browser = await chromium.launch({
@@ -319,7 +320,7 @@ try {
       }
     }
   }
-  await page.setViewportSize({ width: 1120, height: 640 });
+  await page.setViewportSize({ width: 1120, height: 1000 });
   await page.evaluate(() =>
     Object.assign(document.documentElement.dataset, {
       theme: "dark",
@@ -337,7 +338,8 @@ try {
     ),
   );
   await page.screenshot({ path: `${evidence}/expanded-dark.png` });
-  await toggles.nth(2).click();
+  await toggles.nth(2).focus();
+  await page.keyboard.press("Enter");
   await expect(bodies.nth(2)).toContainText("读取公告失败：测试文件不存在。");
   await expect(bodies.nth(2)).toBeVisible();
   checks.push(
@@ -355,7 +357,8 @@ try {
     window.__homeNotices.items = [];
   });
   await refresh.click();
-  await expect(notices.getByRole("status")).toHaveText("暂无公告");
+  await expect(notices.getByRole("status")).toHaveCount(0);
+  await expect(notices.locator(".notice-list-item")).toHaveCount(0);
   await expect(toggles).toHaveCount(0);
   await expect(notices.getByRole("alert")).toHaveCount(0);
   await ready("?clean=on");
@@ -420,7 +423,7 @@ try {
   expect(
     await notices.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
   ).toBe(true);
-  await page.setViewportSize({ width: 1120, height: 640 });
+  await page.setViewportSize({ width: 1120, height: 1000 });
   await toggles.first().click();
   await expect(
     bodies.first().getByRole("img", { name: "公告配图" }),
@@ -776,7 +779,8 @@ try {
   });
   for (let index = 0; index < 3; index++)
     await clickNoticeAction(hides.first());
-  await expect(notices.getByRole("status")).toHaveText("暂无公告");
+  await expect(notices.getByRole("status")).toHaveCount(0);
+  await expect(notices.locator(".notice-list-item")).toHaveCount(0);
   await add.click();
 
   await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
@@ -867,7 +871,7 @@ try {
   ).toHaveCount(0);
   await editor.getByRole("button", { name: "关闭对话框" }).click();
   checks.push(
-    "The home list animates entry, exit, placeholder changes and continuous reflow at full duration; exiting rows become inert immediately, failed saves do not animate removal, custom notices animate creation/deletion, and interrupted restores reverse without duplicates or leftover space.",
+    "The home list animates entry, exit and continuous reflow at full duration; exiting rows become inert immediately, failed saves do not animate removal, custom notices animate creation/deletion, and interrupted restores reverse without duplicates or leftover space.",
   );
   checks.push(
     "Existing custom notices retain their original panels and deletion, stay deleted after reload and older network replies, and never appear as presets even with legacy hidden IDs; original preset visibility remains persistent and reversible through the component library.",

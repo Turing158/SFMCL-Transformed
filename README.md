@@ -10,7 +10,7 @@ StarFall Minecraft Launcher-Transformed · 基于 Rust、Tauri 2 和 React 的 M
 
 <p>
   <img src="https://img.shields.io/badge/平台-Windows%20x64%20%2F%20x86-0078D4?style=flat-square" alt="Windows x64 / x86" />
-  <img src="https://img.shields.io/badge/版本-1.0.2-4C8BF5?style=flat-square" alt="版本 1.0.2" />
+  <img src="https://img.shields.io/badge/版本-1.0.3-4C8BF5?style=flat-square" alt="版本 1.0.3" />
   <img src="https://img.shields.io/badge/核心-Rust-DEA584?style=flat-square" alt="Rust 核心" />
   <img src="https://img.shields.io/badge/界面-Tauri%202%20%2B%20React-24C8D8?style=flat-square" alt="Tauri 2 + React" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-2EA043?style=flat-square" alt="MIT License" /></a>
@@ -319,7 +319,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File SFMCL-T/scripts/import-curse
 | `installer` | `SFMCL-T_v<版本>_<架构>_installer.exe` | NSIS 安装包；检测系统 WebView2，缺少时可下载安装。 |
 | `single` | `SFMCL-T_v<版本>_<架构>.exe` | 前端嵌入 EXE，使用系统 WebView2；默认通过 UPX 压缩。 |
 
-版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v1.0.2_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
+版本号前统一带 `v`，单文件版省略类型后缀，例如 `SFMCL-T_v1.0.3_x86.exe`。`<架构>` 为 `x64` 或 `x86`。可通过 `rustup target add x86_64-pc-windows-msvc i686-pc-windows-msvc` 准备两个 Rust 目标，Windows SDK 也需包含对应架构的库。
 
 也可调用 `build.ps1 -Mode <模式> -Architecture <架构>`，或在 `SFMCL-T/` 内运行 `npm run package`、`npm run package:x86`、`npm run package:x64`。`npm run package:installer -- -Architecture x86` 和 `npm run package:single -- -Architecture x86` 可分别生成 x86 安装版和单文件版。
 

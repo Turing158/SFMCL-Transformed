@@ -8,6 +8,7 @@ import { api, external } from "../api";
 import {
   Button,
   Empty,
+  ErrorBanner,
   PixelFrame,
   ResourceImage,
   TabList,
@@ -189,12 +190,9 @@ export function ProjectPage({
         ]}
       />
       <TabPanel ref={tabContent} id="project" value={tab}>
-        {(detailError || error) && (
-          <div className="inline-error resource-error" role="alert">
-            {detailError || error}
-            <Button onClick={() => setRetry((value) => value + 1)}>重试</Button>
-          </div>
-        )}
+        <ErrorBanner message={detailError || error}>
+          <Button onClick={() => setRetry((value) => value + 1)}>重试</Button>
+        </ErrorBanner>
         {tab === "description" ? (
           <div className="markdown">
             <ReactMarkdown

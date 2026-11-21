@@ -21,6 +21,7 @@ import {
   Badge,
   Button,
   Empty,
+  ErrorBanner,
   PixelFrame,
   ResourceImage,
   TabList,
@@ -345,16 +346,14 @@ export function LocalResources({
           </div>
         </div>
         <TabPanel ref={tabContent} id="version-resources" value={kind}>
+          <ErrorBanner message={loading ? "" : errors[kind] || ""}>
+            <Button onClick={refresh}>重试</Button>
+          </ErrorBanner>
           {loading ? (
             <p className="loading-text" role="status">
               正在读取资源…
             </p>
-          ) : errors[kind] ? (
-            <div className="inline-error resource-error" role="alert">
-              {errors[kind]}
-              <Button onClick={refresh}>重试</Button>
-            </div>
-          ) : items.length ? (
+          ) : errors[kind] ? null : items.length ? (
             <>
               <div className="resource-list">
                 {visibleItems.map((item) => (

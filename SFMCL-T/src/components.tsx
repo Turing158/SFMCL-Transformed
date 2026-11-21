@@ -4,6 +4,7 @@ import { useImageResource } from "./useImageResource";
 import { beginStartupWork } from "./startupReadiness";
 import { AnimatedSwap } from "./AnimatedSwap";
 import { useModalMotion } from "./useModalMotion";
+import "./error-banner.css";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -285,6 +286,49 @@ function isDialogBackdrop(event: MouseEvent<HTMLDialogElement>) {
   );
 }
 
+export function ErrorBanner({
+  message,
+  children,
+}: {
+  message: string;
+  children?: ReactNode;
+}) {
+  const [display, setDisplay] = useState({ message, present: !!message });
+  const open = !!message;
+  if (open && (display.message !== message || !display.present)) {
+    setDisplay({ message, present: true });
+  }
+  return (
+    <div
+      className="error-banner"
+      data-open={open}
+      hidden={!display.present}
+      aria-hidden={!open}
+      inert={!open}
+      onTransitionEnd={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          event.propertyName === "grid-template-rows" &&
+          !open
+        ) {
+          setDisplay((current) => ({ ...current, present: false }));
+        }
+      }}
+    >
+      <div className="error-banner-clip">
+        {display.present && (
+          <div className="inline-error resource-error" role="alert">
+            <span className="error-banner-message">
+              {message || display.message}
+            </span>
+            {children}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Modal({
   title,
   children,
@@ -349,19 +393,16 @@ export function Modal({
         </button>
       </header>
       <div className="modal-body">
-        {showError && error && (
-          <div className="inline-error" role="alert">
-            {error}
-            <button
-              className="icon-button has-surface"
-              aria-label="关闭错误提示"
-              onClick={clearError}
-            >
-              <PixelFrame />
-              <X size={16} />
-            </button>
-          </div>
-        )}
+        <ErrorBanner message={showError ? error : ""}>
+          <button
+            className="icon-button has-surface"
+            aria-label="关闭错误提示"
+            onClick={clearError}
+          >
+            <PixelFrame />
+            <X size={16} />
+          </button>
+        </ErrorBanner>
         {typeof children === "function" ? children(requestClose) : children}
       </div>
     </dialog>
