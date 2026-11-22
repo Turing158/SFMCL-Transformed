@@ -13,11 +13,9 @@ interface WindowTransition {
   action: WindowAction;
 }
 
-const concealed = {
-  minimize: { scale: 0.93, y: 3, opacity: 0 },
-  hide: { scale: 0.975, y: 0, opacity: 0 },
-};
-const exitDuration = { minimize: 120, hide: 100 };
+const minimizeSurface = { scale: 0.93, y: 3, opacity: 0 };
+const concealed = { minimize: minimizeSurface, hide: minimizeSurface };
+const exitDuration = 120;
 
 export function minimizeWindow() {
   return invoke("minimize_window");
@@ -59,7 +57,7 @@ export function initializeWindowMotion() {
       ),
       {
         id: `sfmcl-t-window-${action}`,
-        duration: action === "show" ? revealDuration : exitDuration[action],
+        duration: action === "show" ? revealDuration : exitDuration,
         // The sampled keyframes already contain the easing for each property.
         easing: "linear",
         fill: "both",
@@ -69,6 +67,8 @@ export function initializeWindowMotion() {
   };
   const transition = async ({ id, action }: WindowTransition) => {
     if (disposed) return;
+    if (action === "show")
+      window.dispatchEvent(new Event("sfmcl-t-window-restoring"));
     const token = ++revision;
     active = action;
     const motion = animate(action);

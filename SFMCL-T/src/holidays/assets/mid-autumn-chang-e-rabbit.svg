@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="154" height="64" viewBox="0 0 154 64" preserveAspectRatio="xMidYMax meet" shape-rendering="crispEdges">
+  <title>像素嫦娥与玉兔</title>
+  <g data-part="chang-e">
+    <path fill="#59424d" d="M43 2h12v4h5v7H38V6h5zM34 13h30v20h-4v16h-8V31H40v18h-9V27h3z"/>
+    <path fill="#d8ab8e" d="M40 15h18v17H40zM36 37h5v9h-5zM61 37h5v9h-5z"/>
+    <path fill="#f0c6a7" d="M42 17h14v12H42zM36 39h3v5h-3zM63 39h3v5h-3z"/>
+    <path fill="#463442" d="M39 13h21v6H39zM41 20h3v2h-3zM52 20h3v2h-3z"/>
+    <path fill="#c77b88" d="M46 26h5v2h-5zM40 23h3v2h-3zM55 23h3v2h-3z"/>
+    <path fill="#d9b66e" d="M44 6h10v2H44zM33 13h7v3h-7zM35 11h3v7h-3zM58 12h6v3h-6z"/>
+    <path fill="#eee1ac" d="M35 13h3v3h-3zM59 13h3v2h-3z"/>
+    <path fill="#9e83b0" d="M41 31h17v5h6v9h-7v5h7v6h5v6H29v-6h5V46h-7V36h14z"/>
+    <path fill="#cbb7d9" d="M40 33h7v12h-7zM51 33h8v12h-8zM30 37h9v7h-9zM59 36h5v9h-5zM40 48h16v7h6v5H34v-5h6z"/>
+    <path fill="#f5eee1" d="M42 31h5v4h4v-4h5v4h-5v5h-4v-5h-5zM28 42h10v3H28zM59 43h7v3h-7zM29 59h40v3H29z"/>
+    <path fill="#83a69e" d="M40 43h18v5H40zM47 47h4v11h-4z"/>
+    <path fill="#d6a3b9" d="M28 35h6v12h-4v7h-5v-4h2v-9h-2v-4h3zM63 33h5v8h6v4h5v8h-5v-6h-6v-5h-5z"/>
+    <path fill="#e7c98f" d="M25 52h5v3h-5zM74 52h5v3h-5z"/>
+    <path fill="#765a70" d="M39 62h7v2h-7zM53 62h7v2h-7z"/>
+  </g>
+  <g data-part="jade-rabbit" transform="translate(138 28) scale(-.6 .6)">
+    <path d="M24 7h7v23h7V2h8v27h8v7h8v15h-9v6H17v-6H7V39h7v-6h10z" fill="#d7d3c7"/>
+    <path d="M26 8h4v25h10V4h5v27h8v7h6v12h-8v4H19v-5h-9V40h6v-4h10z" fill="#fff7e4"/>
+    <path d="M27 12h2v17h-2zM42 8h2v22h-2z" fill="#d6a5a6"/>
+    <path d="M43 37h3v3h-3zM54 38h3v3h-3z" fill="#786675"/>
+    <path d="M47 43h5v3h-5z" fill="#d6a5a6"/>
+    <path d="M23 50h7v10h-7zM40 50h7v10h-7z" fill="#eee6d3"/>
+  </g>
+</svg>

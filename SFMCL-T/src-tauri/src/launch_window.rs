@@ -195,7 +195,7 @@ pub fn event(app: &tauri::AppHandle, id: &str, event: LaunchEvent) -> tauri::Res
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .started(id, restore);
-                crate::window_session::suspend(app)?;
+                crate::window_session::suspend(app, id)?;
             } else if let Some(window) = app.get_webview_window("main") {
                 crate::window_motion::request(&window, crate::window_motion::Action::Minimize)?;
                 state

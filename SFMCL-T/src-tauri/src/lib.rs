@@ -18,6 +18,7 @@ enum StartupPhase {
     Loading,
     Error,
     Ready,
+    Reveal,
     Shown,
 }
 
@@ -61,11 +62,13 @@ async fn startup_window(window: tauri::WebviewWindow, phase: StartupPhase) -> Re
                     window.set_size(tauri::LogicalSize::new(864.0, 591.0))?;
                 }
             }
-            StartupPhase::Shown => {
+            StartupPhase::Reveal => {
                 if window_session::restoring(window.app_handle()) {
                     window.show()?;
                     window.unminimize()?;
                 }
+            }
+            StartupPhase::Shown => {
                 window_motion::finish(&window, None)?;
                 if window_session::restoring(window.app_handle()) {
                     window_session::restored(&window)?;

@@ -155,7 +155,9 @@ const sample = (progress) =>
 
 try {
   await page.goto(process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1431");
-  await expect(page.locator("html")).not.toHaveAttribute("data-startup");
+  await expect(page.locator("html")).not.toHaveAttribute("data-startup", {
+    timeout: 15_000,
+  });
   await idle();
   await page.evaluate(() => {
     const popover = document.createElement("div");
@@ -426,7 +428,7 @@ try {
         .slice(-4)
         .map((motion) => motion.effect.getTiming().duration),
     ),
-  ).toEqual([120, 150, 100, 150]);
+  ).toEqual([120, 150, 120, 150]);
   checks.push(
     "System reduced-motion preference preserves the complete minimize, hide and show animations with intermediate frames and native-operation ordering.",
   );

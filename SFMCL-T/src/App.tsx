@@ -47,6 +47,8 @@ import { handleWindowDrag } from "./windowDrag";
 import { useLauncherQuit } from "./useLauncherQuit";
 import { useSessionState, useWindowSession } from "./windowSession";
 import "./home.css";
+import { HolidayDecorations } from "./holidays/HolidayDecorations";
+import { useHolidayGreeting } from "./holidays/HolidayProvider";
 const navigation = [
   { id: "home", name: pageNames.home, icon: House },
   { id: "versions", name: pageNames.versions, icon: Box },
@@ -239,6 +241,7 @@ export default function App() {
         </WorkspaceFooter>
       </div>
       <AppNotifications />
+      <HolidayDecorations />
       <ModpackDropTarget />
       <YggdrasilDropTarget />
     </div>
@@ -246,6 +249,7 @@ export default function App() {
 }
 function Home() {
   const app = useApp();
+  const greeting = useHolidayGreeting();
   const s = app.data.settings;
   const showContent = !s.homeCleanMode;
   const notices = useNotices(showContent);
@@ -260,7 +264,9 @@ function Home() {
         <PageHeader
           icon={<Play />}
           eyebrow="LET'S PLAY"
-          title={player ? `你好，${player.name}` : "准备好，开启新的冒险"}
+          title={
+            player ? `${greeting}，${player.name}` : "准备好，开启新的冒险"
+          }
           description={!showContent ? "新的世界，等你出发。" : undefined}
         />
       )}

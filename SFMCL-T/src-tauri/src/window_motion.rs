@@ -103,7 +103,7 @@ fn complete(window: &tauri::WebviewWindow, id: u32) -> tauri::Result<bool> {
     if let Some(action) = state.pending(id) {
         match action {
             Action::Minimize => window.minimize()?,
-            Action::Hide => window.hide()?,
+            Action::Hide => crate::window_session::hide(window)?,
             Action::Show => {
                 window.show()?;
                 window.unminimize()?;

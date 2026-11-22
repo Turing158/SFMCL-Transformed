@@ -53,6 +53,7 @@ import {
   type HomeWidgetType,
 } from "./homeContentConfig";
 import "./home-content.css";
+import { useHolidayGreeting } from "./holidays/HolidayProvider";
 
 const icons: Record<HomeWidgetType, ReactNode> = {
   notice: <FileText size={17} />,
@@ -299,6 +300,7 @@ export function HomeContent({
   notices: ReturnType<typeof useNotices>;
 }) {
   const app = useApp();
+  const greeting = useHolidayGreeting();
   const active = usePageActive();
   const saved = useHomeContent(active);
   const [editing, setEditing] = useSessionState("HomeContent.editing", false);
@@ -461,7 +463,7 @@ export function HomeContent({
       <PageHeader
         icon={<Play />}
         eyebrow="LET'S PLAY"
-        title={player ? `你好，${player.name}` : "准备好，开启新的冒险"}
+        title={player ? `${greeting}，${player.name}` : "准备好，开启新的冒险"}
         action={
           <div className="notice-actions home-content-actions">
             <Button

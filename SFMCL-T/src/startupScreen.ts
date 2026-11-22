@@ -10,7 +10,7 @@ import {
   restoreInterfaceLayout,
 } from "./windowSession";
 
-// Startup has a more deliberate entrance than restoring an existing window.
+// Rebuilt tray windows share the startup entrance after restoring their content.
 const startupRevealDuration = 480;
 const startupRevealSurface = { scale: 0.94, y: 3, opacity: 0 };
 
@@ -78,18 +78,6 @@ export async function revealStartup(root: HTMLElement, signal: AbortSignal) {
     document.documentElement.dataset.startup = "restoring";
     await waitForStartupPaint(root, signal);
     signal.throwIfAborted();
-    if (revealing || failed) return;
-    revealing = true;
-    cancelTimeout();
-    closeStartupWork();
-    delete document.documentElement.dataset.startup;
-    root.inert = false;
-    root.removeAttribute("aria-hidden");
-    root.removeAttribute("aria-busy");
-    document.getElementById("startup-screen")!.remove();
-    restoreInterfaceFocus();
-    await setStartupWindow("shown");
-    return;
   }
   if (revealing || failed) return;
   revealing = true;
@@ -106,6 +94,14 @@ export async function revealStartup(root: HTMLElement, signal: AbortSignal) {
       fill: "both",
     },
   );
+  if (isRestoringInterface()) {
+    // Prepare the transparent frame before exposing the rebuilt native window.
+    enter.pause();
+    enter.currentTime = 0;
+    getComputedStyle(root).opacity;
+    await setStartupWindow("reveal");
+    enter.play();
+  }
   const exit = splash.animate(
     [
       { opacity: 1, transform: "translateY(0) scale(1)" },

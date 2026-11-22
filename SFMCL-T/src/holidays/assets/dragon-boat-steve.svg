@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="154" height="64" viewBox="0 0 154 64" preserveAspectRatio="xMidYMax meet" shape-rendering="crispEdges">
+  <title>Steve 站在水面上的端午龙舟中</title>
+  <g data-part="water">
+    <path fill="#8fc7ca" d="M0 54h17v-2h19v2h24v-2h27v2h24v-2h24v2h19v8h-19v2H17v-2H0z"/>
+    <path fill="#579da6" d="M0 60h17v2h21v-2h26v2h28v-2h25v2h37v2H17v-2H0z"/>
+    <path fill="#d4ece7" d="M5 56h17v2H5zM36 60h13v2H36zM113 56h22v2h-22zM73 56h14v2H73z"/>
+  </g>
+  <g data-part="dragon-boat">
+    <path fill="#765333" d="M28 41h98v4h-5v5h-7v3H40v-3h-7v-5h-5z"/>
+    <path fill="#c4a265" d="M30 40h94v5H30z"/>
+    <path fill="#4f7e50" d="M39 46h78v4H39z"/>
+    <path fill="#e1bf77" d="M44 46h5v2h-5zM58 46h5v2h-5zM72 46h5v2h-5zM86 46h5v2h-5zM100 46h5v2h-5z"/>
+    <path fill="#9c7544" d="M45 50h64v3H45z"/>
+    <path fill="#3e6e43" d="M27 25h8v7h6v20H30v-8H19v-4h-8v-7h7v-5h9z"/>
+    <path fill="#78a06b" d="M20 29h13v6h5v7H24v-5H14v-3h6z"/>
+    <path fill="#d4b46d" d="M27 21h4v8h-4zM33 23h4v9h-4zM9 34h5v2H9z"/>
+    <path fill="#e8c780" d="M12 37h14v5H12z"/>
+    <path fill="#b5653e" d="M12 39h7v2h-7z"/>
+    <path fill="#f5ecd1" d="M24 31h5v4h-5z"/>
+    <path fill="#243d31" d="M24 32h2v2h-2z"/>
+    <path fill="#4c7d4f" d="M122 41v-8h6v-5h6v7h-5v6z"/>
+    <path fill="#d4b46d" d="M130 26h6v4h-6z"/>
+    <path fill="#e0bf7b" d="M52 38h16v3H52zM104 38h13v3h-13z"/>
+  </g>
+  <g data-part="steve">
+    <path fill="#4c3426" d="M74 7h16v16H74z"/>
+    <path fill="#bc8d65" d="M76 13h12v10H76z"/>
+    <path fill="#674633" d="M76 9h12v4H76zM86 11h2v4h-2z"/>
+    <path fill="#e5dbcc" d="M77 15h4v2h-4zM83 15h4v2h-4z"/>
+    <path fill="#5570a0" d="M79 15h2v2h-2zM83 15h2v2h-2z"/>
+    <path fill="#996348" d="M80 18h4v2h-4z"/>
+    <path fill="#6d432d" d="M78 21h8v2h-8zM78 19h2v2h-2zM84 19h2v2h-2z"/>
+    <path fill="#2d9dab" d="M76 23h12v12H76zM72 23h4v5h-4zM88 23h4v5h-4z"/>
+    <path fill="#bc8d65" d="M80 23h4v2h-4zM72 28h4v7h-4zM88 28h4v7h-4zM92 29h2v3h-2z"/>
+    <path fill="#267b8b" d="M76 25h2v10h-2zM84 31h4v4h-4z"/>
+    <path fill="#59628f" d="M76 35h5v8h-5zM83 35h5v8h-5z"/>
+    <path fill="#404b74" d="M79 35h2v8h-2zM86 35h2v8h-2z"/>
+    <path fill="#394846" d="M76 42h5v2h-5zM83 42h5v2h-5z"/>
+  </g>
+  <g data-part="paddle">
+    <path fill="#6a4c31" d="M92 30h3v4h4v4h4v4h4v4h4v8h-6v-5h-4v-5h-4v-4h-4v-4h-3z"/>
+    <path fill="#ae8754" d="M105 47h4v7h-4z"/>
+  </g>
+</svg>

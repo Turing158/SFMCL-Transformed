@@ -28,6 +28,7 @@ multiplayer-nodes.json.*
 # Local design and development documents
 /preview/
 /previews/
+/design-previews/
 /design-system/
 /docs/plan/
 /docs/internal/

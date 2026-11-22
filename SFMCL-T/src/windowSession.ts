@@ -25,7 +25,7 @@ export interface InterfaceSnapshot {
 declare global {
   interface Window {
     __SFMCL_T_SESSION__?: InterfaceSnapshot | null;
-    __SFMCL_T_SUSPEND__?: (id: number) => Promise<void>;
+    __SFMCL_T_SUSPEND__?: (id: number, launchId: string) => Promise<void>;
   }
 }
 
@@ -199,7 +199,45 @@ export function restoreInterfaceFocus() {
   }
 }
 
+function waitForLaunchProgress(launchId: string, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    let frame = 0;
+    let painted = false;
+    const cleanup = () => {
+      cancelAnimationFrame(frame);
+      signal.removeEventListener("abort", abort);
+    };
+    const abort = () => {
+      cleanup();
+      reject(signal.reason);
+    };
+    const check = () => {
+      const button = document.querySelector<HTMLElement>(
+        `.launch-primary[data-launch-job="${CSS.escape(launchId)}"]`,
+      );
+      const complete =
+        button?.dataset.launchRunning === "true" &&
+        parseFloat(
+          getComputedStyle(button).getPropertyValue("--launch-button-progress"),
+        ) >= 100;
+      // Wait for the animated fill itself, then give its final frame a paint.
+      if (complete && painted) {
+        cleanup();
+        resolve();
+        return;
+      }
+      painted = complete;
+      frame = requestAnimationFrame(check);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    else frame = requestAnimationFrame(check);
+  });
+}
+
 export function initializeWindowSession() {
+  let suspension: AbortController | undefined;
+  const cancelSuspension = () => suspension?.abort();
   const onScroll = (event: Event) => {
     if (event.target instanceof HTMLElement) {
       if (event.target.closest("main[data-page][hidden]")) return;
@@ -210,19 +248,29 @@ export function initializeWindowSession() {
     }
   };
   document.addEventListener("scroll", onScroll, true);
-  window.__SFMCL_T_SUSPEND__ = async (id) => {
+  window.addEventListener("sfmcl-t-window-restoring", cancelSuspension);
+  window.__SFMCL_T_SUSPEND__ = async (id, launchId) => {
+    cancelSuspension();
+    const controller = new AbortController();
+    suspension = controller;
     try {
+      await waitForLaunchProgress(
+        launchId,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
+      );
       if (!(await flushAutoSaves()))
         throw new Error("设置尚未保存，已保留窗口。");
       // Let completed saves commit their final React state before taking a snapshot.
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => resolve()),
       );
+      controller.signal.throwIfAborted();
       await invoke("suspend_launcher_window", {
         id,
         snapshot: captureInterface(),
       });
     } catch (error) {
+      if (controller.signal.aborted) return;
       await invoke("suspend_launcher_window", { id, snapshot: null }).catch(
         console.error,
       );
@@ -232,7 +280,9 @@ export function initializeWindowSession() {
     }
   };
   return () => {
+    cancelSuspension();
     document.removeEventListener("scroll", onScroll, true);
+    window.removeEventListener("sfmcl-t-window-restoring", cancelSuspension);
     delete window.__SFMCL_T_SUSPEND__;
   };
 }

@@ -21,14 +21,14 @@ struct SessionState {
     destroying: bool,
     rebuilding: bool,
     restore_requested: bool,
-    resuspend: bool,
+    resuspend: Option<String>,
     quit_event: Option<Value>,
 }
 
 impl SessionState {
-    fn begin(&mut self) -> Option<u32> {
+    fn begin(&mut self, launch_id: &str) -> Option<u32> {
         if self.rebuilding {
-            self.resuspend = true;
+            self.resuspend = Some(launch_id.into());
             return None;
         }
         if self.pending.is_some() || self.saved.is_some() || self.rebuilding {
@@ -48,18 +48,19 @@ impl SessionState {
     }
 }
 
-pub fn suspend(app: &tauri::AppHandle) -> tauri::Result<()> {
+pub fn suspend(app: &tauri::AppHandle, launch_id: &str) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Ok(());
     };
     let id = {
         let state = app.state::<WindowSession>();
         let mut state = state.0.lock().unwrap_or_else(|e| e.into_inner());
-        state.begin()
+        state.begin(launch_id)
     };
     let Some(id) = id else { return Ok(()) };
-    // The frontend acknowledges only after its drafts and view state are safe.
-    if let Err(error) = window.eval(format!("window.__SFMCL_T_SUSPEND__({id});")) {
+    // Acknowledge only after the launch fill reaches 100% and drafts are safe.
+    let launch_id = serde_json::to_string(launch_id)?;
+    if let Err(error) = window.eval(format!("window.__SFMCL_T_SUSPEND__({id}, {launch_id});")) {
         abort(app, id);
         return Err(error);
     }
@@ -70,7 +71,6 @@ pub fn suspend(app: &tauri::AppHandle) -> tauri::Result<()> {
             eprintln!("Cannot suspend launcher: saving the interface timed out");
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.emit("sfmcl-t-session-error", "保存界面超时，已保留窗口。");
-                let _ = crate::window_motion::request(&window, crate::window_motion::Action::Hide);
             }
         }
     });
@@ -96,10 +96,7 @@ pub async fn suspend_launcher_window(
     }
     let app = window.app_handle().clone();
     let Some(ui) = snapshot else {
-        if abort(&app, id) {
-            crate::window_motion::request(&window, crate::window_motion::Action::Hide)
-                .map_err(|error| error.to_string())?;
-        }
+        abort(&app, id);
         return Ok(false);
     };
     let saved = SavedWindow {
@@ -115,9 +112,29 @@ pub async fn suspend_launcher_window(
             return Ok(false);
         }
         state.saved = Some(saved);
+    }
+    if let Err(error) = crate::window_motion::request(&window, crate::window_motion::Action::Hide) {
+        app.state::<WindowSession>()
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .saved = None;
+        return Err(error.to_string());
+    }
+    Ok(true)
+}
+
+// The existing window transition calls this only after its exit animation.
+pub fn hide(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    let app = window.app_handle();
+    {
+        let state = app.state::<WindowSession>();
+        let mut state = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        if state.saved.is_none() || state.rebuilding {
+            return window.hide();
+        }
         state.destroying = true;
     }
-    crate::window_motion::reset_for_startup(&window);
     let result = window.hide().and_then(|_| {
         crate::window_frame::set_visible(&window, false)?;
         window.destroy()
@@ -127,9 +144,9 @@ pub async fn suspend_launcher_window(
         let mut state = state.0.lock().unwrap_or_else(|e| e.into_inner());
         state.saved = None;
         state.destroying = false;
-        return Err(error.to_string());
+        return Err(error);
     }
-    Ok(true)
+    Ok(())
 }
 
 /// Returns true when rebuilding (or waiting for destruction) handles the show.
@@ -139,8 +156,13 @@ pub fn show(app: &tauri::AppHandle) -> tauri::Result<bool> {
         let mut state = state.0.lock().unwrap_or_else(|e| e.into_inner());
         // A manual restore or an early game exit cancels an unacknowledged save.
         state.pending = None;
-        state.resuspend = false;
+        state.resuspend = None;
         if state.saved.is_none() {
+            return Ok(false);
+        }
+        // A restore during the exit animation keeps this WebView and reverses it.
+        if !state.destroying && !state.rebuilding && app.get_webview_window("main").is_some() {
+            state.saved = None;
             return Ok(false);
         }
         state.restore_requested = true;
@@ -212,11 +234,11 @@ pub fn restored(window: &tauri::WebviewWindow) -> tauri::Result<()> {
         state.saved = None;
         state.rebuilding = false;
         state.restore_requested = false;
-        let resuspend = std::mem::take(&mut state.resuspend);
+        let resuspend = state.resuspend.take();
         (state.quit_event.take(), resuspend)
     };
-    if resuspend {
-        suspend(window.app_handle())?;
+    if let Some(launch_id) = resuspend {
+        suspend(window.app_handle(), &launch_id)?;
     } else {
         if let Some(tray) = window.app_handle().tray_by_id("launcher") {
             tray.set_visible(false)?;
@@ -255,10 +277,10 @@ mod tests {
     #[test]
     fn duplicate_suspends_and_stale_acknowledgements_are_ignored() {
         let mut state = SessionState::default();
-        let first = state.begin().unwrap();
-        assert_eq!(state.begin(), None);
+        let first = state.begin("first-game").unwrap();
+        assert_eq!(state.begin("first-game"), None);
         state.pending = None; // restore before the frontend finishes saving
-        let second = state.begin().unwrap();
+        let second = state.begin("second-game").unwrap();
         assert!(!state.accept(first));
         assert!(state.accept(second));
         assert!(!state.accept(second));
@@ -270,9 +292,9 @@ mod tests {
             rebuilding: true,
             ..Default::default()
         };
-        assert_eq!(state.begin(), None);
-        assert!(state.resuspend);
+        assert_eq!(state.begin("game"), None);
+        assert_eq!(state.resuspend.as_deref(), Some("game"));
         state.rebuilding = false;
-        assert!(state.begin().is_some());
+        assert!(state.begin("game").is_some());
     }
 }

@@ -779,6 +779,8 @@ export function LaunchDock({
                 data-tooltip={buttonDetail}
                 data-indeterminate={indeterminate || undefined}
                 data-progress-active={task.active || undefined}
+                data-launch-job={task.active ? task.job!.id : undefined}
+                data-launch-running={mode === "running" || undefined}
                 style={
                   {
                     "--launch-button-progress": `${buttonProgress}%`,

@@ -19,6 +19,7 @@ import { TooltipHost } from "./Tooltip";
 import { initializeWindowMotion } from "./windowMotion";
 import { initializeScrollbars } from "./scrollbars";
 import { initializeWindowSession } from "./windowSession";
+import { HolidayProvider } from "./holidays/HolidayProvider";
 const disposeWindowSession = initializeWindowSession();
 const disposeWindowMotion = initializeWindowMotion();
 const disposeScrollbars = initializeScrollbars();
@@ -33,9 +34,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <StartupErrorBoundary>
       <Provider>
         <StartupBoundary>
-          <OnboardingProvider>
-            <App />
-          </OnboardingProvider>
+          <HolidayProvider>
+            <OnboardingProvider>
+              <App />
+            </OnboardingProvider>
+          </HolidayProvider>
           <ConfirmationDialogHost />
           <TooltipHost />
         </StartupBoundary>
