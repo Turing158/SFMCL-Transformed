@@ -230,6 +230,7 @@ export function Versions() {
           <button
             className="icon-button has-surface"
             aria-label="添加游戏目录"
+            data-tooltip="添加游戏目录"
             data-tour="add-directory"
             onClick={() => void app.run(addDir)}
           >
@@ -239,6 +240,7 @@ export function Versions() {
           <button
             className="icon-button has-surface"
             aria-label="打开游戏目录"
+            data-tooltip="打开游戏目录"
             disabled={showAll || !s.activeDir}
             onClick={() =>
               void app.run(() =>
@@ -252,6 +254,7 @@ export function Versions() {
           <button
             className="icon-button has-surface"
             aria-label="移除目录记录"
+            data-tooltip="移除目录记录"
             disabled={showAll || !s.activeDir}
             onClick={async () => {
               if (
@@ -276,6 +279,7 @@ export function Versions() {
           <button
             className="icon-button has-surface"
             aria-label="刷新版本"
+            data-tooltip="刷新版本"
             disabled={app.busy || (showAll && all.loading)}
             onClick={() =>
               showAll

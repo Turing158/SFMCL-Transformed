@@ -1,8 +1,7 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { Box, Download, Globe, Layers, Package, Sun, X } from "lucide-react";
-import { Button, ErrorBanner, PixelFrame } from "../components";
+import { Box, Download, Globe, Layers, Package, Sun } from "lucide-react";
+import { PixelFrame } from "../components";
 import { PageTitle } from "../PageHeader";
-import { useApp } from "../store";
 import type { ResourceTab } from "../navigation";
 
 export function ResourceSubpage({
@@ -14,7 +13,6 @@ export function ResourceSubpage({
   tab: ResourceTab | "world";
   children: ReactNode;
 }) {
-  const app = useApp();
   const heading = useRef<HTMLHeadingElement>(null);
   const Icon = {
     minecraft: Download,
@@ -44,11 +42,6 @@ export function ResourceSubpage({
         className={`resource-subpage-body has-surface ${tab === "minecraft" ? "minecraft-config" : ""}`}
       >
         <PixelFrame />
-        <ErrorBanner message={app.error}>
-          <Button aria-label="关闭错误提示" onClick={app.clearError}>
-            <X size={16} />
-          </Button>
-        </ErrorBanner>
         {children}
       </div>
     </section>

@@ -20,6 +20,29 @@ page.on("pageerror", (error) => errors.push(error.message));
 await page.addInitScript(pixelAppFixture);
 await page.addInitScript(resourceCenterFixture);
 await page.addInitScript(installComponentsFixture);
+await page.addInitScript(() => {
+  const invoke = window.__TAURI_INTERNALS__.invoke;
+  window.__TAURI_INTERNALS__.invoke = async (command, args) => {
+    if (command === "request" && args.operation === "multiplayer.status")
+      return {
+        state: "idle",
+        sessionId: null,
+        componentReady: true,
+        componentVersion: "2.6.4",
+        tunnelReady: false,
+        tunnelVersion: "2026.10.7",
+        componentJobId: null,
+        role: null,
+        name: "",
+        gameVersion: "",
+        address: null,
+        worldOpen: false,
+        members: [],
+        error: null,
+      };
+    return invoke(command, args);
+  };
+});
 const message = "版本名称已存在，请选择其他名称";
 const nav = (name) =>
   page
@@ -102,8 +125,7 @@ try {
     })
     .click();
   const body = page.locator("main.page .resource-subpage-body");
-  const banner = body.locator(":scope > .error-banner");
-  await expect(banner).toBeHidden();
+  await expect(body).toBeVisible();
   const formOffset = () =>
     body.evaluate(
       (element) =>
@@ -111,28 +133,58 @@ try {
         element.getBoundingClientRect().top,
     );
   const baseline = await formOffset();
+  await nav("联机");
+  await page.getByRole("textbox", { name: "游戏端口", exact: true }).fill("");
+  await page.getByRole("button", { name: "检查端口", exact: true }).click();
+  const portError = "请输入 1–65535 之间的整数端口";
+  await expect(
+    page.locator(".notification-slot").first().getByRole("alert"),
+  ).toHaveText(portError);
+  await nav("资源中心");
+  await expect(body).toBeVisible();
+  await expect(body.locator(":scope > .error-banner")).toHaveCount(0);
+  expect(await formOffset()).toBeCloseTo(baseline, 0);
+  await shot("resource-after-port-check");
+  checks.push(
+    "An invalid multiplayer port remains a notification; returning to the retained Minecraft details adds no global error banner or layout space",
+  );
+
   await page.evaluate(
     (message) => (window.__pixelTest.failures.install = message),
     message,
   );
   await page.getByRole("button", { name: "开始安装", exact: true }).click();
+  await expect(
+    page.locator(".notification-slot").first().getByRole("alert"),
+  ).toContainText(message);
+  await expect(body.locator(":scope > .error-banner")).toHaveCount(0);
+  expect(await formOffset()).toBeCloseTo(baseline, 0);
+  await shot("installation-error");
+  checks.push(
+    "Installation failures use the notification deck without inserting a global error banner into resource details",
+  );
+  await clear();
+
+  await nav("版本管理");
+  await report(message);
+  await page
+    .getByRole("button", { name: "管理 1.20.1-Fabric", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  const dialogBanner = dialog.locator(".modal-body > .error-banner");
+  const banner = dialogBanner;
   await sample(banner, true);
-  await expect(banner.getByRole("alert")).toContainText(message);
-  expect(await formOffset()).toBeGreaterThan(baseline + 50);
-  await shot("installation-error", banner);
+  await expect(banner.getByRole("alert")).toHaveText(message);
   await banner
     .getByRole("button", { name: "关闭错误提示", exact: true })
     .click();
-  await expect(banner).toHaveAttribute("inert", "");
-  await expect(banner).toContainText(message);
   await sample(banner, false);
-  expect(await formOffset()).toBeCloseTo(baseline, 0);
   await report(message);
   await sample(banner, true);
   await clear();
   await sample(banner, false);
   checks.push(
-    "Installation failure enters smoothly; click and programmatic clear retain the text during exit and remove all layout space afterward",
+    "Dialog errors enter smoothly; click and programmatic clear retain the text during exit and remove all layout space afterward",
   );
 
   await report(message);
@@ -181,19 +233,6 @@ try {
     "Reduced-motion preference retains the complete 300 ms height/translation and 220 ms fade animations",
   );
 
-  await nav("版本管理");
-  await report(message);
-  await page
-    .getByRole("button", { name: "管理 1.20.1-Fabric", exact: true })
-    .click();
-  const dialog = page.getByRole("dialog");
-  const dialogBanner = dialog.locator(".modal-body > .error-banner");
-  await sample(dialogBanner, true);
-  await expect(dialogBanner.getByRole("alert")).toHaveText(message);
-  await dialogBanner
-    .getByRole("button", { name: "关闭错误提示", exact: true })
-    .click();
-  await sample(dialogBanner, false);
   for (const theme of ["light", "dark"]) {
     await page.evaluate(
       (theme) => (document.documentElement.dataset.theme = theme),
