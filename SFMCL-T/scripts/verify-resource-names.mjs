@@ -131,6 +131,9 @@ try {
   );
   await chooseFile();
   await expect(dialog()).toHaveAccessibleName("下载 钠（Sodium）");
+  await dialog()
+    .getByRole("checkbox", { name: "自动安装必需前置依赖" })
+    .uncheck();
   await dialog().getByRole("button", { name: "开始下载" }).click();
   await expect(dialog()).toHaveCount(0);
   expect((await last("resources.download")).title).toBe("Sodium");

@@ -40,6 +40,8 @@ pub struct JobSnapshot {
     pub created_at: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch: Option<LaunchContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crash_report: Option<crate::minecraft::crash::CrashReport>,
 }
 pub struct Job {
     kind: JobKind,
@@ -47,6 +49,9 @@ pub struct Job {
     pub cancel: CancellationToken,
 }
 impl Job {
+    pub fn set_crash_report(&self, report: crate::minecraft::crash::CrashReport) {
+        self.update(|snapshot| snapshot.crash_report = Some(report));
+    }
     pub fn cancellation_message(&self) -> &'static str {
         match self.kind {
             JobKind::Install | JobKind::Modpack => "安装已取消",
@@ -147,6 +152,15 @@ pub struct Jobs {
     jobs: Mutex<Vec<Arc<Job>>>,
 }
 impl Jobs {
+    pub fn get(&self, id: &str) -> anyhow::Result<Arc<Job>> {
+        self.jobs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .find(|job| job.snapshot().id == id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("任务不存在"))
+    }
     pub(crate) fn restore_launch(&self, snapshot: JobSnapshot) -> Arc<Job> {
         let mut jobs = self.jobs.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(job) = jobs.iter().find(|job| job.snapshot().id == snapshot.id) {
@@ -174,6 +188,7 @@ impl Jobs {
                 log: vec![],
                 created_at: now(),
                 launch: None,
+                crash_report: None,
                 steps: steps
                     .iter()
                     .map(|name| Step {

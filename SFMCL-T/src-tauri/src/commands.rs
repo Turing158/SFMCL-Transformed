@@ -19,11 +19,12 @@ use sfmcl_t_core::{
     jobs::{JobKind, Jobs},
     minecraft::{
         installer::{InstallRequest, Installer},
-        java, loaders, version_settings, versions,
+        crash, java, loaders, version_settings, versions,
     },
     paths::{atomic_write, minecraft_root, safe_join},
     resources::{
         community::Community,
+        install::{ModInstaller, Target as ModInstallTarget},
         local,
         modpacks::{ModpackRequest, Modpacks, UrlResolver},
     },
@@ -38,6 +39,7 @@ pub struct Runtime {
     pub installer: Arc<Installer>,
     pub community: Arc<Community>,
     pub modpacks: Arc<Modpacks>,
+    pub mod_installer: Arc<ModInstaller>,
     pub official_notices: sfmcl_t_core::notices::OfficialNotices,
     pub home_content: sfmcl_t_core::home_content::HomeContentStore,
     pub directory: PathBuf,
@@ -107,6 +109,7 @@ impl Runtime {
         {
             tauri::async_runtime::spawn(game.watch());
         }
+        crash::recover(&directory, &jobs);
         let accounts = Accounts::open(&directory, vault.clone(), settings.clone(), jobs.clone())?;
         let installer = Arc::new(Installer {
             downloads: downloads.clone(),
@@ -132,6 +135,7 @@ impl Runtime {
             installer,
             community,
             modpacks: Arc::new(Modpacks::default()),
+            mod_installer: Arc::new(ModInstaller::default()),
             official_notices,
             home_content: Default::default(),
             multiplayer,
@@ -699,6 +703,27 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             });
             Ok(json!(id))
         }
+        "crash.acknowledge" => {
+            let job = r.jobs.get(text(&p, "id")?)?;
+            crash::acknowledge(&r.directory, &job)?;
+            Ok(json!(true))
+        }
+        "crash.openLog" => {
+            let id = text(&p, "id")?;
+            let job = r.jobs.get(id)?;
+            let snapshot = job.snapshot();
+            let report = snapshot.crash_report.context("此任务没有崩溃分析报告")?;
+            let original = crash::original_log(&report)
+                .filter(|path| r.allowed_path(path).is_ok())
+                .map(Path::to_path_buf);
+            let path = original.unwrap_or(crash::archived_log(&r.directory, id)?);
+            r.allowed_path(&path)?;
+            if !path.is_file() {
+                bail!("本次日志已不存在，无法打开所在位置");
+            }
+            app.opener().reveal_item_in_dir(path)?;
+            Ok(json!(true))
+        }
         "tasks" => {
             let snapshots = r.downloads.snapshots().await;
             let summaries:Vec<_>=snapshots.into_iter().map(|s|{
@@ -844,6 +869,37 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                     .start(request, r.installer.clone(), r.community.clone(), resolver)
                     .await?
             ))
+        }
+        "resources.installPlan" => {
+            let target = ModInstallTarget::resolve(
+                r.target_root(&p)?, text(&p, "versionId")?, &r.settings.get(),
+            )?;
+            Ok(json!(r.mod_installer.preview(
+                &r.community, text(&p, "source")?, text(&p, "projectId")?,
+                text(&p, "fileId")?, target,
+            ).await?))
+        }
+        "resources.discardInstallPlan" => {
+            r.mod_installer.discard(text(&p, "token")?);
+            Ok(json!(true))
+        }
+        "resources.install" => {
+            let target = ModInstallTarget::resolve(
+                r.target_root(&p)?, text(&p, "versionId")?, &r.settings.get(),
+            )?;
+            let enable_paths: Vec<String> = decode(p["enablePaths"].clone())?;
+            let community = r.community.clone();
+            let resolver: UrlResolver = Arc::new(move |url| {
+                let app = app.clone();
+                let community = community.clone();
+                Box::pin(async move {
+                    crate::curseforge_download::resolve_with_sources(&app, &url, &community).await
+                })
+            });
+            Ok(json!(r.mod_installer.start(
+                text(&p, "token")?, target, enable_paths, r.downloads.clone(),
+                r.jobs.clone(), r.settings.clone(), resolver,
+            ).await?))
         }
         "resources.download" => {
             let kind = text(&p, "kind")?;

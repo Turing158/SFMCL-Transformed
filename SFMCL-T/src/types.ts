@@ -148,6 +148,15 @@ export interface Step {
   status: Status;
   detail: string;
 }
+export interface CrashReport {
+  category: string;
+  title: string;
+  description: string;
+  suggestions: string[];
+  exitCode: number | null;
+  logPath?: string | null;
+  acknowledged: boolean;
+}
 export interface Job {
   id: string;
   createdAt?: number;
@@ -158,6 +167,7 @@ export interface Job {
   downloadId?: string;
   error?: string;
   log: string[];
+  crashReport?: CrashReport;
   launch?: {
     versionId: string;
     gameVersion: string;
@@ -269,6 +279,21 @@ export interface ResourceFile {
   loaders: string[];
   file?: DownloadSpec;
   dependencies: ResourceDependency[];
+}
+export interface ResourceInstallPlan {
+  token: string | null;
+  items: {
+    projectId: string;
+    versionId: string;
+    name: string;
+    version: string;
+    kind: ResourceDependency["kind"];
+    status: "install" | "installed" | "disabled";
+    path: string;
+    main: boolean;
+  }[];
+  issues: string[];
+  warnings: string[];
 }
 export type LocalDataOperation = "migrate" | "backup" | "restore";
 export interface LocalDataResult {

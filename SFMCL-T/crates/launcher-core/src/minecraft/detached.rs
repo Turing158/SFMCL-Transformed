@@ -274,7 +274,12 @@ async fn host(request: Request) -> Result<()> {
     publish(&request.session, &state, &mut previous)?;
     let (events, mut receiver) = tokio::sync::mpsc::unbounded_channel();
     let running_job = job.clone();
-    let runner = super::process::run_java_with_settings(
+    let data = request
+        .session
+        .parent()
+        .and_then(Path::parent)
+        .context("游戏数据路径无效")?;
+    let runner = super::process::run_java_diagnosed(
         &request.java,
         &request.args,
         &request.directory,
@@ -282,6 +287,7 @@ async fn host(request: Request) -> Result<()> {
         &request.redactions,
         &request.settings,
         Some(events),
+        Some(data),
     );
     tokio::pin!(runner);
     let mut tick = tokio::time::interval(POLL);
@@ -323,6 +329,9 @@ async fn host(request: Request) -> Result<()> {
         }
     }
     state.code = result.as_ref().ok().copied();
+    if let Err(error) = &result {
+        super::crash::startup_failure(data, &job, &format!("{error:#}"), &request.redactions);
+    }
     job.finish(&result.map(|_| ()));
     state.snapshot = job.snapshot();
     publish(&request.session, &state, &mut previous)?;
@@ -932,6 +941,14 @@ mod tests {
             assert!(job.snapshot().log.iter().any(|line| line == "quoted value"));
             if code != 0 {
                 assert!(job.snapshot().error.unwrap().contains("7"));
+                assert_eq!(job.snapshot().crash_report.unwrap().exit_code, Some(7));
+                assert!(
+                    super::super::crash::archived_log(fixture.temp.path(), &job.snapshot().id)
+                        .unwrap()
+                        .is_file()
+                );
+            } else {
+                assert!(job.snapshot().crash_report.is_none());
             }
         }
         let job = fixture.job(&Jobs::default());

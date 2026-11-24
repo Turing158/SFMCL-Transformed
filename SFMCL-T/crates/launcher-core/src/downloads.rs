@@ -1103,7 +1103,7 @@ pub async fn verify_file(
         .map(|_| ())
 }
 
-fn verify_file_blocking(
+pub(crate) fn verify_file_blocking(
     path: &Path,
     spec: &DownloadSpec,
     cancel: &CancellationToken,

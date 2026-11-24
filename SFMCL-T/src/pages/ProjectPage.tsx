@@ -342,6 +342,8 @@ export function ProjectPage({
       {download && kind !== "modpack" && (
         <ResourceDownloadDialog
           resource={download}
+          source={detail.source}
+          projectId={detail.id}
           title={detail.title}
           localizedName={detail.localizedName}
           kind={kind}

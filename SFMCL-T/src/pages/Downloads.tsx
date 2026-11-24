@@ -19,6 +19,7 @@ import {
   Play,
   RefreshCw,
   Trash2,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { PageHeader } from "../PageHeader";
@@ -40,6 +41,7 @@ import {
 } from "../components";
 import type { Download, DownloadFile, Job, Status } from "../types";
 import { getJobPresentation } from "../jobPresentation";
+import { CrashAnalysisDialog } from "../CrashAnalysisDialog";
 import "../downloads.css";
 
 function DownloadBadge({
@@ -97,6 +99,10 @@ export function Downloads() {
     null,
   );
   const [log, setLog] = useSessionState<string | null>("Downloads.log", null);
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const analyzedJob = tasks.jobs.find(
+    (job) => job.id === analysis && job.crashReport,
+  );
   const active = tasks.downloads.filter((d) =>
     ["running", "paused", "pausing", "queued"].includes(d.status),
   );
@@ -165,7 +171,12 @@ export function Downloads() {
           </div>
           <div className="job-list">
             {tasks.jobs.slice(0, 12).map((job) => (
-              <JobCard key={job.id} job={job} onLog={() => setLog(job.id)} />
+              <JobCard
+                key={job.id}
+                job={job}
+                onLog={() => setLog(job.id)}
+                onAnalyze={() => setAnalysis(job.id)}
+              />
             ))}
           </div>
         </>
@@ -198,6 +209,12 @@ export function Downloads() {
         <DownloadList key={filter} downloads={downloads} onFiles={setFileId} />
       </TabPanel>
       {fileId && <FileDialog id={fileId} onClose={() => setFileId(null)} />}{" "}
+      {analyzedJob && (
+        <CrashAnalysisDialog
+          job={analyzedJob}
+          onClose={() => setAnalysis(null)}
+        />
+      )}
       {selectedJob && (
         <Modal
           title={`${selectedJob.title} · 日志`}
@@ -358,7 +375,15 @@ function DownloadRow({
   );
 }
 
-function JobCard({ job, onLog }: { job: Job; onLog: () => void }) {
+function JobCard({
+  job,
+  onLog,
+  onAnalyze,
+}: {
+  job: Job;
+  onLog: () => void;
+  onAnalyze: () => void;
+}) {
   const app = useApp();
   const presentation = getJobPresentation(job);
   const [open, setOpen] = useState(job.status !== "completed");
@@ -382,6 +407,16 @@ function JobCard({ job, onLog }: { job: Job; onLog: () => void }) {
         </button>
         <JobBadge job={job} />
         <div className="row-actions">
+          {job.crashReport && (
+            <button
+              className="icon-button has-surface"
+              aria-label={`查看 ${job.title} 崩溃分析`}
+              onClick={onAnalyze}
+            >
+              <PixelFrame />
+              <TriangleAlert size={17} />
+            </button>
+          )}
           <button
             className="icon-button has-surface"
             aria-label={`查看 ${job.title} 日志`}

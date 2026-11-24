@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { Download, FolderOpen, Gamepad2, LoaderCircle } from "lucide-react";
 import { api, pick } from "../api";
 import { Button, Modal, PixelFrame, TabList, TabPanel } from "../components";
-import { Input, Select } from "../controls";
+import { Checkbox, Input, Select } from "../controls";
 import type { ResourceTab } from "../navigation";
 import {
   compatibleResourceVersion,
@@ -14,12 +14,15 @@ import type {
   LocalizedName,
   ResourceDependency,
   ResourceFile,
+  ResourceInstallPlan,
   Version,
 } from "../types";
 import { resourceName } from "../resourceNames";
 
 export function ResourceDownloadDialog({
   resource,
+  source,
+  projectId,
   title,
   localizedName,
   kind,
@@ -29,6 +32,8 @@ export function ResourceDownloadDialog({
   onClose,
 }: {
   resource: ResourceFile;
+  source: string;
+  projectId: string;
   title: string;
   localizedName?: LocalizedName | null;
   kind: Exclude<ResourceTab, "minecraft">;
@@ -61,11 +66,73 @@ export function ResourceDownloadDialog({
     null,
   );
   const [readyToClose, setReadyToClose] = useState(false);
+  const [autoDependencies, setAutoDependencies] = useState(true);
+  const [enablePaths, setEnablePaths] = useState<string[]>([]);
+  const [retryPlan, setRetryPlan] = useState(0);
+  const [planState, setPlanState] = useState<{
+    key: string;
+    plan?: ResourceInstallPlan;
+    error?: string;
+  } | null>(null);
   useEffect(() => {
     // Restore focus only after the resource row is enabled again.
     if (readyToClose && !app.busy) onClose();
   }, [readyToClose, app.busy, onClose]);
   const target = versions.find((version) => version.id === targetId);
+  const installDependencies =
+    kind === "mod" && destination === "version" && autoDependencies;
+  const planKey = JSON.stringify([
+    source,
+    projectId,
+    resource.id,
+    app.data.settings.activeDir,
+    targetId,
+    target?.isolation,
+    app.data.settings.isolation,
+    retryPlan,
+  ]);
+  const currentPlan = planState?.key === planKey ? planState : null;
+  const plan = currentPlan?.plan;
+  useEffect(() => {
+    if (!installDependencies || !targetId) return;
+    let live = true;
+    let token: string | null = null;
+    setEnablePaths([]);
+    setPlanState(null);
+    void api<ResourceInstallPlan>("resources.installPlan", {
+      source,
+      projectId,
+      fileId: resource.id,
+      directory: app.data.settings.activeDir,
+      versionId: targetId,
+    })
+      .then((result) => {
+        token = result.token;
+        if (live) setPlanState({ key: planKey, plan: result });
+        else if (token)
+          void api("resources.discardInstallPlan", { token }).catch(() => {});
+      })
+      .catch((error) => {
+        if (live)
+          setPlanState({
+            key: planKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+      });
+    return () => {
+      live = false;
+      if (token)
+        void api("resources.discardInstallPlan", { token }).catch(() => {});
+    };
+  }, [
+    installDependencies,
+    planKey,
+    source,
+    projectId,
+    resource.id,
+    app.data.settings.activeDir,
+    targetId,
+  ]);
   const key = JSON.stringify([
     resource.id,
     destination,
@@ -78,6 +145,13 @@ export function ResourceDownloadDialog({
     !!resource.file &&
     !app.busy &&
     !alreadyQueued &&
+    (!installDependencies ||
+      (!!plan?.token &&
+        !plan.issues.length &&
+        plan.items.every(
+          (item) =>
+            item.status !== "disabled" || enablePaths.includes(item.path),
+        ))) &&
     (destination === "version" ? !!target : !!directory);
   const dependencyGroups = new Map<
     ResourceDependency["kind"],
@@ -103,17 +177,32 @@ export function ResourceDownloadDialog({
           void app.run(async () => {
             setSubmitting(true);
             try {
-              await api("resources.download", {
-                kind,
-                ...(destination === "version"
-                  ? { versionId: targetId }
-                  : { directory }),
-                file: resource.file,
-                title,
-              });
+              if (installDependencies) {
+                await api("resources.install", {
+                  token: plan!.token,
+                  directory: app.data.settings.activeDir,
+                  versionId: targetId,
+                  enablePaths,
+                });
+              } else
+                await api("resources.download", {
+                  kind,
+                  ...(destination === "version"
+                    ? { versionId: targetId }
+                    : { directory }),
+                  file: resource.file,
+                  title,
+                });
               onQueued(key);
               setReadyToClose(true);
-              app.notify("已加入下载队列");
+              app.notify(
+                installDependencies
+                  ? "模组与前置已加入安装队列"
+                  : "已加入下载队列",
+              );
+            } catch (error) {
+              if (installDependencies) setRetryPlan((value) => value + 1);
+              throw error;
             } finally {
               setSubmitting(false);
             }
@@ -289,6 +378,120 @@ export function ResourceDownloadDialog({
             )}
           </TabPanel>
         </div>
+        {kind === "mod" && destination === "version" && (
+          <section
+            className="resource-install-plan"
+            aria-label="模组安装清单"
+            aria-busy={installDependencies && !!target && !currentPlan}
+          >
+            <label className="resource-install-option">
+              <Checkbox
+                checked={autoDependencies}
+                onChange={(event) => setAutoDependencies(event.target.checked)}
+                disabled={app.busy}
+              />
+              自动安装必需前置依赖
+            </label>
+            {!autoDependencies ? (
+              <p className="helper">
+                仅下载主模组，缺少前置可能导致游戏无法启动。
+              </p>
+            ) : !target ? (
+              <p className="helper">选择兼容版本后检查前置依赖。</p>
+            ) : !currentPlan ? (
+              <p className="helper" role="status">
+                <LoaderCircle size={14} className="spin" />{" "}
+                正在检查前置与本地文件…
+              </p>
+            ) : (
+              <>
+                {plan?.items.length ? (
+                  <ul className="resource-install-items">
+                    {plan.items.map((item) => (
+                      <li key={item.projectId}>
+                        <div>
+                          {item.main ? (
+                            <strong>{item.name}（主模组）</strong>
+                          ) : (
+                            <button
+                              type="button"
+                              className="resource-install-name"
+                              disabled={app.busy}
+                              aria-label={`查看 ${item.name} 资源页面`}
+                              onClick={() =>
+                                void app.run(async () => {
+                                  const open = await onOpenDependency(
+                                    {
+                                      projectId: item.projectId,
+                                      versionId: item.versionId,
+                                      name: item.name,
+                                      kind: item.kind,
+                                    },
+                                    target,
+                                  );
+                                  open?.();
+                                })
+                              }
+                            >
+                              {item.name}
+                            </button>
+                          )}
+                          <span>{item.version}</span>
+                        </div>
+                        {item.status === "disabled" ? (
+                          <label className="resource-install-option">
+                            <Checkbox
+                              aria-label={`启用已有 ${item.name}`}
+                              checked={enablePaths.includes(item.path)}
+                              disabled={app.busy}
+                              onChange={(event) =>
+                                setEnablePaths((current) =>
+                                  event.target.checked
+                                    ? [...current, item.path]
+                                    : current.filter(
+                                        (path) => path !== item.path,
+                                      ),
+                                )
+                              }
+                            />
+                            启用已有文件
+                          </label>
+                        ) : (
+                          <span className="helper">
+                            {item.status === "installed"
+                              ? "已安装，跳过下载"
+                              : "需要安装"}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {currentPlan.error && (
+                  <p className="inline-error" role="alert">
+                    {currentPlan.error}
+                  </p>
+                )}
+                {plan?.issues.map((issue) => (
+                  <p className="inline-error" role="alert" key={issue}>
+                    {issue}
+                  </p>
+                ))}
+                {plan?.warnings.map((warning) => (
+                  <p className="helper" key={warning}>
+                    {warning}
+                  </p>
+                ))}
+                <Button
+                  disabled={app.busy}
+                  onClick={() => setRetryPlan((value) => value + 1)}
+                >
+                  重新检查前置
+                </Button>
+              </>
+            )}
+          </section>
+        )}
         <div className="dialog-actions">
           <Button disabled={app.busy} onClick={onClose}>
             取消
@@ -299,7 +502,9 @@ export function ResourceDownloadDialog({
               ? "已加入队列"
               : submitting
                 ? "正在准备下载…"
-                : "开始下载"}
+                : installDependencies
+                  ? "开始安装"
+                  : "开始下载"}
           </Button>
         </div>
       </form>

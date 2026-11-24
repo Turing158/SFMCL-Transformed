@@ -16,9 +16,9 @@ pub struct LocalProjectMatch {
     pub id: String,
 }
 
-struct ModIdentity {
-    sha1: String,
-    fingerprint: u32,
+pub(super) struct ModIdentity {
+    pub sha1: String,
+    pub fingerprint: u32,
 }
 
 impl Community {
@@ -117,6 +117,10 @@ fn identify_mod(root: &Path, path: &Path) -> Result<ModIdentity> {
     {
         bail!("不是所选游戏中的模组文件");
     }
+    identify_file(&path)
+}
+
+pub(super) fn identify_file(path: &Path) -> Result<ModIdentity> {
     let mut file = File::open(path)?;
     let mut sha1 = Sha1::new();
     let mut normalized_length = 0u32;

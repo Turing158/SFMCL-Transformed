@@ -231,12 +231,12 @@ try {
   await page
     .getByRole("textbox", { name: "版本名称", exact: true })
     .fill("Minecraft-test");
-  await select("安装目录", "测试目录");
+  await select("安装目录", "测试目录 · C:/Pixel-Test/Other");
   await page.evaluate(() => {
     window.__pixelTest.failures.install = "测试安装失败";
   });
   await page.getByRole("button", { name: "开始安装", exact: true }).click();
-  await expect(installPage.getByRole("alert")).toContainText("测试安装失败");
+  await expect(page.getByRole("alert").filter({ hasText: "测试安装失败" })).toBeVisible();
   await expect(installPage).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "版本名称", exact: true }),
@@ -766,8 +766,7 @@ try {
   const fileDownload = page.locator("button.project-file");
   const dialog = page.getByRole("dialog", { name: "下载 Sodium", exact: true });
   const submitDownload = dialog.getByRole("button", {
-    name: "开始下载",
-    exact: true,
+    name: /^开始(?:下载|安装)$/,
   });
   const downloadCount = () =>
     page.evaluate(
@@ -780,6 +779,9 @@ try {
   await fileDownload.focus();
   await fileDownload.press("Enter");
   await expect(dialog).toBeVisible();
+  await dialog
+    .getByRole("checkbox", { name: "自动安装必需前置依赖" })
+    .uncheck();
   await expect(
     dialog.getByRole("combobox", { name: "本地游戏版本" }),
   ).toContainText("1.20.1-Fabric");
@@ -798,6 +800,9 @@ try {
   await expect(fileDownload).toBeFocused();
 
   await fileDownload.press("Space");
+  await dialog
+    .getByRole("checkbox", { name: "自动安装必需前置依赖" })
+    .uncheck();
   await page.evaluate(() => {
     window.__pixelTest.failures["resources.download"] = "测试下载失败，请重试";
   });

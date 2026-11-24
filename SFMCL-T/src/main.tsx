@@ -13,6 +13,7 @@ import "./scrollbars.css";
 import App from "./App";
 import { OnboardingProvider } from "./Onboarding";
 import { ConfirmationDialogHost } from "./ConfirmationDialog";
+import { CrashAnalysisDialogHost } from "./CrashAnalysisDialog";
 import { Provider } from "./store";
 import { StartupBoundary, StartupErrorBoundary } from "./StartupBoundary";
 import { TooltipHost } from "./Tooltip";
@@ -40,6 +41,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             </OnboardingProvider>
           </HolidayProvider>
           <ConfirmationDialogHost />
+          <CrashAnalysisDialogHost />
           <TooltipHost />
         </StartupBoundary>
       </Provider>

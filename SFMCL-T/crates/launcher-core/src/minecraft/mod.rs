@@ -1,4 +1,5 @@
 pub mod arguments;
+pub mod crash;
 mod authlib_injector;
 #[cfg(windows)]
 pub mod detached;

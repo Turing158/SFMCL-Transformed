@@ -186,6 +186,28 @@ export function resourceCenterFixture() {
               file.loaders.includes(payload.loader.toLowerCase())),
         );
     }
+    if (operation === "resources.installPlan")
+      return {
+        token: `plan-${payload.projectId}-${payload.fileId}-${payload.versionId}`,
+        items: [
+          {
+            projectId: payload.projectId,
+            versionId: payload.fileId,
+            name:
+              projects.find((project) => project.id === payload.projectId)
+                ?.title || "Sodium",
+            version: "1.0",
+            kind: "mod",
+            status: "install",
+            path: "mods/test-0.jar",
+            main: true,
+          },
+        ],
+        issues: [],
+        warnings: [],
+      };
+    if (operation === "resources.discardInstallPlan") return true;
+    if (operation === "resources.install") return "queued-mod-install";
     if (operation === "resources.download") return "queued-resource";
     if (operation === "resources.local")
       return structuredClone(

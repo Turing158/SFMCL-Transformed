@@ -25,7 +25,12 @@ impl Drop for ExitEvent {
     }
 }
 
-async fn pump(reader: impl tokio::io::AsyncRead + Unpin, job: Arc<Job>, redactions: Vec<String>) {
+async fn pump(
+    reader: impl tokio::io::AsyncRead + Unpin,
+    job: Arc<Job>,
+    redactions: Vec<String>,
+    capture: Option<Arc<super::crash::Capture>>,
+) {
     let mut reader = BufReader::new(reader);
     let mut bytes = Vec::new();
     loop {
@@ -46,6 +51,9 @@ async fn pump(reader: impl tokio::io::AsyncRead + Unpin, job: Arc<Job>, redactio
         }
         if line.len() > 4000 {
             line = line.chars().take(4000).collect();
+        }
+        if let Some(capture) = &capture {
+            capture.line(&line);
         }
         job.log(line);
     }
@@ -85,6 +93,24 @@ pub async fn run_java_with_settings(
     settings: &crate::config::Settings,
     events: Option<LaunchEvents>,
 ) -> Result<i32> {
+    run_java_diagnosed(
+        java, args, directory, job, redactions, settings, events, None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn run_java_diagnosed(
+    java: &str,
+    args: &[String],
+    directory: &Path,
+    job: Arc<Job>,
+    redactions: &[String],
+    settings: &crate::config::Settings,
+    events: Option<LaunchEvents>,
+    data: Option<&Path>,
+) -> Result<i32> {
+    let capture = data.map(|_| Arc::new(super::crash::Capture::new(directory, redactions)));
     let mut child = super::java::command(super::java::executable(java))
         .args(args)
         .current_dir(directory)
@@ -113,8 +139,8 @@ pub async fn run_java_with_settings(
     let mut window = super::window::Controller::new(settings, directory, job.clone());
     let out = child.stdout.take().context("无法读取 Java 输出")?;
     let err = child.stderr.take().context("无法读取 Java 错误输出")?;
-    let stdout = tokio::spawn(pump(out, job.clone(), redactions.to_vec()));
-    let stderr = tokio::spawn(pump(err, job.clone(), redactions.to_vec()));
+    let stdout = tokio::spawn(pump(out, job.clone(), redactions.to_vec(), capture.clone()));
+    let stderr = tokio::spawn(pump(err, job.clone(), redactions.to_vec(), capture.clone()));
     let mut title_tick = tokio::time::interval(std::time::Duration::from_secs(1));
     let status = loop {
         let status = tokio::select! {
@@ -130,6 +156,9 @@ pub async fn run_java_with_settings(
     stderr.await?;
     let code = status.code().unwrap_or(-1);
     if !status.success() {
+        if let (Some(capture), Some(data)) = (capture, data) {
+            capture.finish(data, &job, code);
+        }
         bail!("Java 进程退出，错误码 {code}。请查看任务日志");
     }
     Ok(code)
@@ -238,7 +267,7 @@ mod tests {
         let jobs = crate::jobs::Jobs::default();
         let job = jobs.create(crate::jobs::JobKind::Other, "test".into(), &["running"]);
         let output = b"before\r\nlocal \xff\xfe token-secret\r\nafter\n";
-        pump(&output[..], job.clone(), vec!["token-secret".into()]).await;
+        pump(&output[..], job.clone(), vec!["token-secret".into()], None).await;
         let log = job.snapshot().log;
         assert_eq!(log.len(), 3);
         assert_eq!(log[0], "before");

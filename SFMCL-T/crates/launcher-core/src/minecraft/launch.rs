@@ -56,6 +56,8 @@ impl Installer {
         if let Some(target) = &target {
             target.apply(&mut settings)?;
         }
+        let game = versions::game_directory(&root, &id, settings.isolation)?;
+        let _install_guard = crate::resources::install::launch_guard(&game)?;
         let lock_path = safe_join(&root, format!(".tmcl/locks/launch-{id}.lock"))?;
         std::fs::create_dir_all(lock_path.parent().unwrap())?;
         let lock = std::fs::OpenOptions::new()
@@ -80,9 +82,18 @@ impl Installer {
             ],
         );
         let job_id = job.snapshot().id;
+        job.set_launch_context(LaunchContext {
+            version_id: id.clone(),
+            game_version: id.clone(),
+            directory: settings.active_dir.clone(),
+            player_name: player.name.clone(),
+            offline_lan: settings.offline_lan,
+            running: false,
+        });
         let installer = self.clone();
         tokio::spawn(async move {
             let _lock = lock;
+            let secrets = vec![player.access_token.clone()];
             let result = installer
                 .launch_inner(
                     &root,
@@ -93,6 +104,14 @@ impl Installer {
                     LaunchOptions { events, target },
                 )
                 .await;
+            if let Err(error) = &result {
+                super::crash::startup_failure(
+                    installer.settings.directory(),
+                    &job,
+                    &format!("{error:#}"),
+                    &secrets,
+                );
+            }
             job.finish(&result);
         });
         Ok(job_id)
@@ -204,7 +223,7 @@ impl Installer {
         )
         .await?;
         #[cfg(not(windows))]
-        super::process::run_java_with_settings(
+        super::process::run_java_diagnosed(
             &java.path,
             &args,
             &directory,
@@ -212,6 +231,7 @@ impl Installer {
             &[player.access_token],
             &settings,
             options.events,
+            Some(self.settings.directory()),
         )
         .await?;
         Ok(())

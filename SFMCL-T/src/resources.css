@@ -1521,6 +1521,65 @@
 .resource-download-form .dialog-actions {
   margin-top: 0;
 }
+.resource-install-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.resource-install-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.resource-install-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.resource-install-items li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.resource-install-items li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.resource-install-items li > div > span {
+  color: var(--muted);
+}
+.resource-install-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.resource-install-name:hover {
+  text-decoration: underline;
+}
+.resource-install-plan > .button {
+  align-self: flex-start;
+}
+.resource-install-plan > .helper:has(svg) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .version-local-link {
   color: var(--accent);
   display: inline-flex;
