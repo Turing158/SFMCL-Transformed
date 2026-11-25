@@ -6,10 +6,12 @@ import type { ResourceTab } from "../navigation";
 
 export function ResourceSubpage({
   title,
+  titleContent,
   tab,
   children,
 }: {
   title: string;
+  titleContent?: ReactNode;
   tab: ResourceTab | "world";
   children: ReactNode;
 }) {
@@ -32,6 +34,7 @@ export function ResourceSubpage({
         <PageTitle
           icon={<Icon />}
           title={title}
+          titleContent={titleContent}
           eyebrow={
             tab === "minecraft" ? "MINECRAFT INSTALLATION" : "RESOURCE DETAILS"
           }

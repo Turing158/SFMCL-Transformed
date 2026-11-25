@@ -1,6 +1,6 @@
 import { useSessionChangeEffect, useSessionState } from "../windowSession";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, LoaderCircle } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Input, Select } from "../controls";
 import { useApp } from "../store";
@@ -15,9 +15,10 @@ import {
   TabPanel,
 } from "../components";
 import type { Project, ResourceFile } from "../types";
-import type { ResourceTab } from "../navigation";
+import { resourceTabNames, type ResourceTab } from "../navigation";
 import { ResourceSubpage } from "./ResourceSubpage";
 import { useTabContentTransition } from "../useTabContentTransition";
+import { LoadingState } from "../LoadingState";
 import { ResourceDownloadDialog } from "./ResourceDownloadDialog";
 import { ModpackInstallDialog } from "./ModpackInstallDialog";
 import { CatalogView, type ResourceView } from "./CatalogView";
@@ -256,79 +257,80 @@ export function ProjectPage({
                 aria-controls="project-file-results"
               />
             </div>
-            {loading && (
-              <div className="project-file-loading loading-text" role="status">
-                <LoaderCircle size={28} className="spin" aria-hidden="true" />
-                <span>加载中...</span>
-              </div>
-            )}
-            {files.length === 0 && !loading && !error && (
-              <Empty
-                title="未找到兼容文件"
-                description={
-                  kind === "datapack"
-                    ? "试试其他游戏版本，或清除筛选后重试。"
-                    : "试试其他游戏版本或加载器，或清除筛选后重试。"
-                }
-              />
-            )}
-            <CatalogItems
-              id="project-file-results"
-              className="project-file-results"
-              view={view}
-              revision={pageFiles}
-              label="下载列表"
-              busy={loading}
+            <LoadingState
+              loading={loading}
+              label={`正在加载${resourceTabNames[kind]}文件…`}
             >
-              {pageFiles.map((file) => (
-                <ProjectFileItem
-                  key={file.id}
-                  resource={file}
-                  disabled={app.busy || loading}
-                  onSelect={() => {
-                    app.clearError();
-                    setDownload(file);
-                  }}
+              {files.length === 0 && !loading && !error && (
+                <Empty
+                  title="未找到兼容文件"
+                  description={
+                    kind === "datapack"
+                      ? "试试其他游戏版本，或清除筛选后重试。"
+                      : "试试其他游戏版本或加载器，或清除筛选后重试。"
+                  }
                 />
-              ))}
-            </CatalogItems>
-            {!loading && !error && files.length > 0 && (
-              <nav
-                className="pagination catalog-pagination project-file-pagination"
-                aria-label="下载列表分页"
+              )}
+              <CatalogItems
+                id="project-file-results"
+                className="project-file-results"
+                view={view}
+                revision={pageFiles}
+                label="下载列表"
+                busy={loading}
               >
-                <Button
-                  aria-controls="project-file-results"
-                  disabled={currentFilePage === 0}
-                  onClick={() => goToFilePage(currentFilePage - 1)}
+                {pageFiles.map((file) => (
+                  <ProjectFileItem
+                    key={file.id}
+                    resource={file}
+                    disabled={app.busy || loading}
+                    onSelect={() => {
+                      app.clearError();
+                      setDownload(file);
+                    }}
+                  />
+                ))}
+              </CatalogItems>
+              {!loading && !error && files.length > 0 && (
+                <nav
+                  className="pagination catalog-pagination project-file-pagination"
+                  aria-label="下载列表分页"
                 >
-                  上一页
-                </Button>
-                <span
-                  className="page-indicator catalog-page-indicator has-surface"
-                  role="status"
-                  aria-atomic="true"
-                >
-                  <PixelFrame />
-                  <span className="page-indicator-text">
-                    第 {currentFilePage + 1} / {filePages} 页
+                  <Button
+                    aria-controls="project-file-results"
+                    disabled={currentFilePage === 0}
+                    onClick={() => goToFilePage(currentFilePage - 1)}
+                  >
+                    上一页
+                  </Button>
+                  <span
+                    className="page-indicator catalog-page-indicator has-surface"
+                    role="status"
+                    aria-atomic="true"
+                  >
+                    <PixelFrame />
+                    <span className="page-indicator-text">
+                      第 {currentFilePage + 1} / {filePages} 页
+                    </span>
                   </span>
-                </span>
-                <Button
-                  aria-controls="project-file-results"
-                  disabled={currentFilePage + 1 >= filePages}
-                  onClick={() => goToFilePage(currentFilePage + 1)}
-                >
-                  下一页
-                </Button>
-              </nav>
-            )}
+                  <Button
+                    aria-controls="project-file-results"
+                    disabled={currentFilePage + 1 >= filePages}
+                    onClick={() => goToFilePage(currentFilePage + 1)}
+                  >
+                    下一页
+                  </Button>
+                </nav>
+              )}
+            </LoadingState>
           </div>
         )}
       </TabPanel>
       {download && kind === "modpack" && (
         <ModpackInstallDialog
           resource={download}
+          source={detail.source}
+          projectId={detail.id}
           title={detail.title}
           localizedName={detail.localizedName}
           queued={queued}

@@ -35,6 +35,9 @@ pub struct Settings {
     pub window_y: i32,
     pub launcher_action: String,
     pub restore_launcher: bool,
+    pub pre_launch_command: crate::minecraft::commands::CommandSettings,
+    #[serde(default = "crate::minecraft::commands::CommandSettings::after_exit")]
+    pub post_exit_command: crate::minecraft::commands::CommandSettings,
     pub server_enabled: bool,
     pub server_host: String,
     pub server_port: u16,
@@ -118,6 +121,8 @@ impl Default for Settings {
             window_y: 0,
             launcher_action: "keep".into(),
             restore_launcher: true,
+            pre_launch_command: Default::default(),
+            post_exit_command: crate::minecraft::commands::CommandSettings::after_exit(),
             server_enabled: false,
             server_host: String::new(),
             server_port: 25565,

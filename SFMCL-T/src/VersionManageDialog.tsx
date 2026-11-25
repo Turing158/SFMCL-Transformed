@@ -2,11 +2,12 @@ import { useState } from "react";
 import {
   FolderOpen,
   ImagePlus,
+  Package,
   RefreshCw,
-  Settings2,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
-import { Button, Modal, ResourceImage } from "./components";
+import { Button, Modal, PixelFrame, ResourceImage } from "./components";
 import { Input } from "./controls";
 import { useApp } from "./store";
 import type { Version } from "./types";
@@ -47,24 +48,36 @@ export function VersionManageDialog({
         </div>
       </label>
       <div className="action-grid">
-        <Button
-          onClick={() => {
-            app.openVersionPage("settings", version);
-            onClose();
-          }}
+        <div
+          className="split-button split-button-equal has-surface"
+          role="group"
+          aria-label="整合包操作"
         >
-          <Settings2 size={16} />
-          游戏设置
-        </Button>
-        <Button
-          onClick={() => {
-            app.openVersionPage("resources", version);
-            onClose();
-          }}
-        >
-          <FolderOpen size={16} />
-          本地资源
-        </Button>
+          <PixelFrame />
+          <button
+            type="button"
+            disabled={app.busy || !!version.error}
+            onClick={() => {
+              app.openVersionPage("modpack-update", version);
+              onClose();
+            }}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+            更新
+          </button>
+          <button
+            type="button"
+            className="split-button-secondary"
+            disabled={app.busy || !!version.error}
+            onClick={() => {
+              app.openVersionPage("modpack-export", version);
+              onClose();
+            }}
+          >
+            <Package size={16} aria-hidden="true" />
+            导出
+          </button>
+        </div>
         <Button disabled={app.busy} onClick={() => void actions.openFolder()}>
           <FolderOpen size={16} />
           打开版本目录
@@ -75,16 +88,31 @@ export function VersionManageDialog({
         >
           打开 native 目录
         </Button>
-        <Button disabled={app.busy} onClick={() => void actions.changeIcon()}>
-          <ImagePlus size={16} />
-          更换图标
-        </Button>
-        <Button
-          disabled={app.busy}
-          onClick={() => void actions.changeIcon(true)}
+        <div
+          className="split-button has-surface"
+          role="group"
+          aria-label="版本图标操作"
         >
-          恢复默认图标
-        </Button>
+          <PixelFrame />
+          <button
+            type="button"
+            disabled={app.busy}
+            onClick={() => void actions.changeIcon()}
+          >
+            <ImagePlus size={16} aria-hidden="true" />
+            更换图标
+          </button>
+          <button
+            type="button"
+            className="split-button-secondary"
+            aria-label="恢复默认图标"
+            data-tooltip="恢复默认图标"
+            disabled={app.busy}
+            onClick={() => void actions.changeIcon(true)}
+          >
+            <RotateCcw size={14} aria-hidden="true" />
+          </button>
+        </div>
         <Button disabled={app.busy} onClick={() => void actions.repair()}>
           <RefreshCw size={16} />
           补全资源文件

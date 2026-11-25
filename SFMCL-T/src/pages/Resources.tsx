@@ -30,11 +30,8 @@ import { ProjectPage } from "./ProjectPage";
 import { MinecraftInstallPage } from "./MinecraftInstallPage";
 import { MinecraftInstall } from "./MinecraftInstall";
 import { CatalogView, type ResourceView } from "./CatalogView";
-import {
-  CatalogItems,
-  CatalogResultCount,
-  CatalogSkeleton,
-} from "./CatalogMotion";
+import { CatalogItems, CatalogResultCount } from "./CatalogMotion";
+import { LoadingState } from "../LoadingState";
 import { useApp } from "../store";
 import { usePageActive } from "../PageActivity";
 import { useTabContentTransition } from "../useTabContentTransition";
@@ -581,140 +578,142 @@ export function Resources() {
                     )}
                   </div>
                 )}
-                {error ? (
-                  <section className="panel has-surface">
-                    <PixelFrame />
-                    <Empty
-                      title="暂时无法获取资源"
-                      description={error}
-                      action={
-                        <Button onClick={() => setRetry((value) => value + 1)}>
-                          重试
-                        </Button>
-                      }
-                    />
-                  </section>
-                ) : loading ? (
-                  <CatalogSkeleton view={view} label="正在加载资源" />
-                ) : projects.length ? (
-                  <>
-                    <CatalogItems view={view} revision={projects}>
-                      {projects.map((project) => (
-                        <article
-                          key={`${project.source}-${project.id}`}
-                          className="catalog-project has-surface"
-                        >
-                          <PixelFrame />
-                          <button
-                            className="catalog-project-info"
-                            aria-label={`查看 ${resourceName(project.title, project.localizedName)} 详情`}
-                            onClick={() =>
-                              openDetail({
-                                kind: "project",
-                                project,
-                                initialTab: "description",
-                                gameVersion: filters.gameVersion,
-                                loader: filters.loader,
-                              })
-                            }
+                <LoadingState loading={loading} label={`正在加载${kindLabel}…`}>
+                  {error ? (
+                    <section className="panel has-surface">
+                      <PixelFrame />
+                      <Empty
+                        title="暂时无法获取资源"
+                        description={error}
+                        action={
+                          <Button
+                            onClick={() => setRetry((value) => value + 1)}
                           >
-                            <ResourceImage path={project.icon} alt="" />
-                            <div className="catalog-project-copy">
-                              <div className="catalog-project-title">
-                                <h2>
-                                  {resourceName(
-                                    project.title,
-                                    project.localizedName,
-                                  )}
-                                </h2>
-                                <span>{project.author}</span>
-                              </div>
-                              <p>{project.description}</p>
-                              <div className="catalog-project-meta">
-                                <div className="catalog-tags">
-                                  {project.categories
-                                    .slice(0, 3)
-                                    .map((category) => (
-                                      <Badge key={category}>{category}</Badge>
-                                    ))}
+                            重试
+                          </Button>
+                        }
+                      />
+                    </section>
+                  ) : projects.length ? (
+                    <>
+                      <CatalogItems view={view} revision={projects}>
+                        {projects.map((project) => (
+                          <article
+                            key={`${project.source}-${project.id}`}
+                            className="catalog-project has-surface"
+                          >
+                            <PixelFrame />
+                            <button
+                              className="catalog-project-info"
+                              aria-label={`查看 ${resourceName(project.title, project.localizedName)} 详情`}
+                              onClick={() =>
+                                openDetail({
+                                  kind: "project",
+                                  project,
+                                  initialTab: "description",
+                                  gameVersion: filters.gameVersion,
+                                  loader: filters.loader,
+                                })
+                              }
+                            >
+                              <ResourceImage path={project.icon} alt="" />
+                              <div className="catalog-project-copy">
+                                <div className="catalog-project-title">
+                                  <h2>
+                                    {resourceName(
+                                      project.title,
+                                      project.localizedName,
+                                    )}
+                                  </h2>
+                                  <span>{project.author}</span>
                                 </div>
-                                <ProjectDownloads count={project.downloads} />
+                                <p>{project.description}</p>
+                                <div className="catalog-project-meta">
+                                  <div className="catalog-tags">
+                                    {project.categories
+                                      .slice(0, 3)
+                                      .map((category) => (
+                                        <Badge key={category}>{category}</Badge>
+                                      ))}
+                                  </div>
+                                  <ProjectDownloads count={project.downloads} />
+                                </div>
                               </div>
-                            </div>
-                          </button>
-                        </article>
-                      ))}
-                    </CatalogItems>
-                    <nav
-                      className="pagination catalog-pagination"
-                      aria-label="资源分页"
-                    >
-                      <Button
-                        disabled={filters.offset === 0}
-                        onClick={() => {
-                          setFilters((current) => ({
-                            ...current,
-                            offset: Math.max(0, current.offset - pageSize),
-                          }));
-                          resultsRef.current?.scrollIntoView({
-                            block: "start",
-                          });
-                        }}
+                            </button>
+                          </article>
+                        ))}
+                      </CatalogItems>
+                      <nav
+                        className="pagination catalog-pagination"
+                        aria-label="资源分页"
                       >
-                        上一页
-                      </Button>
-                      <span
-                        className="page-indicator catalog-page-indicator has-surface"
-                        tabIndex={0}
-                      >
-                        <PixelFrame />
-                        <span className="page-indicator-text">
-                          第 {Math.floor(filters.offset / pageSize) + 1} /{" "}
-                          {Math.max(1, Math.ceil(total / pageSize))} 页
-                        </span>
-                      </span>
-                      <Button
-                        disabled={filters.offset + pageSize >= total}
-                        onClick={() => {
-                          setFilters((current) => ({
-                            ...current,
-                            offset: current.offset + pageSize,
-                          }));
-                          resultsRef.current?.scrollIntoView({
-                            block: "start",
-                          });
-                        }}
-                      >
-                        下一页
-                      </Button>
-                    </nav>
-                  </>
-                ) : (
-                  <section className="panel has-surface">
-                    <PixelFrame />
-                    <Empty
-                      title="没有找到匹配资源"
-                      description="试试其他关键词，或减少筛选条件。"
-                      action={
                         <Button
+                          disabled={filters.offset === 0}
                           onClick={() => {
-                            setQuery("");
-                            setVersionInput("");
-                            changeFilters({
-                              query: "",
-                              gameVersion: "",
-                              loader: "",
-                              category: "",
+                            setFilters((current) => ({
+                              ...current,
+                              offset: Math.max(0, current.offset - pageSize),
+                            }));
+                            resultsRef.current?.scrollIntoView({
+                              block: "start",
                             });
                           }}
                         >
-                          <Search size={16} />
-                          浏览全部{kindLabel}
+                          上一页
                         </Button>
-                      }
-                    />
-                  </section>
-                )}
+                        <span
+                          className="page-indicator catalog-page-indicator has-surface"
+                          tabIndex={0}
+                        >
+                          <PixelFrame />
+                          <span className="page-indicator-text">
+                            第 {Math.floor(filters.offset / pageSize) + 1} /{" "}
+                            {Math.max(1, Math.ceil(total / pageSize))} 页
+                          </span>
+                        </span>
+                        <Button
+                          disabled={filters.offset + pageSize >= total}
+                          onClick={() => {
+                            setFilters((current) => ({
+                              ...current,
+                              offset: current.offset + pageSize,
+                            }));
+                            resultsRef.current?.scrollIntoView({
+                              block: "start",
+                            });
+                          }}
+                        >
+                          下一页
+                        </Button>
+                      </nav>
+                    </>
+                  ) : (
+                    <section className="panel has-surface">
+                      <PixelFrame />
+                      <Empty
+                        title="没有找到匹配资源"
+                        description="试试其他关键词，或减少筛选条件。"
+                        action={
+                          <Button
+                            onClick={() => {
+                              setQuery("");
+                              setVersionInput("");
+                              changeFilters({
+                                query: "",
+                                gameVersion: "",
+                                loader: "",
+                                category: "",
+                              });
+                            }}
+                          >
+                            <Search size={16} />
+                            浏览全部{kindLabel}
+                          </Button>
+                        }
+                      />
+                    </section>
+                  )}
+                </LoadingState>
               </div>
             </div>
           )}

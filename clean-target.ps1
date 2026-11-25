@@ -97,9 +97,16 @@ try {
                 ((Get-Item -LiteralPath $lockPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
                 throw "Refusing to open a linked Cargo lock: $lockPath"
             }
+            $cargoLockStream = $null
             try {
-                $locks.Add([IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None))
+                # A finished cargo run can retain an unlocked file handle
+                # while the desktop app runs. Use the OS byte-range lock used
+                # by Cargo on Windows, so active builds are still excluded.
+                $cargoLockStream = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::ReadWrite)
+                $cargoLockStream.Lock(0, [long]::MaxValue)
+                $locks.Add($cargoLockStream)
             } catch {
+                if ($null -ne $cargoLockStream) { $cargoLockStream.Dispose() }
                 throw "Cannot lock Cargo output. Finish builds/tests before cleaning: $lockPath"
             }
         }

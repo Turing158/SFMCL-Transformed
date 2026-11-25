@@ -11,6 +11,7 @@ const browser = await chromium.launch({
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+page.setDefaultTimeout(8000);
 const errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
 await page.emulateMedia({ reducedMotion: "reduce" });
@@ -199,6 +200,51 @@ try {
   await expect(install).toBeEnabled();
   await close();
 
+  // A focused version tooltip lives inside the native dialog. Replacing its
+  // anchor while it exits must not feed aria-hidden mutations back into itself.
+  for (const reducedMotion of ["no-preference", "reduce"]) {
+    await page.emulateMedia({ reducedMotion });
+    await page.setViewportSize({ width: 864, height: 600 });
+    await open("conflict", 300);
+    const version = dialog.getByRole("combobox", { name: "本地游戏版本" });
+    const tooltip = page.locator("#sfmcl-t-tooltip");
+    await expect(dialog.getByRole("alert")).toContainText("版本不满足要求");
+    await page.mouse.move(850, 590);
+    await version.hover();
+    await expect(tooltip).toHaveAttribute("data-open", "true");
+    await expect(tooltip).toHaveCSS("opacity", "1");
+    await expect(install).toBeDisabled();
+    await dialog.getByRole("tab", { name: "安装到游戏", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(
+      dialog.getByRole("tab", { name: "下载到文件夹", exact: true }),
+    ).toHaveAttribute("aria-selected", "true");
+    await expect(tooltip).toHaveCount(0);
+    await page.keyboard.press("ArrowLeft");
+    await expect(dialog.getByRole("alert")).toContainText("版本不满足要求");
+    await page.evaluate(() => {
+      window.__modInstallTest.mode = "normal";
+    });
+    await dialog.getByRole("button", { name: "重新检查前置" }).click();
+    await expect(install).toBeEnabled();
+    await version.click();
+    await expect(
+      page.getByRole("listbox", { name: "本地游戏版本" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await dialog
+      .getByRole("button", { name: "关闭对话框", exact: true })
+      .click();
+    await expect(dialog).toHaveCount(0);
+
+    await open("conflict", 300);
+    await expect(dialog.getByRole("alert")).toContainText("版本不满足要求");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator("button.project-file").first()).toBeEnabled();
+  }
+  await page.setViewportSize({ width: 1280, height: 960 });
+
   await open("stale");
   await expect(install).toBeEnabled();
   const previous = await page.evaluate(() => window.__modInstallTest.plans);
@@ -250,6 +296,9 @@ try {
           "disabled explicit enable",
           "conflict and retry",
           "network error and retry",
+          "conflict tooltip exit and keyboard destination switch without freezing",
+          "retry, version dropdown, close button and Escape after dependency checks",
+          "full and reduced motion at 864x600",
           "stale plan refresh",
           "folder download and stale response",
           "single grouped install",

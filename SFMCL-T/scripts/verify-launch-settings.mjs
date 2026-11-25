@@ -50,7 +50,22 @@ try {
     "游戏窗口",
     "启动行为",
     "高级启动参数",
+    "执行命令",
   ]);
+  const advanced = page.getByRole("button", { name: "高级设置", exact: true });
+  const advancedHeading = page.getByRole("heading", { name: "高级启动参数" });
+  const commandsHeading = page.getByRole("heading", { name: "执行命令" });
+  await expect(advanced).toHaveAttribute("aria-expanded", "false");
+  await expect(advancedHeading).toHaveCount(0);
+  await expect(commandsHeading).toHaveCount(0);
+  await advanced.press("Enter");
+  await expect(advanced).toHaveAttribute("aria-expanded", "true");
+  await expect(advancedHeading).toBeVisible();
+  await expect(commandsHeading).toBeVisible();
+  await advanced.press("Space");
+  await expect(advanced).toHaveAttribute("aria-expanded", "false");
+  await expect(advancedHeading).toHaveCount(0);
+  await expect(commandsHeading).toHaveCount(0);
   await expect(
     page.getByRole("textbox", { name: "服务器地址", exact: true }),
   ).toHaveCount(0);
@@ -124,7 +139,7 @@ try {
   await expect(port()).toHaveValue("");
   await expect(
     page.locator(".settings-card-heading .pixel-switch-labeled"),
-  ).toHaveCount(5);
+  ).toHaveCount(6);
   const windowFields = page.locator('[data-setting-group="window"]:visible');
   const launcherFields = page.locator(
     '[data-setting-group="launcher"]:visible',
@@ -408,6 +423,7 @@ try {
   });
   expect(errors).toEqual([]);
   const checks = [
+    "Advanced parameters and commands are collapsed by default and toggle together with Enter and Space",
     "Window size, title, position and monitor share one card without helper text",
     "Each merged window and launch card uses one scope switch for all its fields",
     "Direct-entry card exists only in version settings and contains no switches",

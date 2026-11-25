@@ -236,7 +236,9 @@ try {
     window.__pixelTest.failures.install = "测试安装失败";
   });
   await page.getByRole("button", { name: "开始安装", exact: true }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "测试安装失败" })).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "测试安装失败" }),
+  ).toBeVisible();
   await expect(installPage).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "版本名称", exact: true }),
@@ -484,7 +486,9 @@ try {
   await expect(
     page.getByText("正在获取官方版本清单…", { exact: true }),
   ).toHaveCount(0);
-  await expect(installer.locator(".catalog-skeleton")).toHaveCount(6);
+  await expect(installer.locator(".loading-state")).toHaveText(
+    "正在加载 Minecraft 版本…",
+  );
   await expect(installer.locator(".catalog-project")).toHaveCount(3);
   await expect(installer.getByRole("alert")).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 1000 });

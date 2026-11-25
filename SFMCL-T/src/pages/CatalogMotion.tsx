@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { PixelFrame } from "../components";
 import type { ResourceView } from "./CatalogView";
 
 const easing = "cubic-bezier(0.22, 0.8, 0.25, 1)";
@@ -78,34 +77,6 @@ export function CatalogItems({
     >
       {children}
     </div>
-  );
-}
-
-export function CatalogSkeleton({
-  view,
-  label,
-}: {
-  view: ResourceView;
-  label: string;
-}) {
-  return (
-    <CatalogItems view={view} label={label}>
-      {Array.from({ length: 6 }, (_, index) => (
-        <div
-          key={index}
-          className="catalog-skeleton has-surface"
-          aria-hidden="true"
-        >
-          <PixelFrame />
-          <span />
-          <div>
-            <i />
-            <i />
-            <i />
-          </div>
-        </div>
-      ))}
-    </CatalogItems>
   );
 }
 

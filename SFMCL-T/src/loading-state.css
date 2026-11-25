@@ -1,0 +1,36 @@
+.loading-region {
+  min-width: 0;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 152px;
+  padding: 36px 12px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.loading-state-icon {
+  display: flex;
+  color: var(--accent);
+}
+
+.loading-state-spinner {
+  animation: loading-state-spin 900ms linear infinite;
+}
+
+.loading-state-text {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@keyframes loading-state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -39,6 +39,10 @@ async fn startup_window(window: tauri::WebviewWindow, phase: StartupPhase) -> Re
                     window.set_size(tauri::LogicalSize::new(864.0, 591.0))?;
                     window.center()?;
                 }
+                // The small startup document is ready, including on tray restore.
+                // Show its animation before React, IPC and first-screen assets load.
+                window.show()?;
+                window.unminimize()?;
             }
             StartupPhase::Error => {
                 window_frame::set_visible(&window, false)?;
@@ -92,7 +96,6 @@ pub(crate) fn create_main_window(
         .map(|saved| saved.ui.clone())
         .unwrap_or(serde_json::Value::Null);
     let webview_directory = runtime.directory.join("webview");
-    let restoring = saved.is_some();
     window_frame::reset(app);
     let mut window =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
@@ -112,17 +115,6 @@ pub(crate) fn create_main_window(
             .initialization_script(format!(
         "window.__SFMCL_T_APPEARANCE__ = {appearance}; window.__SFMCL_T_SESSION__ = {session};"
     ))
-            .on_page_load(move |window, payload| {
-                if !restoring && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
-                {
-                    if let Err(error) = window_frame::set_visible(&window, false) {
-                        eprintln!("Cannot prepare startup window frame: {error}");
-                    }
-                    if let Err(error) = window.show() {
-                        eprintln!("Cannot show startup window: {error}");
-                    }
-                }
-            })
             .data_directory(webview_directory)
             .inner_size(864.0, 591.0)
             .center();

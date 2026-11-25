@@ -97,6 +97,7 @@
 
 .button,
 .icon-button,
+.split-button,
 .players-split-button {
   --surface-edge: var(--surface-line);
   --surface-base: var(--surface-shadow);
@@ -113,9 +114,12 @@
     color 220ms ease,
     opacity 220ms ease;
 }
-:is(.button, .icon-button, .players-split-button) > .surface-frame,
-:is(.button, .icon-button, .players-split-button) > .surface-frame::before,
-:is(.button, .icon-button, .players-split-button) > .surface-frame::after {
+:is(.button, .icon-button, .split-button, .players-split-button)
+  > .surface-frame,
+:is(.button, .icon-button, .split-button, .players-split-button)
+  > .surface-frame::before,
+:is(.button, .icon-button, .split-button, .players-split-button)
+  > .surface-frame::after {
   transition: background-color 220ms ease;
 }
 .button {
@@ -320,6 +324,15 @@
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
   scroll-padding-inline: 7px;
+  transition: opacity 220ms ease;
+}
+/* Fade the strip together: opacity on a button would trap its label below
+   the sibling selection indicator in a separate stacking context. */
+.tab-items:has(> button:disabled) {
+  opacity: 0.46;
+}
+.tab-items > button:disabled {
+  opacity: 1;
 }
 .tab-indicator {
   --surface-edge: var(--accent);
@@ -381,8 +394,8 @@
   color: var(--accent);
 }
 @media (hover: hover) {
-  .tab-items > button:hover,
-  .tab-items:has(> button.active:hover) > .tab-indicator {
+  .tab-items > button:hover:not(:disabled),
+  .tab-items:has(> button.active:hover:not(:disabled)) > .tab-indicator {
     --surface-fill: var(--soft);
     --surface-edge: var(--accent);
   }

@@ -28,6 +28,22 @@ export function pixelAppFixture({
     windowY: 0,
     launcherAction: "keep",
     restoreLauncher: true,
+    preLaunchCommand: {
+      enabled: false,
+      shell: "cmd",
+      command: "",
+      workingDirectory: "",
+      timeoutSeconds: 60,
+      continueOnFailure: false,
+    },
+    postExitCommand: {
+      enabled: false,
+      shell: "cmd",
+      command: "",
+      workingDirectory: "",
+      timeoutSeconds: 300,
+      continueOnFailure: false,
+    },
     serverEnabled: false,
     serverHost: "",
     serverPort: 25565,
@@ -101,6 +117,8 @@ export function pixelAppFixture({
         "windowY",
         "launcherAction",
         "restoreLauncher",
+        "preLaunchCommand",
+        "postExitCommand",
         "serverEnabled",
         "serverHost",
         "serverPort",
@@ -220,6 +238,15 @@ export function pixelAppFixture({
           return structuredClone(data);
         case "tasks":
           return structuredClone(tasks);
+        case "jobs.cancel": {
+          const job = tasks.jobs.find((job) => job.id === payload.id);
+          if (job?.commandRuns?.postExit.status === "running") {
+            job.commandRuns.postExit.status = "cancelled";
+            job.commandRuns.postExit.error = "命令已取消";
+            job.status = "completed";
+          } else if (job) job.status = "cancelled";
+          return null;
+        }
         case "versions.list":
           return versions.map((version) => {
             const config = versionSettings[version.id];

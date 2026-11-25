@@ -18,15 +18,18 @@ use sfmcl_t_core::{
     downloads::{prepare_cache_directory, DownloadManager, Status},
     jobs::{JobKind, Jobs},
     minecraft::{
+        crash,
         installer::{InstallRequest, Installer},
-        crash, java, loaders, version_settings, versions,
+        java, loaders, version_settings, versions,
     },
     paths::{atomic_write, minecraft_root, safe_join},
     resources::{
         community::Community,
         install::{ModInstaller, Target as ModInstallTarget},
         local,
+        modpacks::export::{ExportDraft, ExportPlanRequest, ExportTarget, ModpackExporter},
         modpacks::{ModpackRequest, Modpacks, UrlResolver},
+        modpacks::update::{self as modpack_update, ApplyRequest, PrepareRequest},
     },
     vault::Vault,
 };
@@ -39,6 +42,7 @@ pub struct Runtime {
     pub installer: Arc<Installer>,
     pub community: Arc<Community>,
     pub modpacks: Arc<Modpacks>,
+    pub modpack_exporter: Arc<ModpackExporter>,
     pub mod_installer: Arc<ModInstaller>,
     pub official_notices: sfmcl_t_core::notices::OfficialNotices,
     pub home_content: sfmcl_t_core::home_content::HomeContentStore,
@@ -135,6 +139,7 @@ impl Runtime {
             installer,
             community,
             modpacks: Arc::new(Modpacks::default()),
+            modpack_exporter: Arc::new(ModpackExporter::default()),
             mod_installer: Arc::new(ModInstaller::default()),
             official_notices,
             home_content: Default::default(),
@@ -570,6 +575,8 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             let id = text(&p, "id")?;
             let new_id = text(&p, "name")?;
             let root = r.target_root(&p)?;
+            let _guard = modpack_update::operation_guard(&root, id)?;
+            modpack_update::ensure_ready(&root, id)?;
             versions::rename(&root, id, new_id)?;
             r.settings.update(|s| {
                 if s.active_version == id && minecraft_root(Path::new(&s.active_dir)) == root {
@@ -595,6 +602,8 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         "versions.delete" => {
             let root = r.target_root(&p)?;
             let id = text(&p, "id")?;
+            let _guard = modpack_update::operation_guard(&root, id)?;
+            modpack_update::ensure_ready(&root, id)?;
             for entry in versions::scan(&root)? {
                 if entry.id != id {
                     let v = versions::resolve(&root, &entry.id)?;
@@ -607,17 +616,7 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             if !target.is_dir() {
                 bail!("版本不存在");
             }
-            let lockpath = safe_join(&root, format!(".tmcl/locks/launch-{id}.lock"))?;
-            if lockpath.exists() {
-                let lock = std::fs::OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .open(lockpath)?;
-                lock.try_lock().context("游戏正在运行，无法删除")?;
-                std::fs::remove_dir_all(&target)?;
-            } else {
-                std::fs::remove_dir_all(&target)?;
-            }
+            std::fs::remove_dir_all(&target)?;
             r.settings.update(|s| {
                 if s.active_version == id && minecraft_root(Path::new(&s.active_dir)) == root {
                     s.active_version.clear();
@@ -628,6 +627,8 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         "versions.repair" => {
             let root = r.target_root(&p)?;
             let id = text(&p, "id")?.to_owned();
+            let guard = modpack_update::operation_guard(&root, &id)?;
+            modpack_update::ensure_ready(&root, &id)?;
             let job = r.jobs.create(
                 JobKind::Repair,
                 format!("修复 {id}"),
@@ -636,6 +637,7 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             let job_id = job.snapshot().id;
             let installer = r.installer.clone();
             tokio::spawn(async move {
+                let _guard = guard;
                 let result = installer.repair(&root, &id, job.clone()).await;
                 job.finish(&result);
             });
@@ -728,7 +730,7 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             let snapshots = r.downloads.snapshots().await;
             let summaries:Vec<_>=snapshots.into_iter().map(|s|{
                 let total:u64=s.files.iter().map(|f|f.total.unwrap_or(0)).sum();let unknown=s.files.iter().any(|f|f.total.is_none());let downloaded=s.downloaded();let completed=s.completed();let failed=s.files.iter().filter(|f|f.status==Status::Failed).count();
-                json!({"id":s.id,"title":s.title,"status":s.status,"downloaded":downloaded,"total":total,"unknownSize":unknown,"completed":completed,"failed":failed,"fileCount":s.files.len(),"speed":s.bytes_per_second,"workers":s.active_workers,"steps":s.steps,"error":s.error})
+                json!({"id":s.id,"title":s.title,"folderDownload":s.folder_download,"status":s.status,"downloaded":downloaded,"total":total,"unknownSize":unknown,"completed":completed,"failed":failed,"fileCount":s.files.len(),"speed":s.bytes_per_second,"workers":s.active_workers,"steps":s.steps,"error":s.error})
             }).collect();
             Ok(json!({"downloads":summaries,"jobs":r.jobs.snapshots()}))
         }
@@ -746,6 +748,12 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                 .skip(offset)
                 .take(100)
                 .collect::<Vec<_>>()))
+        }
+        "downloads.folder.open" => {
+            let path = r.downloads.folder(text(&p, "id")?).await?;
+            app.opener()
+                .open_path(path.to_string_lossy(), None::<&str>)?;
+            Ok(json!(true))
         }
         "downloads.control" => {
             let id = text(&p, "id")?;
@@ -790,6 +798,7 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         }
         "resources.toggle" => {
             let root = r.resource_root(&p)?;
+            let _guard = sfmcl_t_core::resources::install::launch_guard(&root)?;
             let path = PathBuf::from(text(&p, "path")?);
             Ok(json!(local::toggle_mod(
                 &root,
@@ -799,6 +808,7 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         }
         "resources.deletePack" => {
             let root = r.resource_root(&p)?;
+            let _guard = sfmcl_t_core::resources::install::launch_guard(&root)?;
             let path = PathBuf::from(text(&p, "path")?);
             local::delete_pack(&root, &path.strip_prefix(&root)?.to_string_lossy())?;
             Ok(json!(true))
@@ -824,6 +834,54 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                 .categories(text(&p, "source")?, text(&p, "kind")?)
                 .await
         }
+        "modpacks.export.inspect" => {
+            let target =
+                ExportTarget::resolve(r.target_root(&p)?, text(&p, "id")?, &r.settings.get())?;
+            let exporter = r.modpack_exporter.clone();
+            Ok(json!(
+                tokio::task::spawn_blocking(move || exporter.inspect(target)).await??
+            ))
+        }
+        "modpacks.export.discard" => {
+            r.modpack_exporter.discard(text(&p, "token")?);
+            Ok(json!(true))
+        }
+        "modpacks.export.saveDraft" => {
+            let target =
+                ExportTarget::resolve(r.target_root(&p)?, text(&p, "id")?, &r.settings.get())?;
+            let draft: ExportDraft = decode(p["draft"].clone())?;
+            r.modpack_exporter.save_draft(&target, &draft)?;
+            Ok(json!(true))
+        }
+        "modpacks.export.plan" => {
+            let target =
+                ExportTarget::resolve(r.target_root(&p)?, text(&p, "id")?, &r.settings.get())?;
+            let request: ExportPlanRequest = decode(p)?;
+            Ok(json!(
+                r.modpack_exporter
+                    .plan(request, target, &r.community)
+                    .await?
+            ))
+        }
+        "modpacks.export.start" => {
+            let target =
+                ExportTarget::resolve(r.target_root(&p)?, text(&p, "id")?, &r.settings.get())?;
+            Ok(json!(r.modpack_exporter.start(
+                text(&p, "token")?,
+                target,
+                PathBuf::from(text(&p, "destination")?),
+                r.jobs.clone(),
+                p["overwrite"].as_bool().unwrap_or(false)
+            )?))
+        }
+        "modpacks.export.reveal" => {
+            let path = r.modpack_exporter.completed_path(text(&p, "jobId")?)?;
+            if !path.is_file() {
+                bail!("导出的整合包文件已移动或删除");
+            }
+            app.opener().reveal_item_in_dir(path)?;
+            Ok(json!(true))
+        }
         "modpacks.inspect" => {
             let path = PathBuf::from(text(&p, "path")?);
             let modpacks = r.modpacks.clone();
@@ -839,7 +897,8 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             let id = text(&p, "id")?;
             if !r.jobs.snapshots().iter().any(|job| {
                 job.download_id.as_deref() == Some(id)
-                    && job.title.starts_with("安装整合包 ")
+                    && (job.title.starts_with("安装整合包 ")
+                        || job.title.starts_with("检查整合包更新 "))
                     && !matches!(job.status, Status::Completed | Status::Cancelled)
             }) {
                 bail!("此下载不属于正在安装的整合包");
@@ -852,6 +911,56 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                 .supply_file(id, text(&p, "path")?, Path::new(text(&p, "source")?))
                 .await?;
             Ok(json!(true))
+        }
+        "modpacks.update.info" => {
+            let root = r.target_root(&p)?;
+            let id = text(&p, "id")?.to_owned();
+            Ok(tokio::task::spawn_blocking(move || modpack_update::info(&root, &id)).await??)
+        }
+        "modpacks.update.versions" => {
+            Ok(json!(r.community.modpack_releases(text(&p, "source")?, text(&p, "projectId")?).await?))
+        }
+        "modpacks.update.discover" => {
+            let root = r.target_root(&p)?;
+            let id = text(&p, "id")?.to_owned();
+            let community = r.community.clone();
+            Ok(json!(tokio::time::timeout(
+                std::time::Duration::from_secs(40),
+                modpack_update::discover(&root, &id, &community)
+            ).await.context("在线整合包查询超时，请使用本地更新或稍后重试")??))
+        }
+        "modpacks.update.prepare" => {
+            let root = r.target_root(&p)?;
+            let mut payload = p.clone();
+            payload["root"] = json!(root);
+            let request: PrepareRequest = decode(payload)?;
+            let community = r.community.clone();
+            let resolver: UrlResolver = Arc::new(move |url| {
+                let app = app.clone();
+                let community = community.clone();
+                Box::pin(async move {
+                    crate::curseforge_download::resolve_with_sources(&app, &url, &community).await
+                })
+            });
+            Ok(json!(r.modpacks.prepare_update(request, r.installer.clone(), r.community.clone(), resolver).await?))
+        }
+        "modpacks.update.plan" => Ok(json!(r.modpacks.updates.plan(text(&p, "token")?)?)),
+        "modpacks.update.discard" => {
+            r.modpacks.updates.discard(text(&p, "token")?);
+            Ok(json!(true))
+        }
+        "modpacks.update.start" => {
+            let root = r.target_root(&p)?;
+            let mut payload = p.clone();
+            payload["root"] = json!(root);
+            let request: ApplyRequest = decode(payload)?;
+            Ok(json!(r.modpacks.updates.start(request, r.installer.clone())?))
+        }
+        "modpacks.update.restore" => {
+            let root = r.target_root(&p)?;
+            let id = text(&p, "id")?.to_owned();
+            let backup = text(&p, "backupId")?.to_owned();
+            Ok(json!(tokio::task::spawn_blocking(move || modpack_update::restore(&root, &id, &backup)).await??))
         }
         "modpacks.install" => {
             let mut request: ModpackRequest = decode(p)?;
@@ -872,12 +981,21 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         }
         "resources.installPlan" => {
             let target = ModInstallTarget::resolve(
-                r.target_root(&p)?, text(&p, "versionId")?, &r.settings.get(),
+                r.target_root(&p)?,
+                text(&p, "versionId")?,
+                &r.settings.get(),
             )?;
-            Ok(json!(r.mod_installer.preview(
-                &r.community, text(&p, "source")?, text(&p, "projectId")?,
-                text(&p, "fileId")?, target,
-            ).await?))
+            Ok(json!(
+                r.mod_installer
+                    .preview(
+                        &r.community,
+                        text(&p, "source")?,
+                        text(&p, "projectId")?,
+                        text(&p, "fileId")?,
+                        target,
+                    )
+                    .await?
+            ))
         }
         "resources.discardInstallPlan" => {
             r.mod_installer.discard(text(&p, "token")?);
@@ -885,7 +1003,9 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         }
         "resources.install" => {
             let target = ModInstallTarget::resolve(
-                r.target_root(&p)?, text(&p, "versionId")?, &r.settings.get(),
+                r.target_root(&p)?,
+                text(&p, "versionId")?,
+                &r.settings.get(),
             )?;
             let enable_paths: Vec<String> = decode(p["enablePaths"].clone())?;
             let community = r.community.clone();
@@ -896,10 +1016,19 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                     crate::curseforge_download::resolve_with_sources(&app, &url, &community).await
                 })
             });
-            Ok(json!(r.mod_installer.start(
-                text(&p, "token")?, target, enable_paths, r.downloads.clone(),
-                r.jobs.clone(), r.settings.clone(), resolver,
-            ).await?))
+            Ok(json!(
+                r.mod_installer
+                    .start(
+                        text(&p, "token")?,
+                        target,
+                        enable_paths,
+                        r.downloads.clone(),
+                        r.jobs.clone(),
+                        r.settings.clone(),
+                        resolver,
+                    )
+                    .await?
+            ))
         }
         "resources.download" => {
             let kind = text(&p, "kind")?;
@@ -931,15 +1060,15 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             spec.url =
                 crate::curseforge_download::resolve_with_sources(&app, &spec.url, &r.community)
                     .await?;
-            Ok(json!(
+            let title = p["title"].as_str().unwrap_or("资源下载").into();
+            let id = if p.get("directory").is_some() {
                 r.downloads
-                    .enqueue(
-                        p["title"].as_str().unwrap_or("资源下载").into(),
-                        root,
-                        vec![spec]
-                    )
+                    .enqueue_to_folder(title, root, vec![spec])
                     .await?
-            ))
+            } else {
+                r.downloads.enqueue(title, root, vec![spec]).await?
+            };
+            Ok(json!(id))
         }
         "image" => {
             let source = text(&p, "path")?;

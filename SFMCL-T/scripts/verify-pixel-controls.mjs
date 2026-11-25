@@ -331,6 +331,7 @@ try {
   await checkHover(
     page.getByRole("textbox", { name: "窗口标题", exact: true }),
   );
+  await page.getByRole("button", { name: "高级设置", exact: true }).click();
   await checkHover(
     page.getByRole("textbox", { name: "游戏尾部参数", exact: true }),
   );

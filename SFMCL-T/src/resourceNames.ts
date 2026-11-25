@@ -1,4 +1,5 @@
 import type { LocalizedName, LocalResource } from "./types";
+import { minecraftPlainText } from "./minecraftFormatting";
 
 const normalize = (name: string) =>
   name.trim().replace(/\s+/g, " ").toLowerCase();
@@ -13,9 +14,18 @@ export function resourceName(
   return `${name}（${original}）`;
 }
 
+export function localResourceTitle(item: LocalResource) {
+  const title =
+    item.kind === "shader"
+      ? item.name
+      : resourceName(item.name, item.localizedName);
+  return item.kind === "mod" ? title : minecraftPlainText(title);
+}
+
 export function localResourceSearchText(item: LocalResource) {
   return [
     item.name,
+    ...(item.kind === "mod" ? [] : [localResourceTitle(item)]),
     item.localizedName?.name,
     ...(item.localizedName?.aliases ?? []),
     item.authors,

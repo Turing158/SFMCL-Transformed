@@ -43,3 +43,6 @@ winreg = "0.56"
 [dev-dependencies]
 axum = "0.8"
 sevenz-rust = { version = "0.6", features = ["compress"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

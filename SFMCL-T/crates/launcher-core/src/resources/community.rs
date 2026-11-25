@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 mod dependencies;
 mod local_projects;
+mod modpack_updates;
 pub(super) mod install_metadata;
 mod search;
 pub use dependencies::{ResourceDependency, ResourceKind};

@@ -20,6 +20,15 @@ await page.addInitScript(() => {
     name: "另一个游戏目录",
     path: "D:/Games/Minecraft",
   });
+  window.__pixelTest.versions.push({
+    id: "生存整合包",
+    version: "1.20.1",
+    kind: "release",
+    loader: "Forge",
+    path: `${window.__pixelTest.data.settings.activeDir}/.minecraft/versions/生存整合包`,
+    javaMajor: 17,
+    icon: "",
+  });
 });
 const settle = () =>
   page.evaluate(async () => {
@@ -45,6 +54,9 @@ const settle = () =>
     }
   });
 const mode = async (view) => {
+  // Resizing can put the previous pointer position on another tooltip trigger.
+  await page.mouse.move(0, 0);
+  await page.keyboard.press("Escape");
   if ((await page.locator(".version-list").count()) > 0 !== (view === "list"))
     await page
       .getByRole("button", {
@@ -241,6 +253,12 @@ try {
 
   for (const view of ["grid", "list"]) {
     await mode(view);
+    await expect(card("生存整合包").locator(".version-meta")).toHaveText(
+      "1.20.1 · Forge · Java 17",
+    );
+    await expect(card("1.21.4").locator(".version-meta")).toHaveText(
+      "Vanilla · Java 21",
+    );
     await page.mouse.move(0, 0);
     await settle();
     const frame = fabric.locator(":scope > .surface-frame");
@@ -277,6 +295,7 @@ try {
     ).toBe(border);
   }
   checks.push(
+    "Grid and list show the base Minecraft version before the loader for a renamed instance and preserve the vanilla subtitle.",
     "Grid and list frames fade their hover border and remain stationary on hover, press and pointer leave.",
   );
 

@@ -3,6 +3,7 @@ import { PixelFrame } from "./components";
 
 type PageTitleProps = {
   title: string;
+  titleContent?: ReactNode;
   eyebrow: string;
   icon: ReactNode;
   className?: string;
@@ -11,6 +12,7 @@ type PageTitleProps = {
 
 export function PageTitle({
   title,
+  titleContent,
   eyebrow,
   icon,
   className = "",
@@ -23,8 +25,12 @@ export function PageTitle({
         {icon}
       </span>
       <div className="page-title-copy">
-        <h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
-          {title}
+        <h1
+          ref={headingRef}
+          tabIndex={headingRef ? -1 : undefined}
+          aria-label={titleContent ? title : undefined}
+        >
+          {titleContent ?? title}
         </h1>
         <span className="page-title-edition" aria-hidden="true">
           {eyebrow}

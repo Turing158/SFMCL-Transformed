@@ -1,8 +1,10 @@
 mod archive;
 mod dependencies;
+pub mod export;
 mod parser;
 #[cfg(test)]
 mod tests;
+pub mod update;
 
 use crate::{
     downloads::{DownloadSpec, Status},
@@ -39,6 +41,7 @@ struct Prepared {
 #[derive(Default)]
 pub struct Modpacks {
     prepared: Mutex<HashMap<String, Prepared>>,
+    pub updates: update::Updates,
 }
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,6 +61,8 @@ pub struct ModpackRequest {
     pub file: Option<DownloadSpec>,
     #[serde(default)]
     pub include_optional: bool,
+    #[serde(default)]
+    pub origin: Option<update::Origin>,
 }
 
 impl Modpacks {
@@ -88,12 +93,15 @@ impl Modpacks {
     }
     pub async fn start(
         self: &Arc<Self>,
-        request: ModpackRequest,
+        mut request: ModpackRequest,
         installer: Arc<Installer>,
         community: Arc<Community>,
         resolver: UrlResolver,
     ) -> Result<String> {
         valid_name(&request.name)?;
+        if let Some(origin) = &request.origin {
+            request.file = Some(community.modpack_release(origin).await?.file);
+        }
         if !request.root.is_absolute() {
             bail!("请选择有效的游戏目录");
         }
@@ -159,6 +167,7 @@ impl Modpacks {
                 resolver,
                 job.clone(),
                 work.path(),
+                true,
             )
             .await;
             // Drain tasks before removing their staging root. Session records
@@ -191,6 +200,7 @@ async fn install(
     resolver: UrlResolver,
     job: Arc<Job>,
     work: &Path,
+    publish: bool,
 ) -> Result<()> {
     job.step(0, "准备整合包文件");
     let mut pack = if let Some(prepared) = prepared {
@@ -333,6 +343,23 @@ async fn install(
         &resolver,
     )
     .await?;
+    let prefix = format!("versions/{}/", request.name);
+    let optional_paths = pack
+        .pack
+        .files
+        .iter()
+        .filter(|file| !file.optional || request.include_optional)
+        .zip(downloads.iter())
+        .filter(|(file, _)| file.optional)
+        .filter_map(|(_, spec)| spec.path.strip_prefix(&prefix))
+        .map(|path| {
+            if cfg!(windows) {
+                path.to_lowercase()
+            } else {
+                path.to_owned()
+            }
+        })
+        .collect();
     download_contents(&installer, &job, &stage, &request.name, downloads, &mirrors).await?;
     job.step(9, "合并客户端覆盖文件");
     for source in &pack.pack.contents {
@@ -375,6 +402,16 @@ async fn install(
         settings: GameSettings::from(&settings),
     };
     crate::minecraft::version_settings::save(&stage, &request.name, &independent)?;
+    update::record_install(
+        &instance,
+        &request,
+        &pack.pack.info,
+        &job.cancel,
+        optional_paths,
+    )?;
+    if !publish {
+        return Ok(());
+    }
     job.step(10, "将整合包加入版本管理");
     // Shared files use atomic replacement. The new instance is published once,
     // by rename, so cancellation/failure never exposes a partial version.

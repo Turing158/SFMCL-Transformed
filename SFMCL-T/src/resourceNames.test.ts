@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { localResourceSearchText, resourceName } from "./resourceNames";
+import {
+  localResourceSearchText,
+  localResourceTitle,
+  resourceName,
+} from "./resourceNames";
 import type { LocalResource } from "./types";
 
 describe("resource names", () => {
+  it("uses readable formatted titles for non-mod resources while preserving mod names", () => {
+    const item = {
+      kind: "world",
+      name: "§a我的§l世界",
+      authors: "",
+      description: "",
+    } as LocalResource;
+    expect(localResourceTitle(item)).toBe("我的世界");
+    expect(localResourceSearchText(item)).toContain("我的世界");
+    expect(localResourceTitle({ ...item, kind: "mod" })).toBe("§a我的§l世界");
+    expect(localResourceSearchText({ ...item, kind: "mod" })).not.toContain(
+      "我的世界",
+    );
+  });
   it("displays Chinese mod and modpack names while retaining the original", () => {
     expect(resourceName("Create", { name: "机械动力", aliases: [] })).toBe(
       "机械动力（Create）",

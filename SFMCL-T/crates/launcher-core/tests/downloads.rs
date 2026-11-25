@@ -145,6 +145,70 @@ async fn complete(manager: &DownloadManager, id: &str) {
     .unwrap()
     .unwrap();
 }
+
+#[tokio::test]
+async fn folder_download_keeps_its_destination_after_restart() {
+    let server = TestServer::start().await;
+    let temp = tempfile::tempdir().unwrap();
+    let state = temp.path().join("state");
+    let destination = temp.path().join("selected-folder");
+    std::fs::create_dir(&destination).unwrap();
+    let manager = DownloadManager::open(&state, 1).unwrap();
+    let id = manager
+        .enqueue_to_folder(
+            "安装整合包 Same Title".into(),
+            destination.clone(),
+            vec![server.spec("normal", "pack.mrpack")],
+        )
+        .await
+        .unwrap();
+    assert_eq!(manager.folder(&id).await.unwrap(), destination);
+    complete(&manager, &id).await;
+    assert_eq!(
+        std::fs::read(destination.join("pack.mrpack")).unwrap(),
+        server.state.payload
+    );
+    drop(manager);
+
+    let restored = DownloadManager::open(&state, 1).unwrap();
+    assert!(restored.snapshot(&id).await.unwrap().folder_download);
+    assert_eq!(restored.folder(&id).await.unwrap(), destination);
+    assert!(restored.folder("unknown-download").await.is_err());
+    std::fs::rename(&destination, temp.path().join("moved-folder")).unwrap();
+    assert!(restored.folder(&id).await.is_err());
+    assert!(!destination.exists());
+}
+
+#[tokio::test]
+async fn folder_download_does_not_reclassify_installations_or_legacy_records() {
+    let server = TestServer::start().await;
+    let temp = tempfile::tempdir().unwrap();
+    let state = temp.path().join("state");
+    let manager = DownloadManager::open(&state, 1).unwrap();
+    let id = manager
+        .enqueue(
+            "Fabulously Optimized".into(),
+            temp.path().into(),
+            vec![server.spec("normal", "pack.mrpack")],
+        )
+        .await
+        .unwrap();
+    complete(&manager, &id).await;
+    assert!(!manager.snapshot(&id).await.unwrap().folder_download);
+    assert!(manager.folder(&id).await.is_err());
+    let mut legacy = serde_json::to_value(manager.snapshot(&id).await.unwrap()).unwrap();
+    legacy.as_object_mut().unwrap().remove("folderDownload");
+    drop(manager);
+    std::fs::write(
+        state.join(format!("{id}.json")),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+    let restored = DownloadManager::open(&state, 1).unwrap();
+    assert!(!restored.snapshot(&id).await.unwrap().folder_download);
+    assert!(restored.folder(&id).await.is_err());
+}
+
 fn cached_part(snapshot: &DownloadSnapshot, name: &str) -> std::path::PathBuf {
     snapshot.cache_dir.as_ref().unwrap().join(format!(
         "tmcl-downloads/{}/{}.part",

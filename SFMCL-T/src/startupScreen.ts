@@ -4,11 +4,6 @@ import { isTauri } from "@tauri-apps/api/core";
 import { setStartupWindow } from "./startupWindow";
 import { startupTimeout } from "./startupTimeout";
 import { surfaceMotionFrames, visibleSurface } from "./surfaceMotion";
-import {
-  isRestoringInterface,
-  restoreInterfaceFocus,
-  restoreInterfaceLayout,
-} from "./windowSession";
 
 // Rebuilt tray windows share the startup entrance after restoring their content.
 const startupRevealDuration = 480;
@@ -29,10 +24,6 @@ export function initializeStartupScreen() {
   document
     .getElementById("startup-retry")!
     .addEventListener("click", () => location.reload());
-  if (isRestoringInterface()) {
-    element.style.visibility = "hidden";
-    return;
-  }
   animation = new StartupAnimation(element);
   // The original icon is already in the document, so no React code is needed.
   void Promise.all(
@@ -72,13 +63,14 @@ export async function revealStartup(root: HTMLElement, signal: AbortSignal) {
   // State or an image can change while the last word is being written.
   await waitForStartupPaint(root, signal);
   signal.throwIfAborted();
+  // Session hooks import React. Keep them out of the small splash module graph.
+  const {
+    isRestoringInterface,
+    restoreInterfaceFocus,
+    restoreInterfaceLayout,
+  } = await import("./windowSession");
+  signal.throwIfAborted();
   restoreInterfaceLayout();
-  if (isRestoringInterface()) {
-    // Lay out and paint the restored content while its native window stays hidden.
-    document.documentElement.dataset.startup = "restoring";
-    await waitForStartupPaint(root, signal);
-    signal.throwIfAborted();
-  }
   if (revealing || failed) return;
   revealing = true;
   cancelTimeout();

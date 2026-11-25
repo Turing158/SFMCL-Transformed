@@ -227,6 +227,9 @@ try {
   await expect(page.locator("html")).not.toHaveAttribute("data-startup", /.+/, {
     timeout: 20000,
   });
+  // A fresh isolated profile opens onboarding, whose shade changes native pixels.
+  await page.getByRole("button", { name: "跳过", exact: true }).click();
+  await expect(page.locator(".onboarding-layer")).toHaveCount(0);
   await idle();
   await assertTopEdge("top-edge-light");
   await page.evaluate(() => {

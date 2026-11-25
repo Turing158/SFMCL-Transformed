@@ -4,8 +4,17 @@ import type {
   GameSettings,
   Settings,
   VersionSettings,
+  CommandSettings,
 } from "./types";
 
+export const commandDefaults: CommandSettings = {
+  enabled: false,
+  shell: "cmd",
+  command: "",
+  workingDirectory: "",
+  timeoutSeconds: 60,
+  continueOnFailure: false,
+};
 export const launchSettingDefaults = {
   windowMode: "default",
   windowMonitor: "",
@@ -13,6 +22,8 @@ export const launchSettingDefaults = {
   windowY: 0,
   launcherAction: "keep",
   restoreLauncher: true,
+  preLaunchCommand: { ...commandDefaults },
+  postExitCommand: { ...commandDefaults, timeoutSeconds: 300 },
   serverEnabled: false,
   serverHost: "",
   serverPort: 25565,
@@ -68,6 +79,26 @@ export const absoluteSettingsPath = (value: string) =>
   !value.trim() ||
   /^(?:[a-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+|\/)/i.test(value.trim());
 
+export function prepareCommandSettings(
+  draft: CommandSettings,
+  saved: CommandSettings,
+): CommandSettings {
+  if (
+    (draft.enabled && !draft.command.trim()) ||
+    draft.command.includes("\0") ||
+    new TextEncoder().encode(draft.command).length > 65536 ||
+    draft.workingDirectory.includes("\0")
+  )
+    return saved;
+  return {
+    ...draft,
+    workingDirectory: draft.workingDirectory.trim(),
+    timeoutSeconds: validInteger(draft.timeoutSeconds, 1, 3600)
+      ? draft.timeoutSeconds
+      : saved.timeoutSeconds,
+  };
+}
+
 // Keep incomplete numeric/path input local while other valid changes save.
 export function prepareGameSettings<T extends GameSettings>(
   draft: T,
@@ -83,6 +114,14 @@ export function prepareGameSettings<T extends GameSettings>(
   saved = addMissingDefaults(saved);
   return {
     ...draft,
+    preLaunchCommand: prepareCommandSettings(
+      draft.preLaunchCommand,
+      saved.preLaunchCommand,
+    ),
+    postExitCommand: prepareCommandSettings(
+      draft.postExitCommand,
+      saved.postExitCommand,
+    ),
     memoryMb: validInteger(draft.memoryMb, 512, 131072)
       ? draft.memoryMb
       : saved.memoryMb,
@@ -188,6 +227,7 @@ export const gameSettingFields = {
   advanced: ["jvmArgsEnabled", "jvmArgs", "gameArgs", "offlineLan"],
   position: ["windowMode", "windowMonitor", "windowX", "windowY"],
   launcher: ["launcherAction", "restoreLauncher"],
+  commands: ["preLaunchCommand", "postExitCommand"],
   server: ["serverEnabled", "serverHost", "serverPort"],
   world: ["quickPlayEnabled", "quickPlayWorld"],
   process: ["processPriority"],
@@ -213,6 +253,7 @@ export function independentGroups(config: VersionSettings): GameSettingGroups {
     server: independent && (config.independentGroups?.server ?? false),
     world: independent && (config.independentGroups?.world ?? false),
     process: launcher,
+    commands: independent && (config.independentGroups?.commands ?? false),
   };
 }
 
@@ -286,6 +327,11 @@ export function gameSettingsFrom(settings: GameSettings): GameSettings {
     windowY: settings.windowY ?? 0,
     launcherAction: settings.launcherAction ?? "keep",
     restoreLauncher: settings.restoreLauncher ?? true,
+    preLaunchCommand: { ...commandDefaults, ...settings.preLaunchCommand },
+    postExitCommand: {
+      ...launchSettingDefaults.postExitCommand,
+      ...settings.postExitCommand,
+    },
     serverEnabled: settings.serverEnabled ?? false,
     serverHost: settings.serverHost ?? "",
     serverPort: settings.serverPort ?? 25565,

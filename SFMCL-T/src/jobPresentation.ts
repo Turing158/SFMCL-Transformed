@@ -6,6 +6,18 @@ export function getJobPresentation(job: Job): {
   label?: string;
   steps: Step[];
 } {
+  if (job.launch && job.gameExit) {
+    return {
+      status: job.status,
+      label:
+        job.commandRuns?.postExit.status === "running"
+          ? "收尾中"
+          : job.status === "completed"
+            ? "已结束"
+            : undefined,
+      steps: job.steps,
+    };
+  }
   const started =
     !!job.launch &&
     (job.status === "completed" ||

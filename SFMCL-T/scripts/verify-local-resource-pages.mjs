@@ -379,7 +379,8 @@ try {
     })
     .click();
   await expect(
-    details
+    page
+      .getByRole("region", { name: "通知", exact: true })
       .getByRole("alert")
       .filter({ hasText: "未找到此模组文件对应的 CurseForge 项目" }),
   ).toBeVisible();
@@ -397,7 +398,10 @@ try {
     })
     .click();
   await expect(
-    details.getByRole("alert").filter({ hasText: "测试模组渠道中断" }),
+    page
+      .getByRole("region", { name: "通知", exact: true })
+      .getByRole("alert")
+      .filter({ hasText: "测试模组渠道中断" }),
   ).toBeVisible();
   await expect(
     details.getByRole("heading", { name: "Sodium 扩展 31", exact: true }),
@@ -489,8 +493,8 @@ try {
     )
     .toBe("function");
   await expect(toggleRow).not.toHaveClass(/disabled-resource/);
-  await expect(toggleRow.getByText("已禁用", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("正在读取资源…", { exact: true })).toHaveCount(0);
+  await expect(toggleRow.getByText("已禁用", { exact: true })).toBeHidden();
+  await expect(page.locator(".local-resources .loading-state")).toHaveCount(0);
   await expect(modRows).toHaveCount(20);
   await page.evaluate(() => {
     window.__localPageTest.pauseToggle = false;
@@ -533,7 +537,7 @@ try {
     "/mods/.disabled/sodium-30.jar",
   );
   await expect(toggleRow).not.toHaveClass(/disabled-resource/);
-  await expect(toggleRow.getByText("已禁用", { exact: true })).toHaveCount(0);
+  await expect(toggleRow.getByText("已禁用", { exact: true })).toBeHidden();
   expect(
     await toggleRow.evaluate(
       (element) => element === window.__localPageTest.toggleRow,

@@ -48,6 +48,38 @@ const tasks = (job: Job, files?: Download): Tasks => ({
 });
 
 describe("launch task state", () => {
+  it("keeps cleanup active after the game exits and describes the completed game correctly", () => {
+    const job = launch({
+      gameExit: { code: 0, reason: "normal" },
+      commandRuns: {
+        preLaunch: {
+          status: "completed",
+          exitCode: 0,
+          durationMs: 100,
+          error: null,
+        },
+        postExit: {
+          status: "running",
+          exitCode: null,
+          durationMs: 0,
+          error: null,
+        },
+      },
+    });
+    expect(getLaunchTask(tasks(job), "1.21.4")).toMatchObject({
+      phase: "cleanup",
+      active: true,
+      detail: "游戏已结束 · 正在执行退出后命令",
+      stepLabel: "",
+    });
+    job.status = "completed";
+    job.commandRuns!.postExit.status = "completed";
+    expect(getLaunchTask(tasks(job), "1.21.4")).toMatchObject({
+      phase: "idle",
+      active: false,
+      detail: "游戏已结束，随时可以再次出发",
+    });
+  });
   it("ignores installation jobs and unrelated completed launches", () => {
     const result = getLaunchTask(
       {

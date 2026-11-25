@@ -255,6 +255,21 @@ impl Community {
         })
     }
 
+    /// Resolve CurseForge's canonical installation folders in batches for export.
+    pub(crate) async fn export_curseforge_folders(&self, projects: &[u64]) -> Result<HashMap<String, String>> {
+        let mut folders = HashMap::new();
+        for batch in projects.chunks(50) {
+            let response = self.request("curseforge", "mods", &[], Some(json!({"modIds":batch}))).await?;
+            for project in response["data"].as_array().context("CurseForge 项目响应无效")? {
+                let id = project["id"].as_u64().context("CurseForge 项目缺少 ID")?;
+                if !batch.contains(&id) || project["gameId"].as_u64().is_some_and(|v| v != 432) { bail!("CurseForge 返回了其他游戏或项目"); }
+                let folder = match project["classId"].as_u64() { Some(6) => "mods", Some(12) => "resourcepacks", Some(6552) => "shaderpacks", _ => continue };
+                folders.insert(id.to_string(), folder.into());
+            }
+        }
+        Ok(folders)
+    }
+
     /// Match whole file identities, retaining the exact version (not just the project).
     pub(crate) async fn installed_versions(
         &self,

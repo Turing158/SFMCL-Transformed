@@ -1114,61 +1114,6 @@
   justify-content: space-between;
   padding: 7px 12px 9px;
 }
-.minecraft-install .catalog-skeleton {
-  min-height: 64px;
-  padding: 10px 14px;
-  gap: 12px;
-}
-.minecraft-install .catalog-skeleton > span {
-  width: 36px;
-  height: 36px;
-}
-.minecraft-install .catalog-skeleton > div > i {
-  height: 8px;
-  margin: 6px 0;
-}
-.minecraft-install .grid .catalog-skeleton {
-  min-height: 109px;
-}
-.catalog-skeleton {
-  display: flex;
-  min-height: 129px;
-  padding: 24px;
-  align-items: center;
-  gap: 16px;
-  --surface-edge: var(--line);
-  --surface-fill: var(--panel);
-}
-.catalog-skeleton > span {
-  width: 52px;
-  height: 52px;
-  background: var(--surface-well);
-  flex-shrink: 0;
-}
-.catalog-skeleton > div {
-  flex: 1;
-}
-.catalog-skeleton > div > i {
-  display: block;
-  height: 10px;
-  background: var(--surface-well);
-  margin: 12px 0;
-  width: 80%;
-}
-.catalog-skeleton > div > i:first-child {
-  width: 45%;
-}
-.catalog-skeleton > span,
-.catalog-skeleton > div > i {
-  background: var(--line);
-  animation: catalog-skeleton-pulse 1100ms ease-in-out infinite alternate;
-}
-.catalog-skeleton > div > i:nth-child(2) {
-  animation-delay: 120ms;
-}
-.catalog-skeleton > div > i:nth-child(3) {
-  animation-delay: 240ms;
-}
 @keyframes catalog-skeleton-pulse {
   from {
     opacity: 0.35;
@@ -1176,9 +1121,6 @@
   to {
     opacity: 0.9;
   }
-}
-.grid .catalog-skeleton {
-  min-height: 238px;
 }
 .project-files {
   scroll-margin-top: 18px;
@@ -1214,14 +1156,6 @@
 .project-file-toolbar > .catalog-view {
   margin-left: auto;
   flex-shrink: 0;
-}
-.project-file-loading {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-}
-.project-file-loading .spin {
-  color: var(--accent);
 }
 .project-file-results {
   gap: 10px;
@@ -1711,6 +1645,7 @@
 .local-resources .local-resource-title > .resource-icon {
   width: 44px;
   height: 44px;
+  transition: opacity 280ms cubic-bezier(0.22, 0.8, 0.25, 1);
 }
 .local-resources .catalog-project-title {
   gap: 2px 8px;
@@ -1759,9 +1694,52 @@
   flex-shrink: 0;
   margin-top: 3px;
 }
+.local-resource-meta .catalog-tags {
+  gap: 0;
+}
+.local-resource-status-slot {
+  display: grid;
+  grid-template-columns: 0fr;
+  grid-template-rows: 0fr;
+  min-width: 0;
+  margin-left: 0;
+  opacity: 0;
+  transform: translateX(-6px) scale(0.92);
+  visibility: hidden;
+  transition:
+    grid-template-columns 280ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    grid-template-rows 280ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    margin-left 280ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    opacity 280ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    transform 280ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    visibility 0s linear 280ms;
+}
+.local-resource-status-slot[data-disabled="true"] {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.local-resource-meta
+  .badge
+  + .local-resource-status-slot[data-disabled="true"] {
+  margin-left: 5px;
+}
+.local-resource-status-clip {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
 .local-resources .local-resource-status {
+  flex: none;
+  width: max-content;
+  max-width: none;
   gap: 5px;
   color: var(--surface-warning);
+  white-space: nowrap;
 }
 .local-resources .disabled-resource {
   opacity: 1;
@@ -1779,6 +1757,26 @@
   min-width: 32px;
   min-height: 32px;
   padding: 0;
+}
+.local-resources .resource-row.local-mod-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.local-resources .local-mod-row .local-resource-actions {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 4px 6px;
+  padding: 10px 14px 10px 0;
+}
+.local-mod-row .local-resource-actions > .local-resource-size {
+  grid-column: 1 / -1;
+  justify-self: end;
+  text-align: right;
+}
+.local-mod-row .local-resource-actions > .button {
+  --surface-depth: 0px;
+}
+.local-mod-row .local-resource-actions > .button > .surface-frame {
+  display: none;
 }
 .resource-source {
   --channel-color: var(--surface-success);

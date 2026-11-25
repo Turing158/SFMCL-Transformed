@@ -1,7 +1,13 @@
 import type { Download, Job, Tasks } from "./types";
 
 export type LaunchPhase =
-  "idle" | "preparing" | "running" | "paused" | "download-error" | "failed";
+  | "idle"
+  | "preparing"
+  | "running"
+  | "cleanup"
+  | "paused"
+  | "download-error"
+  | "failed";
 
 export interface LaunchTask {
   job?: Job;
@@ -100,7 +106,10 @@ export function getLaunchTask(
     ) {
       phase = "paused";
       detail = "游戏文件下载已暂停，继续后将完成启动";
-    } else if (currentStep?.name === "游戏运行") {
+    } else if (job?.commandRuns?.postExit.status === "running") {
+      phase = "cleanup";
+      detail = "游戏已结束 · 正在执行退出后命令";
+    } else if (currentStep?.name === "游戏运行" && !job?.gameExit) {
       phase = "running";
       detail = "游戏已启动 · 祝你玩得开心";
     } else {
@@ -115,7 +124,7 @@ export function getLaunchTask(
     detail = job.error || "上次启动未完成，请查看日志后重试";
   } else if (job?.status === "completed" || job?.status === "cancelled") {
     detail =
-      currentStep?.name === "游戏运行"
+      job.gameExit || currentStep?.name === "游戏运行"
         ? "游戏已结束，随时可以再次出发"
         : "启动已取消，可以重新出发";
   }
@@ -129,7 +138,7 @@ export function getLaunchTask(
     detail,
     progress,
     stepLabel:
-      active && phase !== "running" && setupSteps.length
+      active && phase !== "running" && phase !== "cleanup" && setupSteps.length
         ? `第 ${Math.min((job?.currentStep || 0) + 1, setupSteps.length)} / ${setupSteps.length} 步`
         : "",
   };

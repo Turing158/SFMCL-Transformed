@@ -1,10 +1,18 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useApp } from "./store";
 import { useImageResource } from "./useImageResource";
 import { beginStartupWork } from "./startupReadiness";
 import { AnimatedSwap } from "./AnimatedSwap";
 import { useModalMotion } from "./useModalMotion";
 import "./error-banner.css";
+import "./split-button.css";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -94,6 +102,7 @@ export function TabList({
   items,
   className = "",
   disabled = false,
+  separator,
 }: {
   id: string;
   label: string;
@@ -108,6 +117,7 @@ export function TabList({
   }[];
   className?: string;
   disabled?: boolean;
+  separator?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = useState<{
@@ -211,44 +221,54 @@ export function TabList({
             <PixelFrame />
           </span>
         )}
-        {items.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            role="tab"
-            disabled={disabled}
-            id={`${id}-tab-${item.value}`}
-            aria-controls={`${id}-panel`}
-            aria-selected={value === item.value}
-            aria-busy={item.loading || undefined}
-            tabIndex={value === item.value ? 0 : -1}
-            className={`has-surface ${value === item.value ? "active" : ""}`}
-            onClick={(event) => {
-              onValueChange(item.value);
-              event.currentTarget.scrollIntoView({
-                block: "nearest",
-                inline: "nearest",
-              });
-            }}
-          >
-            <PixelFrame />
-            <span className="tab-content">
-              {item.icon}
-              {item.label}
-              {(item.loading || item.count !== undefined) && (
-                <Badge
-                  className="tab-count"
-                  aria-label={item.loading ? "正在加载" : undefined}
-                >
-                  {item.loading ? (
-                    <LoaderCircle size={12} className="spin" aria-hidden="true" />
-                  ) : (
-                    item.count
-                  )}
-                </Badge>
-              )}
-            </span>
-          </button>
+        {items.map((item, index) => (
+          <Fragment key={item.value}>
+            {index > 0 && separator != null && (
+              <span className="tab-separator" aria-hidden="true">
+                {separator}
+              </span>
+            )}
+            <button
+              type="button"
+              role="tab"
+              disabled={disabled}
+              id={`${id}-tab-${item.value}`}
+              aria-controls={`${id}-panel`}
+              aria-selected={value === item.value}
+              aria-busy={item.loading || undefined}
+              tabIndex={value === item.value ? 0 : -1}
+              className={`has-surface ${value === item.value ? "active" : ""}`}
+              onClick={(event) => {
+                onValueChange(item.value);
+                event.currentTarget.scrollIntoView({
+                  block: "nearest",
+                  inline: "nearest",
+                });
+              }}
+            >
+              <PixelFrame />
+              <span className="tab-content">
+                {item.icon}
+                {item.label}
+                {(item.loading || item.count !== undefined) && (
+                  <Badge
+                    className="tab-count"
+                    aria-label={item.loading ? "正在加载" : undefined}
+                  >
+                    {item.loading ? (
+                      <LoaderCircle
+                        size={12}
+                        className="spin"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      item.count
+                    )}
+                  </Badge>
+                )}
+              </span>
+            </button>
+          </Fragment>
         ))}
       </div>
     </div>
@@ -289,9 +309,13 @@ function isDialogBackdrop(event: MouseEvent<HTMLDialogElement>) {
 export function ErrorBanner({
   message,
   children,
+  tone = "error",
+  compact = false,
 }: {
   message: string;
   children?: ReactNode;
+  tone?: "error" | "info";
+  compact?: boolean;
 }) {
   const [display, setDisplay] = useState({ message, present: !!message });
   const open = !!message;
@@ -302,6 +326,8 @@ export function ErrorBanner({
     <div
       className="error-banner"
       data-open={open}
+      data-tone={tone}
+      data-compact={compact || undefined}
       hidden={!display.present}
       aria-hidden={!open}
       inert={!open}
@@ -317,7 +343,10 @@ export function ErrorBanner({
     >
       <div className="error-banner-clip">
         {display.present && (
-          <div className="inline-error resource-error" role="alert">
+          <div
+            className="inline-error resource-error"
+            role={tone === "error" ? "alert" : "status"}
+          >
             <span className="error-banner-message">
               {message || display.message}
             </span>

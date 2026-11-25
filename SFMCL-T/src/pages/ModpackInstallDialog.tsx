@@ -28,6 +28,8 @@ import { useTabContentTransition } from "../useTabContentTransition";
 
 export function ModpackInstallDialog({
   resource,
+  source,
+  projectId,
   initialSource,
   title = "整合包",
   localizedName,
@@ -36,6 +38,8 @@ export function ModpackInstallDialog({
   onClose,
 }: {
   resource?: ResourceFile;
+  source?: string;
+  projectId?: string;
   initialSource?: ModpackSource;
   title?: string;
   localizedName?: LocalizedName | null;
@@ -200,7 +204,7 @@ export function ModpackInstallDialog({
                 name,
                 includeOptional,
                 ...(resource
-                  ? { file: resource.file }
+                  ? { file: resource.file, ...(source && projectId ? { origin: { source, projectId, versionId: resource.id } } : {}) }
                   : { token: inspection?.token }),
               });
               token.current = null;

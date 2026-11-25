@@ -7,7 +7,8 @@ import { useApp } from "../store";
 import { matchesVersionFilter } from "../installOptions";
 import type { ManifestVersion } from "../types";
 import { CatalogView, type ResourceView } from "./CatalogView";
-import { CatalogItems, CatalogSkeleton } from "./CatalogMotion";
+import { CatalogItems } from "./CatalogMotion";
+import { LoadingState } from "../LoadingState";
 import { useTabContentTransition } from "../useTabContentTransition";
 import { MinecraftTypeIcon } from "./MinecraftTypeIcon";
 
@@ -104,100 +105,100 @@ export function MinecraftInstall({
         aria-busy={loading}
         tabIndex={0}
       >
-        {error ? (
-          <section className="panel has-surface" role="alert">
-            <PixelFrame />
-            <Empty
-              title="暂时无法获取版本"
-              description={error}
-              action={
-                <Button onClick={() => setRevision((value) => value + 1)}>
-                  <RefreshCw size={16} />
-                  重新获取列表
-                </Button>
-              }
-            />
-          </section>
-        ) : loading ? (
-          <CatalogSkeleton view={view} label="正在加载版本" />
-        ) : list.length ? (
-          <>
-            <CatalogItems
-              view={view}
-              revision={`${filter}:${query}:${currentPage}`}
-            >
-              {list
-                .slice(currentPage * pageSize, (currentPage + 1) * pageSize)
-                .map((version) => (
-                  <article
-                    key={version.id}
-                    className="catalog-project has-surface"
-                  >
-                    <PixelFrame />
-                    <button
-                      className="catalog-project-info"
-                      aria-label={`查看 Minecraft ${version.id} 安装配置`}
-                      onClick={() => onSelect(version)}
+        <LoadingState loading={loading} label="正在加载 Minecraft 版本…">
+          {error ? (
+            <section className="panel has-surface" role="alert">
+              <PixelFrame />
+              <Empty
+                title="暂时无法获取版本"
+                description={error}
+                action={
+                  <Button onClick={() => setRevision((value) => value + 1)}>
+                    <RefreshCw size={16} />
+                    重新获取列表
+                  </Button>
+                }
+              />
+            </section>
+          ) : list.length ? (
+            <>
+              <CatalogItems
+                view={view}
+                revision={`${filter}:${query}:${currentPage}`}
+              >
+                {list
+                  .slice(currentPage * pageSize, (currentPage + 1) * pageSize)
+                  .map((version) => (
+                    <article
+                      key={version.id}
+                      className="catalog-project has-surface"
                     >
-                      <MinecraftTypeIcon version={version} />
-                      <div className="catalog-project-copy">
-                        <div className="catalog-project-title">
-                          <h2>{version.id}</h2>
+                      <PixelFrame />
+                      <button
+                        className="catalog-project-info"
+                        aria-label={`查看 Minecraft ${version.id} 安装配置`}
+                        onClick={() => onSelect(version)}
+                      >
+                        <MinecraftTypeIcon version={version} />
+                        <div className="catalog-project-copy">
+                          <div className="catalog-project-title">
+                            <h2>{version.id}</h2>
+                          </div>
+                          <p>发布于 {version.releaseTime.slice(0, 10)}</p>
                         </div>
-                        <p>发布于 {version.releaseTime.slice(0, 10)}</p>
+                      </button>
+                      <div className="catalog-project-footer">
+                        <div className="catalog-tags">
+                          <Badge>
+                            {versionTypes.find(
+                              (type) =>
+                                type.value !== "all" &&
+                                matchesVersionFilter(version, type.value),
+                            )?.label || version.type}
+                          </Badge>
+                          <Badge>Java 版</Badge>
+                        </div>
                       </div>
-                    </button>
-                    <div className="catalog-project-footer">
-                      <div className="catalog-tags">
-                        <Badge>
-                          {versionTypes.find(
-                            (type) =>
-                              type.value !== "all" &&
-                              matchesVersionFilter(version, type.value),
-                          )?.label || version.type}
-                        </Badge>
-                        <Badge>Java 版</Badge>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-            </CatalogItems>
-            <nav
-              className="pagination catalog-pagination"
-              aria-label="Minecraft 版本分页"
-            >
-              <Button
-                disabled={currentPage === 0}
-                onClick={() => goToPage(currentPage - 1)}
+                    </article>
+                  ))}
+              </CatalogItems>
+              <nav
+                className="pagination catalog-pagination"
+                aria-label="Minecraft 版本分页"
               >
-                上一页
-              </Button>
-              <span
-                className="page-indicator catalog-page-indicator has-surface"
-                tabIndex={0}
-              >
-                <PixelFrame />
-                <span className="page-indicator-text">
-                  第 {currentPage + 1} / {pages} 页
+                <Button
+                  disabled={currentPage === 0}
+                  onClick={() => goToPage(currentPage - 1)}
+                >
+                  上一页
+                </Button>
+                <span
+                  className="page-indicator catalog-page-indicator has-surface"
+                  tabIndex={0}
+                >
+                  <PixelFrame />
+                  <span className="page-indicator-text">
+                    第 {currentPage + 1} / {pages} 页
+                  </span>
                 </span>
-              </span>
-              <Button
-                disabled={currentPage + 1 >= pages}
-                onClick={() => goToPage(currentPage + 1)}
-              >
-                下一页
-              </Button>
-            </nav>
-          </>
-        ) : (
-          <section className="panel has-surface">
-            <PixelFrame />
-            <Empty
-              title="没有找到匹配版本"
-              description="试试其他关键词或版本类型。"
-            />
-          </section>
-        )}
+                <Button
+                  disabled={currentPage + 1 >= pages}
+                  onClick={() => goToPage(currentPage + 1)}
+                >
+                  下一页
+                </Button>
+              </nav>
+            </>
+          ) : (
+            <section className="panel has-surface">
+              <PixelFrame />
+              <Empty
+                title="没有找到匹配版本"
+                description="试试其他关键词或版本类型。"
+              />
+            </section>
+          )}
+        </LoadingState>
       </div>
     </section>
   );

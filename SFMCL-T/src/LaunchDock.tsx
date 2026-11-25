@@ -385,7 +385,9 @@ export function LaunchDock({
     if (!job) return;
     const settled =
       pending.kind === "launch" ||
-      (pending.kind === "cancel" && !isActiveLaunch(job, tasks.downloads)) ||
+      (pending.kind === "cancel" &&
+        (!isActiveLaunch(job, tasks.downloads) ||
+          job.commandRuns?.postExit.status === "running")) ||
       (pending.kind === "resume" && tasks !== pending.snapshot);
     if (settled) setPending(null);
   }, [tasks, pending]);
@@ -455,7 +457,7 @@ export function LaunchDock({
       : 100;
   const buttonDetail = [message, task.stepLabel].filter(Boolean).join(" · ");
   const PrimaryIcon =
-    mode === "running"
+    mode === "running" || mode === "cleanup"
       ? Square
       : spinning
         ? LoaderCircle
@@ -469,27 +471,29 @@ export function LaunchDock({
                 ? Pause
                 : Play;
   const primaryText =
-    mode === "running"
-      ? "结束游戏"
-      : mode === "cancelling"
-        ? "正在结束"
-        : mode === "preparing"
-          ? indeterminate
-            ? "正在启动"
-            : `正在启动 ${Math.round(buttonProgress)}%`
-          : mode === "empty"
-            ? "选择版本"
-            : mode === "no-player"
-              ? "选择角色"
-              : mode === "invalid"
-                ? "管理版本"
-                : mode === "failed"
-                  ? "重试启动"
-                  : mode === "download-error"
-                    ? "重试下载"
-                    : mode === "paused"
-                      ? "继续启动"
-                      : "开始游戏";
+    mode === "cleanup"
+      ? "停止命令"
+      : mode === "running"
+        ? "结束游戏"
+        : mode === "cancelling"
+          ? "正在结束"
+          : mode === "preparing"
+            ? indeterminate
+              ? "正在启动"
+              : `正在启动 ${Math.round(buttonProgress)}%`
+            : mode === "empty"
+              ? "选择版本"
+              : mode === "no-player"
+                ? "选择角色"
+                : mode === "invalid"
+                  ? "管理版本"
+                  : mode === "failed"
+                    ? "重试启动"
+                    : mode === "download-error"
+                      ? "重试下载"
+                      : mode === "paused"
+                        ? "继续启动"
+                        : "开始游戏";
 
   async function request(kind: PendingAction["kind"]) {
     if (requestInFlight.current || app.busy || pending) return;
@@ -539,7 +543,7 @@ export function LaunchDock({
   function primaryAction() {
     if (mode === "no-player") app.setPage("players");
     else if (mode === "invalid") app.setPage("versions");
-    else if (mode === "running") void request("cancel");
+    else if (mode === "running" || mode === "cleanup") void request("cancel");
     else if (mode === "paused" || mode === "download-error")
       void request("resume");
     else void request("launch");

@@ -7,6 +7,8 @@ use tokio_util::sync::CancellationToken;
 pub enum JobKind {
     Install,
     Modpack,
+    ModpackExport,
+    ModpackUpdate,
     Launch,
     Repair,
     Login,
@@ -42,19 +44,74 @@ pub struct JobSnapshot {
     pub launch: Option<LaunchContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crash_report: Option<crate::minecraft::crash::CrashReport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command_runs: Option<crate::minecraft::commands::CommandRuns>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_exit: Option<crate::minecraft::commands::GameExit>,
 }
 pub struct Job {
     kind: JobKind,
     snapshot: Mutex<JobSnapshot>,
     pub cancel: CancellationToken,
+    pub command_cancel: CancellationToken,
 }
 impl Job {
+    pub fn initialize_commands(&self, pre_launch: bool, post_exit: bool) {
+        use crate::minecraft::commands::{CommandRun, CommandRuns};
+        self.update(|snapshot| {
+            snapshot.command_runs = Some(CommandRuns {
+                pre_launch: CommandRun::pending(pre_launch),
+                post_exit: CommandRun::pending(post_exit),
+            })
+        });
+    }
+    pub fn set_command_run(
+        &self,
+        phase: crate::minecraft::commands::CommandPhase,
+        run: crate::minecraft::commands::CommandRun,
+    ) {
+        if !matches!(self.kind, JobKind::Launch) {
+            return;
+        }
+        use crate::minecraft::commands::{CommandPhase, CommandRun, CommandRuns};
+        self.update(|snapshot| {
+            let runs = snapshot.command_runs.get_or_insert_with(|| CommandRuns {
+                pre_launch: CommandRun::pending(false),
+                post_exit: CommandRun::pending(false),
+            });
+            match phase {
+                CommandPhase::PreLaunch => runs.pre_launch = run,
+                CommandPhase::PostExit => runs.post_exit = run,
+            }
+        });
+    }
+    pub fn set_game_exit(&self, exit: crate::minecraft::commands::GameExit) {
+        if !matches!(self.kind, JobKind::Launch) {
+            return;
+        }
+        self.update(|snapshot| snapshot.game_exit = Some(exit));
+    }
+    pub fn cancel_requested(&self) {
+        use crate::minecraft::commands::CommandStatus;
+        let snapshot = self.snapshot();
+        if snapshot
+            .command_runs
+            .as_ref()
+            .is_some_and(|runs| runs.post_exit.status == CommandStatus::Running)
+        {
+            self.command_cancel.cancel();
+        } else {
+            self.cancel.cancel();
+        }
+    }
     pub fn set_crash_report(&self, report: crate::minecraft::crash::CrashReport) {
         self.update(|snapshot| snapshot.crash_report = Some(report));
     }
     pub fn cancellation_message(&self) -> &'static str {
         match self.kind {
             JobKind::Install | JobKind::Modpack => "安装已取消",
+            JobKind::ModpackExport => "整合包导出已取消",
+            JobKind::ModpackUpdate => "整合包更新已取消",
             JobKind::Launch => "启动已取消",
             JobKind::Repair => "修复已取消",
             JobKind::Login => "登录已取消",
@@ -128,21 +185,73 @@ impl Job {
         self.update(|snapshot| snapshot.download_id = None);
     }
     pub fn finish(&self, result: &anyhow::Result<()>) {
-        self.update(|s| match result {
-            Ok(()) => {
-                s.status = Status::Completed;
-                for step in &mut s.steps {
-                    step.status = Status::Completed;
+        self.update(|s| {
+            use crate::minecraft::commands::CommandStatus;
+            if let Some(runs) = &mut s.command_runs {
+                for run in [&mut runs.pre_launch, &mut runs.post_exit] {
+                    if run.status == CommandStatus::Pending {
+                        run.status = CommandStatus::Skipped;
+                    }
                 }
             }
-            Err(error) => {
-                s.status = if self.cancel.is_cancelled() {
-                    Status::Cancelled
-                } else {
-                    Status::Failed
-                };
-                s.error = Some(format!("{error:#}"));
-                s.steps[s.current_step].status = s.status;
+            match result {
+                Ok(()) => {
+                    s.status = Status::Completed;
+                    for step in &mut s.steps {
+                        step.status = Status::Completed;
+                    }
+                }
+                Err(error) => {
+                    s.status = if self.cancel.is_cancelled() {
+                        Status::Cancelled
+                    } else {
+                        Status::Failed
+                    };
+                    s.error = Some(format!("{error:#}"));
+                    s.steps[s.current_step].status = s.status;
+                }
+            }
+            if let Some(runs) = &s.command_runs {
+                if let Some(exit) = &s.game_exit {
+                    if exit.reason != "normal" {
+                        if let Some(step) = s.steps.iter_mut().find(|step| step.name == "游戏运行")
+                        {
+                            step.status = if exit.reason == "cancelled" {
+                                Status::Cancelled
+                            } else {
+                                Status::Failed
+                            };
+                            step.detail = s.error.clone().unwrap_or_default();
+                        }
+                    }
+                }
+                for (name, run) in [
+                    ("启动前命令", &runs.pre_launch),
+                    ("退出后命令", &runs.post_exit),
+                ] {
+                    if let Some(step) = s.steps.iter_mut().find(|step| step.name == name) {
+                        if matches!(
+                            run.status,
+                            CommandStatus::Completed | CommandStatus::Skipped
+                        ) {
+                            step.status = Status::Completed;
+                            step.detail = if run.status == CommandStatus::Skipped {
+                                "已跳过"
+                            } else {
+                                "命令执行完成"
+                            }
+                            .into();
+                        }
+                        if matches!(run.status, CommandStatus::Failed | CommandStatus::Cancelled) {
+                            step.status = if run.status == CommandStatus::Cancelled {
+                                Status::Cancelled
+                            } else {
+                                Status::Failed
+                            };
+                            step.detail = run.error.clone().unwrap_or_default();
+                        }
+                    }
+                }
             }
         });
     }
@@ -169,6 +278,7 @@ impl Jobs {
         let job = Arc::new(Job {
             kind: JobKind::Launch,
             cancel: CancellationToken::new(),
+            command_cancel: CancellationToken::new(),
             snapshot: Mutex::new(snapshot),
         });
         jobs.push(job.clone());
@@ -178,6 +288,7 @@ impl Jobs {
         let job = Arc::new(Job {
             kind,
             cancel: CancellationToken::new(),
+            command_cancel: CancellationToken::new(),
             snapshot: Mutex::new(JobSnapshot {
                 id: uuid::Uuid::new_v4().to_string(),
                 title,
@@ -189,6 +300,8 @@ impl Jobs {
                 created_at: now(),
                 launch: None,
                 crash_report: None,
+                command_runs: None,
+                game_exit: None,
                 steps: steps
                     .iter()
                     .map(|name| Step {
@@ -237,12 +350,13 @@ impl Jobs {
             .iter()
             .find(|j| j.snapshot().id == id)
             .ok_or_else(|| anyhow::anyhow!("任务不存在"))?;
-        job.cancel.cancel();
+        job.cancel_requested();
         Ok(())
     }
     pub fn cancel_all(&self) {
         for job in self.jobs.lock().unwrap_or_else(|e| e.into_inner()).iter() {
             job.cancel.cancel();
+            job.command_cancel.cancel();
         }
     }
 }
@@ -262,7 +376,7 @@ pub async fn download(
         title,
         root,
         files,
-        if matches!(job.kind, JobKind::Modpack) {
+        if matches!(job.kind, JobKind::Modpack | JobKind::ModpackUpdate) {
             DownloadRetention::Session
         } else {
             DownloadRetention::Persistent

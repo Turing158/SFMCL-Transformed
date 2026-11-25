@@ -1,6 +1,14 @@
 import { useLayoutEffect, useRef } from "react";
 
-export function useTabContentTransition(index: number, enabled = true) {
+export function useTabContentTransition(
+  index: number,
+  enabled = true,
+  {
+    duration = 240,
+    distance = 16,
+    initialOpacity = 0.15,
+  }: { duration?: number; distance?: number; initialOpacity?: number } = {},
+) {
   const content = useRef<HTMLDivElement>(null);
   const previous = useRef({ index, enabled });
 
@@ -14,12 +22,15 @@ export function useTabContentTransition(index: number, enabled = true) {
     const direction = index > last.index ? 1 : -1;
     const animation = content.current.animate(
       [
-        { opacity: 0.15, transform: `translateX(${direction * 16}px)` },
+        {
+          opacity: initialOpacity,
+          transform: `translateX(${direction * distance}px)`,
+        },
         { opacity: 1, transform: "translateX(0)" },
       ],
       {
         id: "sfmcl-t-resource-tab",
-        duration: 240,
+        duration,
         easing: "cubic-bezier(0.22, 0.8, 0.25, 1)",
         fill: "both",
       },
@@ -27,7 +38,7 @@ export function useTabContentTransition(index: number, enabled = true) {
     const cleanup = () => animation.cancel();
     void animation.finished.then(cleanup, cleanup);
     return cleanup;
-  }, [index, enabled]);
+  }, [index, enabled, duration, distance, initialOpacity]);
 
   return content;
 }

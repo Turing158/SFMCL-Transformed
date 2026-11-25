@@ -43,6 +43,30 @@ await page.addInitScript(() => {
     return invoke(command, args);
   };
 });
+// Keep the shorter fade available when sampling starts after it has finished.
+await page.addInitScript(() => {
+  window.__errorBannerMotion = new WeakMap();
+  document.addEventListener("transitionrun", (event) => {
+    const element = event.target;
+    if (
+      !(element instanceof HTMLElement) ||
+      !element.classList.contains("error-banner")
+    )
+      return;
+    let recorded = window.__errorBannerMotion.get(element);
+    if (!recorded || recorded.open !== element.dataset.open) {
+      recorded = { open: element.dataset.open, transitions: new Map() };
+      window.__errorBannerMotion.set(element, recorded);
+    }
+    for (const animation of element.getAnimations()) {
+      if (
+        animation instanceof CSSTransition &&
+        animation.effect.getTiming().duration > 0
+      )
+        recorded.transitions.set(animation.transitionProperty, animation);
+    }
+  });
+});
 const message = "版本名称已存在，请选择其他名称";
 const nav = (name) =>
   page
@@ -64,9 +88,12 @@ const settle = (banner) =>
 const sample = async (banner, opening) => {
   await expect(banner).toHaveAttribute("data-open", String(opening));
   const motion = await banner.evaluate((element) => {
-    const animations = element
-      .getAnimations()
-      .filter((animation) => animation.effect.getTiming().duration > 0);
+    const recorded = window.__errorBannerMotion.get(element);
+    const animations = (
+      recorded?.open === element.dataset.open
+        ? [...recorded.transitions.values()]
+        : element.getAnimations()
+    ).filter((animation) => animation.effect.getTiming().duration > 0);
     const height = animations.find(
       (animation) => animation.transitionProperty === "grid-template-rows",
     );

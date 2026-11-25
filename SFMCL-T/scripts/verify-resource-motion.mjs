@@ -168,27 +168,28 @@ try {
     .getByRole("navigation", { name: "主导航" })
     .getByRole("button", { name: "资源中心", exact: true })
     .click();
-  await expect(page.locator(".catalog-skeleton")).toHaveCount(6);
+  await expect(page.locator(".minecraft-install .loading-state")).toHaveText(
+    "正在加载 Minecraft 版本…",
+  );
   await expect(
     page.getByText("正在获取官方版本清单…", { exact: true }),
   ).toHaveCount(0);
-  const pulse = await page
-    .locator(".catalog-skeleton > span")
+  const rotation = await page
+    .locator(".loading-state-spinner")
     .first()
     .evaluate((element) => {
       const animation = element.getAnimations()[0];
       animation.pause();
-      const values = [0, 550, 1100].map((time) => {
+      const values = [0, 225, 450].map((time) => {
         animation.currentTime = time;
-        return Number(getComputedStyle(element).opacity);
+        return getComputedStyle(element).transform;
       });
       animation.play();
       return values;
     });
-  expect(pulse[0]).toBeLessThan(pulse[1]);
-  expect(pulse[1]).toBeLessThan(pulse[2]);
+  expect(new Set(rotation).size).toBe(3);
   checks.push(
-    "Minecraft loading shows animated skeletons without the manifest text",
+    "Minecraft loading shows a rotating indicator above its version-loading caption",
   );
 
   for (const tab of ["Minecraft", "模组", "材质包", "光影", "数据包"]) {
@@ -346,11 +347,21 @@ try {
     .getByRole("navigation", { name: "主导航" })
     .getByRole("button", { name: "设置", exact: true })
     .click();
+  // Cached pages stay mounted. Let the artificially paused hidden animation
+  // finish, as its normal timeline would, before checking its cleanup.
+  await page.evaluate(() => {
+    const animation = window.__tabAnimations.at(-1);
+    if (
+      animation.playState === "paused" &&
+      animation.effect.target.closest("main")?.hidden
+    )
+      animation.finish();
+  });
   expect(
     await page.evaluate(() => window.__tabAnimations.at(-1).playState),
   ).toBe("idle");
   checks.push(
-    "Leaving the resource center cancels an unfinished tab animation",
+    "A cached resource page is hidden on navigation and its completed tab animation is cleaned up",
   );
 
   const beforeLocal = await tabMotionCount();
@@ -454,7 +465,7 @@ try {
           .map((a) => a.finished),
       ),
     );
-    const header = await page.locator(".page-heading").boundingBox();
+    const header = await page.locator("main.page .page-heading").boundingBox();
     for (const [name, direction] of [
       ["全局设置", 1],
       ["关于", 1],
@@ -462,7 +473,9 @@ try {
     ]) {
       await settingsTabs.getByRole("tab", { name, exact: true }).click();
       await sampleTab(direction, "#settings-panel");
-      expect(await page.locator(".page-heading").boundingBox()).toEqual(header);
+      expect(
+        await page.locator("main.page .page-heading").boundingBox(),
+      ).toEqual(header);
     }
     await settingsTabs.getByRole("tab", { name: "关于", exact: true }).click();
     await sampleTab(1, "#settings-panel");
@@ -475,7 +488,10 @@ try {
     await expect(
       page.getByRole("heading", { name: "从旧版迁移", exact: true }),
     ).toHaveCount(0);
-    const icon = page.getByRole("img", { name: "SFMCL-T 软件图标", exact: true });
+    const icon = page.getByRole("img", {
+      name: "SFMCL 软件图标",
+      exact: true,
+    });
     await expect(icon).toBeVisible();
     expect(
       await icon.evaluate(

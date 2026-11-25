@@ -121,7 +121,7 @@ pub async fn run_java_diagnosed(
         .spawn()
         .context("无法启动 Java 进程")?;
     job.set_launch_running(true);
-    let _exit = ExitEvent {
+    let exit_event = ExitEvent {
         events: events.clone(),
         job: job.clone(),
     };
@@ -142,26 +142,95 @@ pub async fn run_java_diagnosed(
     let stdout = tokio::spawn(pump(out, job.clone(), redactions.to_vec(), capture.clone()));
     let stderr = tokio::spawn(pump(err, job.clone(), redactions.to_vec(), capture.clone()));
     let mut title_tick = tokio::time::interval(std::time::Duration::from_secs(1));
+    let mut cancelled = false;
     let status = loop {
         let status = tokio::select! {
-            status = child.wait() => Some(status?),
-            _ = job.cancel.cancelled() => { child.kill().await?; child.wait().await?; stdout.abort(); stderr.abort(); bail!("{}，Java 进程已停止", job.cancellation_message()); }
+            status = child.wait() => Some(status),
+            _ = job.cancel.cancelled() => {
+                cancelled = true;
+                let _ = child.start_kill();
+                Some(child.wait().await)
+            }
             _ = title_tick.tick() => { window.tick(pid); None }
         };
         if let Some(status) = status {
             break status;
         }
     };
-    stdout.await?;
-    stderr.await?;
-    let code = status.code().unwrap_or(-1);
-    if !status.success() {
-        if let (Some(capture), Some(data)) = (capture, data) {
-            capture.finish(data, &job, code);
+    let (status, wait_error) = match status {
+        Ok(status) => (status, None),
+        Err(error) => {
+            let _ = child.start_kill();
+            let status = child.wait().await.context("无法确认 Java 进程已结束")?;
+            job.log(format!("等待 Java 进程失败：{error}"));
+            (status, Some(error))
         }
-        bail!("Java 进程退出，错误码 {code}。请查看任务日志");
+    };
+    let code = status.code();
+    job.set_game_exit(super::commands::GameExit {
+        code,
+        reason: if cancelled {
+            "cancelled"
+        } else if status.success() && wait_error.is_none() {
+            "normal"
+        } else {
+            "crashed"
+        }
+        .into(),
+    });
+    // Notify the UI as soon as Java has exited, even if a cleanup command is
+    // still running. The background host keeps the version lock until cleanup.
+    drop(exit_event);
+    let mut stdout = stdout;
+    let mut stderr = stderr;
+    if tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        let _ = (&mut stdout).await;
+        let _ = (&mut stderr).await;
+    })
+    .await
+    .is_err()
+    {
+        stdout.abort();
+        stderr.abort();
     }
-    Ok(code)
+    if (!status.success() || wait_error.is_some()) && !cancelled {
+        if let (Some(capture), Some(data)) = (capture, data) {
+            capture.finish(data, &job, code.unwrap_or(-1));
+        }
+    }
+    if settings.post_exit_command.enabled {
+        if let Some(index) = job
+            .snapshot()
+            .steps
+            .iter()
+            .position(|step| step.name == "退出后命令")
+        {
+            job.step(index, "游戏已结束，正在执行退出后命令");
+        }
+    }
+    super::commands::execute(
+        &settings.post_exit_command,
+        super::commands::CommandPhase::PostExit,
+        directory,
+        java,
+        job.clone(),
+        redactions,
+        &job.command_cancel,
+    )
+    .await?;
+    if cancelled {
+        bail!("{}，Java 进程已停止", job.cancellation_message());
+    }
+    if let Some(error) = wait_error {
+        return Err(error.into());
+    }
+    if !status.success() {
+        bail!(
+            "Java 进程退出，错误码 {}。请查看任务日志",
+            code.unwrap_or(-1)
+        );
+    }
+    Ok(code.unwrap_or(0))
 }
 
 #[cfg(test)]

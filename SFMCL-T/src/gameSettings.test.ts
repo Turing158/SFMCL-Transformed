@@ -6,6 +6,7 @@ import {
   mergeJavaPaths,
   withJavaPaths,
   launchSettingDefaults,
+  commandDefaults,
   validServerHost,
   prepareGameSettings,
   prepareSettings,
@@ -46,6 +47,58 @@ const config: VersionSettings = {
 };
 
 describe("per-card game settings", () => {
+  it("inherits commands independently and preserves disabled local overrides", () => {
+    const globalCommands = {
+      ...global,
+      preLaunchCommand: {
+        ...commandDefaults,
+        enabled: true,
+        command: "echo global",
+      },
+    };
+    let local = {
+      ...config,
+      settings: {
+        ...config.settings,
+        preLaunchCommand: { ...commandDefaults, command: "echo local" },
+      },
+    };
+    expect(
+      resolveGameSettings(local, globalCommands).preLaunchCommand.command,
+    ).toBe("echo global");
+    local = updateVersionSettingGroup(local, "commands", true);
+    expect(
+      resolveGameSettings(local, globalCommands).preLaunchCommand,
+    ).toMatchObject({ enabled: false, command: "echo local" });
+    local = updateVersionSettingGroup(local, "commands", false);
+    expect(
+      resolveGameSettings(local, globalCommands).preLaunchCommand.enabled,
+    ).toBe(true);
+    expect(local.settings.preLaunchCommand.command).toBe("echo local");
+  });
+  it("keeps invalid command drafts local and supplies legacy defaults", () => {
+    const legacy = { ...global } as Partial<GameSettings>;
+    delete legacy.preLaunchCommand;
+    delete legacy.postExitCommand;
+    expect(gameSettingsFrom(legacy as GameSettings)).toMatchObject({
+      preLaunchCommand: { enabled: false, timeoutSeconds: 60 },
+      postExitCommand: { enabled: false, timeoutSeconds: 300 },
+    });
+    const draft = {
+      ...global,
+      preLaunchCommand: { ...commandDefaults, enabled: true },
+      postExitCommand: { ...global.postExitCommand, timeoutSeconds: NaN },
+      memoryMb: 6144,
+    };
+    const prepared = prepareGameSettings(draft, global);
+    expect(prepared.preLaunchCommand.enabled).toBe(false);
+    expect(prepared.postExitCommand.timeoutSeconds).toBe(300);
+    expect(prepared.memoryMb).toBe(6144);
+    draft.preLaunchCommand.command = "echo ready";
+    expect(prepareGameSettings(draft, global).preLaunchCommand.enabled).toBe(
+      true,
+    );
+  });
   it("defaults missing offline LAN settings to disabled and preserves saved choices", () => {
     const legacy: Partial<GameSettings> = { ...global };
     delete legacy.offlineLan;
@@ -425,6 +478,7 @@ describe("per-card game settings", () => {
       true,
       true,
       true,
+      false,
       false,
       false,
       false,

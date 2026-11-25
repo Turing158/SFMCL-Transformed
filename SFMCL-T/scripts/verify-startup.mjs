@@ -228,6 +228,8 @@ try {
     fixture.data.settings.theme = "dark";
     fixture.data.settings.accent = "end";
     fixture.data.players[0].skin = "C:/Pixel-Test/skin.png";
+    fixture.data.settings.backgroundType = "local";
+    fixture.data.settings.background = "C:/Pixel-Test/background.png";
     fixture.data.backgroundPath = "C:/Pixel-Test/background.png";
     window.__SFMCL_T_APPEARANCE__ = { theme: "dark", accent: "end" };
     window.__startupTest = {
@@ -580,7 +582,7 @@ try {
       /home-content-clean/,
     );
     await expect(
-      normal.locator(".launch-dock-shadow > .launch-dock-main"),
+      normal.locator(".launch-dock-shadow .launch-dock-main"),
     ).toBeVisible();
     const navigation = normal.getByRole("navigation", { name: "主导航" });
     await navigation.getByRole("button", { name: "设置", exact: true }).click();

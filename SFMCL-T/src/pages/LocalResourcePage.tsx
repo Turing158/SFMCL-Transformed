@@ -5,7 +5,8 @@ import type { LocalResource, Project, Version } from "../types";
 import { ResourceSubpage } from "./ResourceSubpage";
 import { LocalModChannels } from "./LocalModChannels";
 import { localResourceSize, openLocalResource } from "../localResources";
-import { resourceName } from "../resourceNames";
+import { localResourceTitle, resourceName } from "../resourceNames";
+import { MinecraftText } from "../MinecraftText";
 
 export function LocalResourcePage({
   item,
@@ -28,7 +29,12 @@ export function LocalResourcePage({
   return (
     <div className="local-resource-page">
       <ResourceSubpage
-        title={resourceName(item.name, item.localizedName)}
+        title={localResourceTitle(item)}
+        titleContent={
+          item.kind === "mod" ? undefined : (
+            <MinecraftText text={resourceName(item.name, item.localizedName)} />
+          )
+        }
         tab={tab}
       >
         <div className="project-heading">

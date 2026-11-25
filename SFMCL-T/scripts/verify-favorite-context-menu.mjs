@@ -205,6 +205,8 @@ try {
   expect(await root.getByRole("menuitem").allTextContents()).toEqual([
     "启动版本",
     "切换版本",
+    "更新整合包",
+    "制作整合包",
     "查看资源",
     "版本设置",
     "取消收藏",
@@ -222,7 +224,7 @@ try {
   );
   expect(await requests("launch")).toHaveLength(0);
   checks.push(
-    "Six items in order; right click has no selection side effects; switch never launches",
+    "Eight items in order, including modpack update; right click has no selection side effects; switch never launches",
   );
 
   await ready();

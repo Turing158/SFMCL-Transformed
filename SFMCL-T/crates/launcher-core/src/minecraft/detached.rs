@@ -302,12 +302,18 @@ async fn host(request: Request) -> Result<()> {
                     publish(&request.session, &state, &mut previous)?;
                     hello(Hello { host: Some(identity.clone()), error: None })?;
                     announced = true;
+                } else {
+                    state.snapshot = job.snapshot();
+                    publish(&request.session, &state, &mut previous)?;
                 }
             }
             result = &mut runner => break result,
             _ = tick.tick() => {
                 if request.session.join("cancel").exists() {
                     job.cancel.cancel();
+                }
+                if request.session.join("stop-command").exists() {
+                    job.command_cancel.cancel();
                 }
                 state.snapshot = job.snapshot();
                 publish(&request.session, &state, &mut previous)?;
@@ -328,7 +334,7 @@ async fn host(request: Request) -> Result<()> {
             }
         }
     }
-    state.code = result.as_ref().ok().copied();
+    state.code = job.snapshot().game_exit.as_ref().and_then(|exit| exit.code);
     if let Err(error) = &result {
         super::crash::startup_failure(data, &job, &format!("{error:#}"), &request.redactions);
     }
@@ -423,7 +429,13 @@ pub async fn run_game(
     let state = read_state(&session)?;
     ensure!(state.host == started, "游戏后台进程身份发生变化");
     pending.committed = true;
-    job.set_launch_running(true);
+    job.set_launch_running(
+        state
+            .snapshot
+            .launch
+            .as_ref()
+            .is_some_and(|launch| launch.running),
+    );
     if let Some(events) = &events {
         let _ = events.send(LaunchEvent::Started {
             action: settings.launcher_action.clone(),
@@ -440,21 +452,29 @@ async fn monitor(
     job: Arc<Job>,
     events: Option<LaunchEvents>,
 ) -> Result<i32> {
-    let _exit = ExitEvent {
+    let mut exit_event = Some(ExitEvent {
         events,
         job: job.clone(),
-    };
+    });
     let mut cancellation_sent = false;
+    let mut command_cancellation_sent = false;
     loop {
         if job.cancel.is_cancelled() && !cancellation_sent {
             atomic_write(&session.join("cancel"), b"")?;
             cancellation_sent = true;
+        }
+        if job.command_cancel.is_cancelled() && !command_cancellation_sent {
+            atomic_write(&session.join("stop-command"), b"")?;
+            command_cancellation_sent = true;
         }
         let state = read_state(&session)?;
         ensure!(state.host == identity, "游戏后台进程身份发生变化");
         let status = state.snapshot.status;
         let error = state.snapshot.error.clone();
         job.sync_launch(state.snapshot);
+        if job.snapshot().game_exit.is_some() {
+            drop(exit_event.take());
+        }
         if status.terminal() {
             if status == Status::Completed {
                 return Ok(state.code.unwrap_or(0));
@@ -514,9 +534,18 @@ pub fn recover(data: &Path, settings: &Settings, jobs: &Arc<Jobs>) -> Result<Vec
             || settings
                 .registered_game_root(Path::new(&context.directory))
                 .is_err()
-            || !state.host.alive()
-            || state.snapshot.status.terminal()
         {
+            continue;
+        }
+        if state.snapshot.status.terminal() {
+            if state.snapshot.command_runs.as_ref().is_some_and(|runs| {
+                runs.post_exit.status != super::commands::CommandStatus::Skipped
+            }) {
+                jobs.restore_launch(state.snapshot);
+            }
+            continue;
+        }
+        if !state.host.alive() {
             continue;
         }
         let job = jobs.restore_launch(state.snapshot);
@@ -652,6 +681,7 @@ mod tests {
                 let sessions: Vec<_> = entries.flatten().map(|entry| entry.path()).collect();
                 for session in &sessions {
                     let _ = atomic_write(&session.join("cancel"), b"");
+                    let _ = atomic_write(&session.join("stop-command"), b"");
                 }
                 let deadline = std::time::Instant::now() + Duration::from_secs(10);
                 while std::time::Instant::now() < deadline
@@ -859,8 +889,153 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cleanup_outlives_launcher_and_completed_commands_are_not_replayed() {
+        let fixture = Fixture::new("cleanup-survive-");
+        let job = fixture.job(&Jobs::default());
+        let mut request = fixture.request(&job, "Start-Sleep -Milliseconds 800");
+        request.settings.post_exit_command = super::super::commands::CommandSettings {
+            enabled: true,
+            shell: super::super::commands::CommandShell::Powershell,
+            command: "Add-Content -LiteralPath 'cleanup.txt' -Value $env:SFMCL_SESSION_ID".into(),
+            ..Default::default()
+        };
+        let session = request.session.clone();
+        let mut launcher = tokio::process::Command::from(command(
+            TEST_LAUNCHER,
+            &std::env::current_exe().unwrap(),
+        ))
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+        let launcher_pid = launcher.id().unwrap();
+        launcher
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&serde_json::to_vec(&request).unwrap())
+            .await
+            .unwrap();
+        let mut output = BufReader::new(launcher.stdout.take().unwrap());
+        tokio::time::timeout(Duration::from_secs(15), async {
+            let mut line = String::new();
+            loop {
+                line.clear();
+                assert_ne!(output.read_line(&mut line).await.unwrap(), 0);
+                if line.contains(READY) {
+                    break;
+                }
+            }
+            assert!(launcher.wait().await.unwrap().success());
+        })
+        .await
+        .unwrap();
+        assert!(Identity::read(launcher_pid).is_err());
+        let state = wait_state(&session, |state| state.snapshot.status.terminal()).await;
+        assert_eq!(state.snapshot.status, Status::Completed);
+        assert_eq!(
+            state
+                .snapshot
+                .command_runs
+                .as_ref()
+                .unwrap()
+                .post_exit
+                .status,
+            super::super::commands::CommandStatus::Completed
+        );
+        let path = Path::new(&fixture.settings.active_dir).join("cleanup.txt");
+        assert_eq!(fs::read_to_string(&path).unwrap().lines().count(), 1);
+        for _ in 0..2 {
+            let reopened = Arc::new(Jobs::default());
+            assert!(recover(fixture.temp.path(), &fixture.settings, &reopened)
+                .unwrap()
+                .is_empty());
+            assert_eq!(reopened.snapshots().len(), 1);
+            assert_eq!(
+                reopened.snapshots()[0]
+                    .command_runs
+                    .as_ref()
+                    .unwrap()
+                    .post_exit
+                    .status,
+                super::super::commands::CommandStatus::Completed
+            );
+        }
+        assert_eq!(fs::read_to_string(path).unwrap().lines().count(), 1);
+    }
+
+    #[tokio::test]
+    async fn cancelled_game_runs_cleanup_under_version_lock_and_second_cancel_stops_command() {
+        let fixture = Fixture::new("cleanup-stop-");
+        let job = fixture.job(&Jobs::default());
+        let mut request = fixture.request(&job, "Start-Sleep -Seconds 30");
+        request.settings.post_exit_command = super::super::commands::CommandSettings {
+            enabled: true,
+            shell: super::super::commands::CommandShell::Powershell,
+            command: "Set-Content -LiteralPath 'cleanup-started.txt' -Value 'ready'; Start-Sleep -Seconds 30".into(),
+            ..Default::default()
+        };
+        let (task, job, mut events) = start(request).await;
+        assert!(matches!(
+            events.recv().await,
+            Some(LaunchEvent::Started { .. })
+        ));
+        job.cancel_requested();
+        assert!(matches!(
+            tokio::time::timeout(Duration::from_secs(5), events.recv())
+                .await
+                .unwrap(),
+            Some(LaunchEvent::Exited)
+        ));
+        tokio::time::timeout(Duration::from_secs(8), async {
+            while !Path::new(&fixture.settings.active_dir)
+                .join("cleanup-started.txt")
+                .exists()
+                || job.snapshot().command_runs.as_ref().is_none_or(|runs| {
+                    runs.post_exit.status != super::super::commands::CommandStatus::Running
+                })
+            {
+                tokio::time::sleep(POLL).await;
+            }
+        })
+        .await
+        .unwrap();
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(
+                minecraft_root(Path::new(&fixture.settings.active_dir))
+                    .join(".tmcl/locks/launch-test.lock"),
+            )
+            .unwrap();
+        assert!(lock.try_lock().is_err());
+        job.cancel_requested();
+        assert!(tokio::time::timeout(Duration::from_secs(8), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_err());
+        assert_eq!(
+            job.snapshot().command_runs.unwrap().post_exit.status,
+            super::super::commands::CommandStatus::Cancelled
+        );
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while lock.try_lock().is_err() {
+                tokio::time::sleep(POLL).await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
     async fn simultaneous_games_keep_independent_cancellation_and_version_locks() {
-        let fixture = Fixture::new("parallel-");
+        let mut fixture = Fixture::new("parallel-");
+        fixture.settings.post_exit_command = super::super::commands::CommandSettings {
+            enabled: true,
+            shell: super::super::commands::CommandShell::Powershell,
+            command: "Add-Content -LiteralPath 'sessions.txt' -Value $env:SFMCL_SESSION_ID".into(),
+            ..Default::default()
+        };
         let jobs = Jobs::default();
         let first = fixture.request(&fixture.job(&jobs), "Start-Sleep -Seconds 60");
         let second = fixture.request(&fixture.job(&jobs), "Start-Sleep -Seconds 60");
@@ -916,6 +1091,12 @@ mod tests {
             second_events.recv().await,
             Some(LaunchEvent::Exited)
         ));
+        let text = fs::read_to_string(Path::new(&fixture.settings.active_dir).join("sessions.txt"))
+            .unwrap();
+        let ids: Vec<_> = text.lines().map(str::trim).collect();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&first_job.snapshot().id.as_str()));
+        assert!(ids.contains(&second_job.snapshot().id.as_str()));
     }
 
     #[tokio::test]

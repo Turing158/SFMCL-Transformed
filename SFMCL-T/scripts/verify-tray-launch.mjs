@@ -24,14 +24,19 @@ await page.addInitScript(() => {
   const bridge = window.__TAURI_INTERNALS__;
   const invoke = bridge.invoke;
   let serial = 0;
+  let releaseBootstrap;
+  const bootstrap = restored
+    ? new Promise((resolve) => (releaseBootstrap = resolve))
+    : Promise.resolve();
   const state = (window.__trayTest = {
-    visible: !restored,
+    visible: false,
     pending: null,
     snapshots: [],
     operations: [],
     phases: [],
     motions: [],
     holdReveal: !!restored,
+    releaseBootstrap: () => releaseBootstrap?.(),
     send(action) {
       const payload = { id: ++serial, action };
       state.pending = payload;
@@ -83,6 +88,8 @@ await page.addInitScript(() => {
     }
     if (command === "startup_window") {
       state.phases.push(args.phase);
+      if (args.phase === "loading" || args.phase === "error")
+        state.visible = true;
       if (args.phase === "reveal") {
         state.revealOpacity = Number(
           getComputedStyle(document.querySelector("#root")).opacity,
@@ -90,6 +97,8 @@ await page.addInitScript(() => {
         state.visible = true;
       }
     }
+    if (command === "request" && args?.operation === "bootstrap")
+      await bootstrap;
     return invoke(command, args);
   };
   const animate = Element.prototype.animate;
@@ -208,8 +217,45 @@ try {
     "The actual animated launch fill reaches 100% before a 120ms minimize animation hides the window.",
   );
 
-  // Reload with the saved snapshot, as the native tray restore rebuilds the WebView.
-  await page.reload();
+  // Block the main module: restoring must animate before React can even mount.
+  let releaseMain;
+  let mainRequested = false;
+  const mainHold = new Promise((resolve) => (releaseMain = resolve));
+  const mainModule = /\/(?:src\/main\.tsx|assets\/main-[^/]+\.js)(?:\?|$)/;
+  await page.route(mainModule, async (route) => {
+    mainRequested = true;
+    await mainHold;
+    await route.continue();
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect.poll(() => mainRequested).toBe(true);
+  await expect(page.locator("#startup-screen")).toBeVisible();
+  await expect(page.locator("#root")).toBeEmpty();
+  await expect(page.locator("#root")).toHaveCSS("opacity", "0");
+  await expect(page.locator(".startup-ink-stroke")).toHaveCount(11);
+  await expect(page.locator("#startup-screen")).toHaveAttribute(
+    "data-phase",
+    "erase",
+  );
+  expect(await page.evaluate(() => window.__trayTest.visible)).toBe(true);
+  expect(await page.evaluate(() => window.__trayTest.phases)).toEqual([
+    "loading",
+  ]);
+  await page.screenshot({ path: `${evidence}/restore-loading-bundle.png` });
+  releaseMain();
+  await expect
+    .poll(() => page.evaluate(() => !!window.__SFMCL_T_SUSPEND__))
+    .toBe(true);
+  await page.unroute(mainModule);
+  await expect(page.locator("#startup-screen")).toBeVisible();
+  expect(await page.evaluate(() => window.__trayTest.phases)).toEqual([
+    "loading",
+  ]);
+  await page.screenshot({ path: `${evidence}/restore-loading-bootstrap.png` });
+  checks.push(
+    "Tray restore shows the animated logo before the main module loads and keeps it visible while bootstrap IPC is pending.",
+  );
+  await page.evaluate(() => window.__trayTest.releaseBootstrap());
   await expect
     .poll(() =>
       page.evaluate(() => window.__trayTest.phases.includes("reveal")),
@@ -245,7 +291,7 @@ try {
     "shown",
   );
   checks.push(
-    "The rebuilt tray window starts transparent and reuses the 480ms startup entrance before releasing input and restoring the frame.",
+    "After the loading logo, the rebuilt tray window reuses the 480ms startup entrance before releasing input and restoring the frame.",
   );
   expect(errors).toEqual([]);
   await writeFile(

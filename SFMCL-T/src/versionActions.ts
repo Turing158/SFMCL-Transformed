@@ -38,7 +38,11 @@ export function useVersionActions(
     app.run(async () => {
       const path = reset ? null : await pick(false, ["png"]);
       if (reset || path) {
-        await app.update("versions.icon", versionPayload(version, { path }));
+        await app.update(
+          "versions.icon",
+          versionPayload(version, { path }),
+          reset ? "已恢复默认版本图标" : "版本图标已更换",
+        );
         onClose();
       }
     });

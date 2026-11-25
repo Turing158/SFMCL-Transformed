@@ -141,6 +141,7 @@ export function TooltipHost() {
     let closeTimer: ReturnType<typeof setTimeout> | undefined;
     let skipDelayUntil = 0;
     let currentContent = "";
+    let hiding = false;
     let dismissalPoint: { x: number; y: number } | null = null;
     let pointerPoint = { x: 0, y: 0 };
     const retiring = new Set<HTMLDivElement>();
@@ -180,7 +181,11 @@ export function TooltipHost() {
     };
     const hide = () => {
       cancelTimers();
-      if (!active) return;
+      // A tooltip inside a dialog is also inside the observed React root.
+      // Do not restart its exit when our own aria-hidden mutation is observed:
+      // repeated mutations would prevent the animation and input from advancing.
+      if (!active || hiding) return;
+      hiding = true;
       describe(active, false);
       panel.dataset.open = "false";
       panel.setAttribute("aria-hidden", "true");
@@ -197,6 +202,7 @@ export function TooltipHost() {
     const position = () => {
       if (
         active &&
+        !hiding &&
         (active.getAttribute("aria-expanded") === "true" ||
           !positionTooltip(active, panel, {
             preferred: placement(active),
@@ -238,6 +244,7 @@ export function TooltipHost() {
         element.getAttribute("aria-expanded") === "true"
       )
         return;
+      hiding = false;
       ++revision;
       if (active !== element) {
         retire();

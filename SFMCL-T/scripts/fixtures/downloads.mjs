@@ -7,6 +7,10 @@ export function downloadsFixture() {
   test.fileFailure = false;
   window.__TAURI_INTERNALS__.invoke = async (command, args) => {
     if (command === "plugin:dialog|message") return true;
+    if (command === "request" && args.operation === "downloads.folder.open") {
+      test.requests.push({ operation: args.operation, payload: args.payload });
+      return true;
+    }
     if (command === "request" && args.operation === "downloads.files") {
       const { id, offset = 0 } = args.payload;
       test.requests.push({

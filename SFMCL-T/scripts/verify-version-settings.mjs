@@ -52,7 +52,7 @@ try {
   await expect(independent()).not.toBeChecked();
   await expect(
     page.locator(".settings-card-heading .pixel-switch-labeled"),
-  ).toHaveCount(5);
+  ).toHaveCount(6);
   const scopeLayout = () =>
     independent().evaluate((el) => {
       const track = el
@@ -103,6 +103,7 @@ try {
   await expect(title()).toBeDisabled();
   await independent("游戏窗口").click();
   await independent("Java 运行环境").click();
+  await page.getByRole("button", { name: "高级设置", exact: true }).click();
   await independent("高级启动参数").click();
   await page.getByRole("switch", { name: "自动分配内存", exact: true }).click();
   await memory().fill("8192");

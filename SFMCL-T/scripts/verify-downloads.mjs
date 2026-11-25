@@ -432,6 +432,103 @@ try {
   checks.push({
     name: "launch-started-status-step-log-and-sidebar-completion",
   });
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.jobs = [];
+    const base = {
+      title: "Fabulously Optimized",
+      downloaded: 170000,
+      total: 170000,
+      unknownSize: false,
+      completed: 1,
+      failed: 0,
+      fileCount: 1,
+      speed: 0,
+      workers: 0,
+      steps: [],
+    };
+    window.__pixelTest.tasks.downloads = [
+      { ...base, id: "folder-pack", status: "completed", folderDownload: true },
+      {
+        ...base,
+        id: "installed-pack",
+        status: "completed",
+        folderDownload: false,
+      },
+      { ...base, id: "legacy-pack", status: "completed" },
+    ];
+  });
+  const folderCard = page.locator('[data-download-id="folder-pack"]');
+  for (const status of [
+    "completed",
+    "running",
+    "paused",
+    "failed",
+    "cancelled",
+    "queued",
+  ]) {
+    await page.evaluate((status) => {
+      window.__pixelTest.tasks.downloads[0].status = status;
+    }, status);
+    const folderButton = folderCard.getByRole("button", {
+      name: "前往文件夹",
+      exact: true,
+    });
+    await expect(folderButton).toBeVisible();
+    await expect(
+      folderCard.getByRole("button", { name: "查看文件", exact: true }),
+    ).toHaveCount(0);
+    const requestCount = await page.evaluate(
+      () => window.__pixelTest.requests.length,
+    );
+    await folderButton.click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (offset) =>
+            window.__pixelTest.requests
+              .slice(offset)
+              .filter(
+                (request) =>
+                  request.operation === "downloads.folder.open" &&
+                  request.payload.id === "folder-pack",
+              ).length,
+          requestCount,
+        ),
+      )
+      .toBe(1);
+    await expect(dialog).toHaveCount(0);
+  }
+  for (const id of ["installed-pack", "legacy-pack"]) {
+    const card = page.locator(`[data-download-id="${id}"]`);
+    await expect(
+      card.getByRole("button", { name: "前往文件夹", exact: true }),
+    ).toHaveCount(0);
+    await card.getByRole("button", { name: "查看文件", exact: true }).click();
+    await finishModal();
+    await expect(dialog.locator("tbody tr")).toHaveCount(1);
+    await closeModal("escape");
+  }
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.downloads[0].status = "completed";
+  });
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((theme) => {
+      document.documentElement.dataset.theme = theme;
+      window.__pixelTest.data.settings.theme = theme;
+    }, theme);
+    for (const width of [1120, 850]) {
+      await page.setViewportSize({ width, height: 640 });
+      await expect(
+        folderCard.getByRole("button", { name: "前往文件夹", exact: true }),
+      ).toBeVisible();
+      await page.screenshot({
+        path: `${evidence}/folder-download-${theme}-${width}.png`,
+      });
+    }
+  }
+  checks.push({
+    name: "folder-download-actions-all-statuses-installation-legacy-and-themes",
+  });
   expect(errors).toEqual([]);
   expect(
     await page.evaluate(

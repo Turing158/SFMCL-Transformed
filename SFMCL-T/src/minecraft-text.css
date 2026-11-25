@@ -1,0 +1,26 @@
+:is(.local-resources, .local-resource-page) .minecraft-text,
+.minecraft-text .minecraft-text-run,
+.minecraft-text .minecraft-obfuscated,
+.minecraft-text .minecraft-obfuscated span {
+  font: inherit;
+  color: inherit;
+  text-decoration: inherit;
+}
+
+.minecraft-obfuscated-character {
+  position: relative;
+  display: inline-block;
+  white-space: pre;
+}
+
+.minecraft-obfuscated-source {
+  visibility: hidden;
+}
+
+.minecraft-obfuscated-glyph {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  justify-content: center;
+  overflow: hidden;
+}

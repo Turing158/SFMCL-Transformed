@@ -27,6 +27,9 @@ pub struct GameSettings {
     pub window_y: i32,
     pub launcher_action: String,
     pub restore_launcher: bool,
+    pub pre_launch_command: super::commands::CommandSettings,
+    #[serde(default = "super::commands::CommandSettings::after_exit")]
+    pub post_exit_command: super::commands::CommandSettings,
     pub server_enabled: bool,
     pub server_host: String,
     pub server_port: u16,
@@ -64,6 +67,8 @@ impl From<&Settings> for GameSettings {
             window_y: s.window_y,
             launcher_action: s.launcher_action.clone(),
             restore_launcher: s.restore_launcher,
+            pre_launch_command: s.pre_launch_command.clone(),
+            post_exit_command: s.post_exit_command.clone(),
             server_enabled: s.server_enabled,
             server_host: s.server_host.clone(),
             server_port: s.server_port,
@@ -80,6 +85,8 @@ impl From<&Settings> for GameSettings {
 
 impl GameSettings {
     pub fn validate(&self) -> Result<()> {
+        self.pre_launch_command.validate()?;
+        self.post_exit_command.validate()?;
         if !(512..=131072).contains(&self.memory_mb) {
             bail!("内存必须在 512–131072 MB 之间");
         }
@@ -143,6 +150,8 @@ impl GameSettings {
             window_y: self.window_y,
             launcher_action: self.launcher_action.clone(),
             restore_launcher: self.restore_launcher,
+            pre_launch_command: self.pre_launch_command.clone(),
+            post_exit_command: self.post_exit_command.clone(),
             server_enabled: self.server_enabled,
             server_host: self.server_host.clone(),
             server_port: self.server_port,
@@ -179,6 +188,7 @@ pub struct GameSettingGroups {
     pub world: bool,
     pub process: bool,
     pub advanced: bool,
+    pub commands: bool,
 }
 
 impl VersionSettings {
@@ -213,6 +223,7 @@ impl VersionSettings {
             || groups.server
             || groups.world
             || groups.process
+            || groups.commands
     }
 
     pub fn resolve(&self, global: &Settings) -> Settings {
@@ -255,6 +266,10 @@ impl VersionSettings {
         if groups.launcher {
             effective.launcher_action = saved.launcher_action.clone();
             effective.restore_launcher = saved.restore_launcher;
+        }
+        if groups.commands {
+            effective.pre_launch_command = saved.pre_launch_command.clone();
+            effective.post_exit_command = saved.post_exit_command.clone();
         }
         if groups.server {
             effective.server_host = saved.server_host.trim().into();

@@ -1,15 +1,21 @@
 import { Input, Select, Slider, Switch, Textarea } from "../controls";
-import { useEffect, useState, type ReactNode } from "react";
-import { FolderOpen, RefreshCw } from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { ChevronDown, FolderOpen, RefreshCw } from "lucide-react";
 import { useApp } from "../store";
 import { api, pickJava } from "../api";
 import { Button, PixelFrame } from "../components";
-import { javaPathKey, mergeJavaPaths, validServerHost } from "../gameSettings";
+import {
+  javaPathKey,
+  mergeJavaPaths,
+  validServerHost,
+  launchSettingDefaults,
+} from "../gameSettings";
 import { useAvailableMemory } from "../useAvailableMemory";
 import type {
   GameSettingGroup,
   GameSettingGroups,
   GameSettings,
+  CommandSettings,
   Java,
   Version,
 } from "../types";
@@ -68,6 +74,175 @@ function SettingsCard({
         {children}
       </fieldset>
     </section>
+  );
+}
+
+function AdvancedSettings({ children }: { children: ReactNode }) {
+  const contentId = useId();
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="settings-advanced">
+      <button
+        className="settings-advanced-toggle"
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        高级设置
+        <span className="settings-advanced-chevron" aria-hidden="true">
+          <ChevronDown size={18} />
+        </span>
+      </button>
+      <div
+        className="settings-advanced-content"
+        id={contentId}
+        data-expanded={expanded}
+        aria-hidden={!expanded}
+        inert={!expanded}
+      >
+        <div className="settings-advanced-clip">
+          <div className="settings-stack">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommandFields({
+  title,
+  config,
+  before,
+  onChange,
+  windows,
+}: {
+  title: string;
+  config: CommandSettings;
+  before: boolean;
+  onChange: (config: CommandSettings) => void;
+  windows: boolean;
+}) {
+  const change = <K extends keyof CommandSettings>(
+    key: K,
+    value: CommandSettings[K],
+  ) => onChange({ ...config, [key]: value });
+  const variable =
+    config.shell === "powershell"
+      ? "$env:SFMCL_GAME_DIR"
+      : config.shell === "cmd"
+        ? "%SFMCL_GAME_DIR%"
+        : "$SFMCL_GAME_DIR";
+  return (
+    <div className="command-settings">
+      <div className="setting-row">
+        <div>
+          <strong>{title}</strong>
+          <p>
+            {before
+              ? "准备完成后执行，命令结束后启动游戏。"
+              : "游戏结束后执行，启动器关闭后仍可运行。"}
+          </p>
+        </div>
+        <Switch
+          aria-label={`启用${title}`}
+          checked={config.enabled}
+          onCheckedChange={(enabled) => change("enabled", enabled)}
+        />
+      </div>
+      <div className="form-grid">
+        <label className="field">
+          执行方式
+          <Select
+            aria-label={`${title}执行方式`}
+            value={config.shell}
+            onValueChange={(shell) =>
+              change("shell", shell as CommandSettings["shell"])
+            }
+          >
+            {windows && <option value="cmd">CMD</option>}
+            <option value="powershell">PowerShell</option>
+            {(!windows || config.shell === "sh") && (
+              <option value="sh">Shell（sh）</option>
+            )}
+          </Select>
+        </label>
+        <label className="field">
+          超时时间（秒）
+          <Input
+            aria-label={`${title}超时时间`}
+            type="number"
+            min={1}
+            max={3600}
+            value={config.timeoutSeconds}
+            onChange={(event) =>
+              change("timeoutSeconds", event.target.valueAsNumber)
+            }
+          />
+        </label>
+      </div>
+      <label className="field">
+        命令内容
+        <Textarea
+          aria-label={`${title}内容`}
+          rows={3}
+          value={config.command}
+          onChange={(event) => change("command", event.target.value)}
+          placeholder={
+            before ? "例如执行游戏启动前的准备脚本" : "例如执行存档备份脚本"
+          }
+          spellCheck={false}
+        />
+      </label>
+      {config.enabled && !config.command.trim() && (
+        <p className="inline-error" role="alert">
+          请填写命令内容后保存启用状态。
+        </p>
+      )}
+      {(!Number.isInteger(config.timeoutSeconds) ||
+        config.timeoutSeconds < 1 ||
+        config.timeoutSeconds > 3600) && (
+        <p className="inline-error" role="alert">
+          超时时间必须是 1–3600 秒的整数。
+        </p>
+      )}
+      {new TextEncoder().encode(config.command).length > 65536 && (
+        <p className="inline-error" role="alert">
+          命令内容不能超过 64 KB。
+        </p>
+      )}
+      <label className="field">
+        工作目录
+        <Input
+          aria-label={`${title}工作目录`}
+          value={config.workingDirectory}
+          onChange={(event) => change("workingDirectory", event.target.value)}
+          placeholder="留空使用实际游戏目录；相对路径从游戏目录解析"
+        />
+      </label>
+      {before && (
+        <label className="field">
+          失败时
+          <Select
+            aria-label="启动前命令失败处理"
+            value={config.continueOnFailure ? "continue" : "stop"}
+            onValueChange={(value) =>
+              change("continueOnFailure", value === "continue")
+            }
+          >
+            <option value="stop">阻止游戏启动（默认）</option>
+            <option value="continue">记录警告并继续启动</option>
+          </Select>
+        </label>
+      )}
+      <p className="helper">
+        游戏目录变量：<code>{variable}</code>。可使用
+        SFMCL_VERSION_ID、SFMCL_PLAYER_NAME、SFMCL_JAVA_PATH、SFMCL_SESSION_ID
+        {!before &&
+          "、SFMCL_EXIT_CODE、SFMCL_EXIT_REASON（normal / crashed / cancelled）"}
+        。
+      </p>
+    </div>
   );
 }
 
@@ -181,11 +356,7 @@ export function GameSettingsFields({
     value: GameSettings[K],
   ) => setDraft((current) => ({ ...current, [key]: value }));
   const toggle = (
-    key:
-      | "autoMemory"
-      | "isolation"
-      | "fullscreen"
-      | "jvmArgsEnabled",
+    key: "autoMemory" | "isolation" | "fullscreen" | "jvmArgsEnabled",
     title: string,
     description: string,
   ) => (
@@ -706,32 +877,54 @@ export function GameSettingsFields({
           </fieldset>
         </section>
       )}
-      <SettingsCard group="advanced" title="高级启动参数" {...cardProps}>
-        {toggle(
-          "jvmArgsEnabled",
-          "附加 JVM 参数",
-          "参数直接传给 Java；含空格的值请用引号包围。",
-        )}
-        <label className="field">
-          JVM 参数
-          <Textarea
-            disabled={!draft.jvmArgsEnabled}
-            value={draft.jvmArgs}
-            onChange={(e) => change("jvmArgs", e.target.value)}
-            rows={3}
-            placeholder="例如 -XX:+UseG1GC"
+      <AdvancedSettings>
+        <SettingsCard group="advanced" title="高级启动参数" {...cardProps}>
+          {toggle(
+            "jvmArgsEnabled",
+            "附加 JVM 参数",
+            "参数直接传给 Java；含空格的值请用引号包围。",
+          )}
+          <label className="field">
+            JVM 参数
+            <Textarea
+              disabled={!draft.jvmArgsEnabled}
+              value={draft.jvmArgs}
+              onChange={(e) => change("jvmArgs", e.target.value)}
+              rows={3}
+              placeholder="例如 -XX:+UseG1GC"
+            />
+          </label>
+          <label className="field">
+            游戏尾部参数
+            <Textarea
+              value={draft.gameArgs}
+              onChange={(e) => change("gameArgs", e.target.value)}
+              rows={2}
+              placeholder="附加到游戏参数末尾"
+            />
+          </label>
+        </SettingsCard>
+        <SettingsCard group="commands" title="执行命令" {...cardProps}>
+          <CommandFields
+            title="启动前命令"
+            config={
+              draft.preLaunchCommand ?? launchSettingDefaults.preLaunchCommand
+            }
+            before
+            windows={monitors.supported}
+            onChange={(config) => change("preLaunchCommand", config)}
           />
-        </label>
-        <label className="field">
-          游戏尾部参数
-          <Textarea
-            value={draft.gameArgs}
-            onChange={(e) => change("gameArgs", e.target.value)}
-            rows={2}
-            placeholder="附加到游戏参数末尾"
+          <CommandFields
+            title="退出后命令"
+            config={
+              draft.postExitCommand ?? launchSettingDefaults.postExitCommand
+            }
+            before={false}
+            windows={monitors.supported}
+            onChange={(config) => change("postExitCommand", config)}
           />
-        </label>
-      </SettingsCard>
+        </SettingsCard>
+      </AdvancedSettings>
     </div>
   );
 }

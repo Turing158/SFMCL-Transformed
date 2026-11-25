@@ -21,6 +21,8 @@ export interface GameSettings {
   windowY: number;
   launcherAction: "keep" | "minimize" | "tray";
   restoreLauncher: boolean;
+  preLaunchCommand: CommandSettings;
+  postExitCommand: CommandSettings;
   serverEnabled: boolean;
   serverHost: string;
   serverPort: number;
@@ -31,6 +33,14 @@ export interface GameSettings {
   jvmArgs: string;
   gameArgs: string;
   offlineLan: boolean;
+}
+export interface CommandSettings {
+  enabled: boolean;
+  shell: "cmd" | "powershell" | "sh";
+  command: string;
+  workingDirectory: string;
+  timeoutSeconds: number;
+  continueOnFailure: boolean;
 }
 export interface VersionSettings {
   useGlobal: boolean;
@@ -47,6 +57,7 @@ export interface GameSettingGroups {
   server?: boolean;
   world?: boolean;
   process?: boolean;
+  commands?: boolean;
 }
 export type GameSettingGroup = keyof GameSettingGroups;
 export type HomeNoticeLayout = "single" | "parallel" | "masonry";
@@ -168,6 +179,8 @@ export interface Job {
   error?: string;
   log: string[];
   crashReport?: CrashReport;
+  commandRuns?: { preLaunch: CommandRun; postExit: CommandRun };
+  gameExit?: { code: number | null; reason: string };
   launch?: {
     versionId: string;
     gameVersion: string;
@@ -177,9 +190,17 @@ export interface Job {
     running: boolean;
   };
 }
+export interface CommandRun {
+  status:
+    "pending" | "running" | "completed" | "failed" | "cancelled" | "skipped";
+  exitCode: number | null;
+  durationMs: number;
+  error: string | null;
+}
 export interface Download {
   id: string;
   title: string;
+  folderDownload?: boolean;
   status: Status;
   downloaded: number;
   total: number;

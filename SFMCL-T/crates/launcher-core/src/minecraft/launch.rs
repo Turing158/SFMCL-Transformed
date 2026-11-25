@@ -57,6 +57,7 @@ impl Installer {
             target.apply(&mut settings)?;
         }
         let game = versions::game_directory(&root, &id, settings.isolation)?;
+        crate::resources::modpacks::update::ensure_ready(&root, &id)?;
         let _install_guard = crate::resources::install::launch_guard(&game)?;
         let lock_path = safe_join(&root, format!(".tmcl/locks/launch-{id}.lock"))?;
         std::fs::create_dir_all(lock_path.parent().unwrap())?;
@@ -78,10 +79,16 @@ impl Installer {
                 "检查资源索引",
                 "补全游戏文件",
                 "准备运行环境",
+                "启动前命令",
                 "游戏运行",
+                "退出后命令",
             ],
         );
         let job_id = job.snapshot().id;
+        job.initialize_commands(
+            settings.pre_launch_command.enabled,
+            settings.post_exit_command.enabled,
+        );
         job.set_launch_context(LaunchContext {
             version_id: id.clone(),
             game_version: id.clone(),
@@ -105,12 +112,17 @@ impl Installer {
                 )
                 .await;
             if let Err(error) = &result {
-                super::crash::startup_failure(
-                    installer.settings.directory(),
-                    &job,
-                    &format!("{error:#}"),
-                    &secrets,
-                );
+                if error
+                    .downcast_ref::<super::commands::CommandFailure>()
+                    .is_none()
+                {
+                    super::crash::startup_failure(
+                        installer.settings.directory(),
+                        &job,
+                        &format!("{error:#}"),
+                        &secrets,
+                    );
+                }
             }
             job.finish(&result);
         });
@@ -209,7 +221,24 @@ impl Installer {
         if let Some(target) = &options.target {
             target.validate().await?;
         }
-        job.step(4, "Minecraft 正在运行，可在此查看日志或结束游戏");
+        job.step(4, "执行启动前命令");
+        super::commands::execute(
+            &settings.pre_launch_command,
+            super::commands::CommandPhase::PreLaunch,
+            &directory,
+            &java.path,
+            job.clone(),
+            &[player.access_token.clone()],
+            &job.cancel,
+        )
+        .await?;
+        if job.cancel.is_cancelled() {
+            bail!(job.cancellation_message());
+        }
+        if let Some(target) = &options.target {
+            target.validate().await?;
+        }
+        job.step(5, "Minecraft 正在运行，可在此查看日志或结束游戏");
         #[cfg(windows)]
         super::detached::run_game(
             self.settings.directory(),

@@ -5,7 +5,7 @@ import type {
   Project,
   Version,
 } from "./types";
-import { resourceName } from "./resourceNames";
+import { localResourceTitle, resourceName } from "./resourceNames";
 
 export const pageNames: Record<Page, string> = {
   home: "开始游戏",
@@ -17,7 +17,7 @@ export const pageNames: Record<Page, string> = {
   settings: "设置",
 };
 
-export type VersionPage = "settings" | "resources";
+export type VersionPage = "settings" | "resources" | "modpack-export" | "modpack-update";
 export type ResourceTab =
   "minecraft" | "mod" | "resourcepack" | "shader" | "datapack" | "modpack";
 export const resourceTabNames: Record<ResourceTab, string> = {
@@ -199,11 +199,8 @@ export function entryLabel(entry: NavigationEntry) {
           : "Microsoft 登录";
   if (!entry.detail) return pageNames[entry.page];
   if (entry.detail.kind === "resources" && entry.detail.resource)
-    return resourceName(
-      entry.detail.resource.name,
-      entry.detail.resource.localizedName,
-    );
-  const label = entry.detail.kind === "settings" ? "游戏设置" : "本地资源";
+    return localResourceTitle(entry.detail.resource);
+  const label = entry.detail.kind === "settings" ? "游戏设置" : entry.detail.kind === "modpack-export" ? "制作整合包" : entry.detail.kind === "modpack-update" ? "更新整合包" : "本地资源";
   return `${entry.detail.version.id} · ${label}`;
 }
 

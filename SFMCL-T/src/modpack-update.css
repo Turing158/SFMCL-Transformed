@@ -1,0 +1,114 @@
+.modpack-update-page {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.modpack-update-page > .loading-region > .tabs {
+  margin-bottom: 18px;
+}
+.update-section {
+  display: grid;
+  gap: 18px;
+}
+.update-section h2 {
+  margin-bottom: 0;
+}
+.update-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.update-fields .field,
+.update-section > .field {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.update-wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.update-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.update-original {
+  display: grid;
+  gap: 12px;
+}
+.update-summary,
+.update-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.update-route {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.update-comparison {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  line-height: 1.7;
+}
+.update-file-list {
+  max-height: 440px;
+  overflow-y: auto;
+  min-width: 0;
+}
+.update-file,
+.update-backup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.update-file > div,
+.update-backup > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.update-file strong,
+.update-file small {
+  overflow-wrap: anywhere;
+}
+.update-file small,
+.update-backup small {
+  color: var(--muted);
+}
+.update-file > label {
+  display: grid;
+  gap: 6px;
+  flex: 0 0 220px;
+}
+.update-file[data-conflict="true"] > div > strong {
+  color: var(--accent);
+}
+.update-backup p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .update-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .update-file,
+  .update-backup {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .update-file > label {
+    flex-basis: auto;
+  }
+}

@@ -84,6 +84,9 @@ pub struct DownloadSnapshot {
     pub title: String,
     #[serde(default)]
     pub retention: DownloadRetention,
+    /// Whether the user chose to save resources to a folder instead of installing.
+    #[serde(default)]
+    pub folder_download: bool,
     pub root: PathBuf,
     /// Captured at enqueue time. Old records keep their adjacent partial files.
     #[serde(default)]
@@ -281,6 +284,16 @@ impl DownloadManager {
     pub async fn snapshot(&self, id: &str) -> Result<DownloadSnapshot> {
         Ok(self.batch(id).await?.snapshot())
     }
+    pub async fn folder(&self, id: &str) -> Result<PathBuf> {
+        let snapshot = self.snapshot(id).await?;
+        if !snapshot.folder_download {
+            bail!("此任务不是下载到文件夹的任务");
+        }
+        if !snapshot.root.is_dir() {
+            bail!("下载文件夹不存在或已被移动");
+        }
+        Ok(snapshot.root)
+    }
     pub async fn enqueue(
         self: &Arc<Self>,
         title: String,
@@ -290,12 +303,32 @@ impl DownloadManager {
         self.enqueue_with_retention(title, root, specs, DownloadRetention::Persistent)
             .await
     }
+    pub async fn enqueue_to_folder(
+        self: &Arc<Self>,
+        title: String,
+        root: PathBuf,
+        specs: Vec<DownloadSpec>,
+    ) -> Result<String> {
+        self.enqueue_batch(title, root, specs, DownloadRetention::Persistent, true)
+            .await
+    }
     pub async fn enqueue_with_retention(
         self: &Arc<Self>,
         title: String,
         root: PathBuf,
         specs: Vec<DownloadSpec>,
         retention: DownloadRetention,
+    ) -> Result<String> {
+        self.enqueue_batch(title, root, specs, retention, false)
+            .await
+    }
+    async fn enqueue_batch(
+        self: &Arc<Self>,
+        title: String,
+        root: PathBuf,
+        specs: Vec<DownloadSpec>,
+        retention: DownloadRetention,
+        folder_download: bool,
     ) -> Result<String> {
         let _admission = self.admission.lock().await;
         if !root.is_absolute() {
@@ -353,6 +386,7 @@ impl DownloadManager {
             id: id.clone(),
             title,
             retention,
+            folder_download,
             root,
             cache_dir: Some(cache_dir),
             files,
@@ -1222,6 +1256,7 @@ mod cache_tests {
             id: uuid::Uuid::new_v4().to_string(),
             title: "completed assets".into(),
             retention: DownloadRetention::Persistent,
+            folder_download: false,
             root: root.to_path_buf(),
             cache_dir: cached.then(|| root.join("cache")),
             status: Status::Completed,

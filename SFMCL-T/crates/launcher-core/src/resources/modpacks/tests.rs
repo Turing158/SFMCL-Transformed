@@ -377,6 +377,7 @@ async fn installs_directory_atomically_with_isolation_and_no_profile_pollution()
                 token: Some(inspection.token),
                 file: None,
                 include_optional: false,
+                origin: None,
             },
             installer.clone(),
             community.clone(),
@@ -414,7 +415,8 @@ async fn installs_directory_atomically_with_isolation_and_no_profile_pollution()
                 name: "Installed".into(),
                 token: Some(inspection.token),
                 file: None,
-                include_optional: false
+                include_optional: false,
+                origin: None,
             },
             installer.clone(),
             community,
@@ -452,6 +454,7 @@ async fn failure_and_cancellation_leave_no_visible_instance() {
                 token: Some(inspection.token),
                 file: None,
                 include_optional: false,
+                origin: None,
             },
             installer.clone(),
             community.clone(),
@@ -473,6 +476,7 @@ async fn failure_and_cancellation_leave_no_visible_instance() {
             sha512: None,
         }),
         include_optional: false,
+        origin: None,
     };
     let pending: UrlResolver =
         Arc::new(|_| Box::pin(async { std::future::pending::<Result<String>>().await }));
@@ -609,6 +613,7 @@ async fn online_archive_download_installs_the_detected_client_format() {
                     sha512: None,
                 }),
                 include_optional: false,
+                origin: None,
             },
             installer.clone(),
             community,

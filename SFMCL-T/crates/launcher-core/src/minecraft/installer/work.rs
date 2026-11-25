@@ -110,6 +110,7 @@ mod tests {
             id: "installer".into(),
             title: "installer".into(),
             retention: DownloadRetention::Persistent,
+            folder_download: false,
             root: root.into(),
             cache_dir: None,
             status: Status::Paused,

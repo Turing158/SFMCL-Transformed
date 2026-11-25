@@ -19,6 +19,38 @@ fn version(root: &Path, id: &str) {
     fs::write(dir.join(format!("{id}.jar")), b"test jar").unwrap();
 }
 
+#[test]
+fn command_settings_inherit_separately_and_preserve_disabled_overrides() {
+    let root = tempfile::tempdir().unwrap();
+    version(root.path(), "commands");
+    let mut global = Settings::default();
+    global.pre_launch_command.enabled = true;
+    global.pre_launch_command.command = "echo global".into();
+    let mut profile = independent(&global, 8192);
+    profile.settings.pre_launch_command.enabled = false;
+    profile.settings.pre_launch_command.command = "echo local".into();
+    version_settings::save(root.path(), "commands", &profile).unwrap();
+    assert!(
+        version_settings::resolve(root.path(), "commands", &global)
+            .unwrap()
+            .pre_launch_command
+            .enabled
+    );
+    profile.independent_groups = Some(GameSettingGroups {
+        commands: true,
+        ..Default::default()
+    });
+    version_settings::save(root.path(), "commands", &profile).unwrap();
+    let resolved = version_settings::resolve(root.path(), "commands", &global).unwrap();
+    assert!(!resolved.pre_launch_command.enabled);
+    assert_eq!(resolved.pre_launch_command.command, "echo local");
+    assert!(profile.has_independent_settings());
+    profile.independent_groups.as_mut().unwrap().commands = false;
+    let inherited = profile.resolve(&global);
+    assert!(inherited.pre_launch_command.enabled);
+    assert_eq!(profile.settings.pre_launch_command.command, "echo local");
+}
+
 fn independent(global: &Settings, memory: u64) -> VersionSettings {
     let mut settings = GameSettings::from(global);
     settings.auto_memory = false;

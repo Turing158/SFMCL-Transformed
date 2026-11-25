@@ -15,6 +15,7 @@ import {
   CircleAlert,
   Clock3,
   FileText,
+  FolderOpen,
   Pause,
   Play,
   RefreshCw,
@@ -407,6 +408,22 @@ function JobCard({
         </button>
         <JobBadge job={job} />
         <div className="row-actions">
+          {job.status === "completed" &&
+            job.title.startsWith("导出整合包 ") && (
+              <button
+                className="icon-button has-surface"
+                aria-label={`打开 ${job.title} 所在文件夹`}
+                data-tooltip="打开整合包所在文件夹"
+                onClick={() =>
+                  void app.run(() =>
+                    api("modpacks.export.reveal", { jobId: job.id }),
+                  )
+                }
+              >
+                <PixelFrame />
+                <FolderOpen size={17} />
+              </button>
+            )}
           {job.crashReport && (
             <button
               className="icon-button has-surface"
@@ -428,7 +445,12 @@ function JobCard({
           {job.status !== "completed" && job.status !== "cancelled" && (
             <button
               className="icon-button has-surface"
-              aria-label={`取消 ${job.title}`}
+              aria-label={`${job.commandRuns?.postExit.status === "running" ? "停止命令" : "取消"} ${job.title}`}
+              data-tooltip={
+                job.commandRuns?.postExit.status === "running"
+                  ? "停止退出后命令"
+                  : "取消任务"
+              }
               onClick={() =>
                 void app.run(() => api("jobs.cancel", { id: job.id }))
               }
@@ -450,6 +472,16 @@ function JobCard({
         <div className="job-body-clip">
           <Steps steps={presentation.steps} animated />
           {job.error && <p className="inline-error">{job.error}</p>}
+          {job.commandRuns?.preLaunch.error && (
+            <p className="inline-error">
+              启动前命令：{job.commandRuns.preLaunch.error}
+            </p>
+          )}
+          {job.commandRuns?.postExit.error && (
+            <p className="inline-error">
+              退出后命令：{job.commandRuns.postExit.error}
+            </p>
+          )}
           {job.status === "failed" && job.downloadId && (
             <p className="helper">
               文件下载失败。重试下方下载任务后，操作将自动继续。
@@ -576,8 +608,23 @@ function DownloadCard({
             ? `${bytes(d.speed)}/s`
             : `${Math.round(progress * 100)}%`}
         </span>
-        <button onClick={onFiles}>
-          查看文件 <ChevronDown size={14} />
+        <button
+          onClick={
+            d.folderDownload
+              ? () =>
+                  void app.run(() => api("downloads.folder.open", { id: d.id }))
+              : onFiles
+          }
+        >
+          {d.folderDownload ? (
+            <>
+              前往文件夹 <FolderOpen size={14} />
+            </>
+          ) : (
+            <>
+              查看文件 <ChevronDown size={14} />
+            </>
+          )}
         </button>
       </div>
       {d.error && <p className="inline-error">{d.error}</p>}
@@ -598,7 +645,8 @@ function FileDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const packDownload = tasks.jobs.some(
     (job) =>
       job.downloadId === id &&
-      job.title.startsWith("安装整合包 ") &&
+      (job.title.startsWith("安装整合包 ") ||
+        job.title.startsWith("检查整合包更新 ")) &&
       !["completed", "cancelled"].includes(job.status),
   );
   const total = download?.fileCount || 0;

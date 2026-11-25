@@ -37,6 +37,18 @@
 .error-banner-message {
   min-width: 0;
 }
+.error-banner[data-tone="info"] .inline-error {
+  color: var(--surface-info);
+  background: var(--surface-info-bg);
+}
+.error-banner[data-tone="info"] .error-banner-message {
+  white-space: pre-line;
+}
+.error-banner[data-compact="true"] .inline-error {
+  padding: 8px 12px;
+  margin-block: 8px;
+  line-height: 1.6;
+}
 .error-banner .inline-error > :is(.button, .icon-button) {
   flex: 0 0 auto;
 }

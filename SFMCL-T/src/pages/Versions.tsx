@@ -18,6 +18,8 @@ import { PageHeader } from "../PageHeader";
 import { LocalResources } from "./LocalResources";
 import { VersionSettingsPage } from "./VersionSettings";
 import { ModpackInstallDialog } from "./ModpackInstallDialog";
+import { ModpackExportPage } from "./ModpackExportPage";
+import { ModpackUpdatePage } from "./ModpackUpdatePage";
 import { CatalogView } from "./CatalogView";
 import {
   gameDirectoryName,
@@ -100,6 +102,8 @@ export function Versions() {
     current.detail?.kind === "resources" ? currentVersion : null;
   const settingsVersion =
     current.detail?.kind === "settings" ? currentVersion : null;
+  const exportVersion = current.detail?.kind === "modpack-export" ? currentVersion : null;
+  const updateVersion = current.detail?.kind === "modpack-update" ? currentVersion : null;
   async function addDir() {
     const selected = await pick(true);
     if (selected) {
@@ -134,7 +138,7 @@ export function Versions() {
   const selected = (version: Version) =>
     s.activeVersion === version.id && s.activeDir === version.directory;
   const viewMotion = useVersionViewTransition(
-    !settingsVersion && !localVersion,
+    !settingsVersion && !localVersion && !exportVersion && !updateVersion,
     JSON.stringify([
       showAll,
       s.activeDir,
@@ -153,6 +157,10 @@ export function Versions() {
       items.map((version) => version.path),
     ]),
   );
+  if (exportVersion)
+    return <ModpackExportPage key={exportVersion.path} version={exportVersion} />;
+  if (updateVersion)
+    return <ModpackUpdatePage key={updateVersion.path} version={updateVersion} />;
   if (settingsVersion)
     return (
       <VersionSettingsPage
@@ -519,6 +527,7 @@ export function Versions() {
                       </label>
                     </div>
                     <p className="version-meta">
+                      {v.loader !== "Vanilla" && `${v.version} · `}
                       {v.loader} · Java {v.javaMajor}
                     </p>
                     {showAll && (

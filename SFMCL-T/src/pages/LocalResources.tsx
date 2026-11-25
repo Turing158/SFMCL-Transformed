@@ -31,9 +31,15 @@ import { api, confirmAction } from "../api";
 import { minecraftDirectoryPath } from "../gameDirectories";
 import { useApp } from "../store";
 import type { LocalResource, Project, Version } from "../types";
-import { localResourceSearchText, resourceName } from "../resourceNames";
+import {
+  localResourceSearchText,
+  localResourceTitle,
+  resourceName,
+} from "../resourceNames";
+import { MinecraftText } from "../MinecraftText";
 import { usePageActive } from "../PageActivity";
 import { useTabContentTransition } from "../useTabContentTransition";
+import { LoadingState } from "../LoadingState";
 import { LocalResourcePage } from "./LocalResourcePage";
 import {
   isLocalResourceDirectory,
@@ -116,7 +122,8 @@ export function LocalResources({
   const root = isolation
     ? version.path
     : minecraftDirectoryPath(version.directory ?? app.data.settings.activeDir);
-  const folder = `${root}/${kinds.find((item) => item.value === kind)!.folder}`;
+  const selectedKind = kinds.find((item) => item.value === kind)!;
+  const folder = `${root}/${selectedKind.folder}`;
   const compact = kind === "resourcepack" || kind === "world";
   const refresh = () => setRevision((current) => current + 1);
   const openDetail = (resource: LocalResource, trigger: HTMLButtonElement) => {
@@ -246,7 +253,10 @@ export function LocalResources({
     };
   }, [version.id, root, revision]);
   const items = (resources[kind] || []).filter((item) =>
-    (kind === "shader" ? item.name : localResourceSearchText(item))
+    (kind === "shader"
+      ? `${item.name} ${localResourceTitle(item)}`
+      : localResourceSearchText(item)
+    )
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
@@ -349,197 +359,211 @@ export function LocalResources({
           <ErrorBanner message={loading ? "" : errors[kind] || ""}>
             <Button onClick={refresh}>重试</Button>
           </ErrorBanner>
-          {loading ? (
-            <p className="loading-text" role="status">
-              正在读取资源…
-            </p>
-          ) : errors[kind] ? null : items.length ? (
-            <>
-              <div className="resource-list">
-                {visibleItems.map((item) => (
-                  <article
-                    className={`catalog-project has-surface resource-row local ${compact ? "local-compact-row" : ""} ${kind === "shader" ? "local-shader-row" : item.disabled ? "disabled-resource" : ""}`}
-                    key={item.listKey}
-                  >
-                    <PixelFrame />
-                    {kind === "shader" ? (
-                      <div className="catalog-project-info local-shader-info">
-                        {item.entryType === "directory" ? (
-                          <Folder
-                            size={20}
-                            className="local-shader-symbol"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <Sun
-                            size={20}
-                            className="local-shader-symbol"
-                            aria-hidden="true"
-                          />
-                        )}
-                        <div className="local-shader-copy">
-                          <div className="local-shader-name">
-                            <h3 data-tooltip={item.name}>{item.name}</h3>
-                            {isLocalResourceDirectory(item) && (
-                              <Badge>文件夹</Badge>
-                            )}
+          <LoadingState
+            loading={loading}
+            label={`正在读取${selectedKind.label}…`}
+          >
+            {errors[kind] ? null : items.length ? (
+              <>
+                <div className="resource-list">
+                  {visibleItems.map((item) => (
+                    <article
+                      className={`catalog-project has-surface resource-row local ${compact ? "local-compact-row" : ""} ${kind === "mod" ? "local-mod-row" : ""} ${kind === "shader" ? "local-shader-row" : item.disabled ? "disabled-resource" : ""}`}
+                      key={item.listKey}
+                    >
+                      <PixelFrame />
+                      {kind === "shader" ? (
+                        <div className="catalog-project-info local-shader-info">
+                          {item.entryType === "directory" ? (
+                            <Folder
+                              size={20}
+                              className="local-shader-symbol"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Sun
+                              size={20}
+                              className="local-shader-symbol"
+                              aria-hidden="true"
+                            />
+                          )}
+                          <div className="local-shader-copy">
+                            <div className="local-shader-name">
+                              <h3
+                                aria-label={localResourceTitle(item)}
+                                data-tooltip={localResourceTitle(item)}
+                              >
+                                <MinecraftText text={item.name} />
+                              </h3>
+                              {isLocalResourceDirectory(item) && (
+                                <Badge>文件夹</Badge>
+                              )}
+                            </div>
+                            <span className="local-resource-size">
+                              {item.entryType === "directory"
+                                ? "普通文件夹"
+                                : localResourceSize(item)}
+                            </span>
                           </div>
-                          <span className="local-resource-size">
-                            {item.entryType === "directory"
-                              ? "普通文件夹"
-                              : localResourceSize(item)}
-                          </span>
                         </div>
-                      </div>
-                    ) : kind === "resourcepack" ? (
-                      <div className="catalog-project-info local-resource-title">
-                        <LocalResourceInfo item={item} compact={compact} />
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        className="catalog-project-info local-resource-title"
-                        aria-label={`${resourceName(item.name, item.localizedName)} 详情`}
-                        onClick={(event) =>
-                          openDetail(item, event.currentTarget)
-                        }
-                      >
-                        <LocalResourceInfo item={item} compact={compact} />
-                      </button>
-                    )}
-                    <div className="row-actions local-resource-actions">
-                      <Button
-                        aria-label={`打开 ${resourceName(item.name, item.localizedName)} 所在目录`}
-                        data-tooltip="打开所在目录"
-                        onClick={() =>
-                          void app.run(() => openLocalResource(item))
-                        }
-                      >
-                        <FolderOpen size={17} />
-                      </Button>
-                      {kind === "mod" && (
-                        <Button
-                          disabled={app.busy}
-                          aria-label={`${item.disabled ? "启用" : "禁用"} ${resourceName(item.name, item.localizedName)}`}
-                          data-tooltip={item.disabled ? "启用模组" : "禁用模组"}
-                          onClick={() =>
-                            void app.run(async () => {
-                              const disabled = !item.disabled;
-                              const path = await api<string>(
-                                "resources.toggle",
-                                {
-                                  versionId: version.id,
-                                  directory: version.directory,
-                                  path: item.path,
-                                  disabled,
-                                },
-                              );
-                              setResources((current) => ({
-                                ...current,
-                                mod: (current.mod || []).map((resource) =>
-                                  resource.path === item.path
-                                    ? { ...resource, path, disabled }
-                                    : resource,
-                                ),
-                              }));
-                            })
+                      ) : kind === "resourcepack" ? (
+                        <div className="catalog-project-info local-resource-title">
+                          <LocalResourceInfo item={item} compact={compact} />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="catalog-project-info local-resource-title"
+                          aria-label={`${localResourceTitle(item)} 详情`}
+                          onClick={(event) =>
+                            openDetail(item, event.currentTarget)
                           }
                         >
-                          <Power size={17} />
-                        </Button>
+                          <LocalResourceInfo item={item} compact={compact} />
+                        </button>
                       )}
-                      {kind === "resourcepack" &&
-                        item.entryType !== "directory" && (
+                      <div className="row-actions local-resource-actions">
+                        <Button
+                          aria-label={`打开 ${localResourceTitle(item)} 所在目录`}
+                          data-tooltip="打开所在目录"
+                          onClick={() =>
+                            void app.run(() => openLocalResource(item))
+                          }
+                        >
+                          <FolderOpen size={17} />
+                        </Button>
+                        {kind === "mod" && (
                           <Button
-                            danger
                             disabled={app.busy}
-                            aria-label={`删除 ${item.name}`}
-                            data-tooltip="删除材质包"
-                            onClick={async () => {
-                              if (
-                                await confirmAction(
-                                  `删除材质包 ${item.name}？${isLocalResourceDirectory(item) ? "将删除该文件夹及其全部内容。" : ""}`,
-                                )
-                              )
-                                await app.run(async () => {
-                                  await api("resources.deletePack", {
+                            aria-label={`${item.disabled ? "启用" : "禁用"} ${resourceName(item.name, item.localizedName)}`}
+                            data-tooltip={
+                              item.disabled ? "启用模组" : "禁用模组"
+                            }
+                            onClick={() =>
+                              void app.run(async () => {
+                                const disabled = !item.disabled;
+                                const path = await api<string>(
+                                  "resources.toggle",
+                                  {
                                     versionId: version.id,
                                     directory: version.directory,
                                     path: item.path,
-                                  });
-                                  refresh();
-                                });
-                            }}
+                                    disabled,
+                                  },
+                                );
+                                setResources((current) => ({
+                                  ...current,
+                                  mod: (current.mod || []).map((resource) =>
+                                    resource.path === item.path
+                                      ? { ...resource, path, disabled }
+                                      : resource,
+                                  ),
+                                }));
+                              })
+                            }
                           >
-                            <Trash2 size={17} />
+                            <Power size={17} />
                           </Button>
                         )}
-                    </div>
-                  </article>
-                ))}
-              </div>
-              {kind === "mod" && (
-                <nav
-                  className="pagination catalog-pagination local-mod-pagination"
-                  aria-label="本地模组分页"
-                >
-                  <Button
-                    disabled={currentModPage === 0}
-                    onClick={() => goToModPage(currentModPage - 1)}
+                        {kind === "resourcepack" &&
+                          item.entryType !== "directory" && (
+                            <Button
+                              danger
+                              disabled={app.busy}
+                              aria-label={`删除 ${localResourceTitle(item)}`}
+                              data-tooltip="删除材质包"
+                              onClick={async () => {
+                                if (
+                                  await confirmAction(
+                                    `删除材质包 ${localResourceTitle(item)}？${isLocalResourceDirectory(item) ? "将删除该文件夹及其全部内容。" : ""}`,
+                                  )
+                                )
+                                  await app.run(async () => {
+                                    await api("resources.deletePack", {
+                                      versionId: version.id,
+                                      directory: version.directory,
+                                      path: item.path,
+                                    });
+                                    refresh();
+                                  });
+                              }}
+                            >
+                              <Trash2 size={17} />
+                            </Button>
+                          )}
+                        {kind === "mod" && item.entryType !== "directory" && (
+                          <span className="local-resource-size">
+                            <HardDrive size={13} aria-hidden="true" />
+                            {localResourceSize(item)}
+                          </span>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                {kind === "mod" && (
+                  <nav
+                    className="pagination catalog-pagination local-mod-pagination"
+                    aria-label="本地模组分页"
                   >
-                    上一页
-                  </Button>
-                  <span
-                    className="page-indicator catalog-page-indicator has-surface"
-                    role="status"
-                    aria-atomic="true"
-                  >
-                    <PixelFrame />
-                    <span className="page-indicator-text">
-                      第 {currentModPage + 1} / {modPages} 页
-                    </span>
-                  </span>
-                  <Button
-                    disabled={currentModPage + 1 >= modPages}
-                    onClick={() => goToModPage(currentModPage + 1)}
-                  >
-                    下一页
-                  </Button>
-                </nav>
-              )}
-            </>
-          ) : (
-            <section className="panel has-surface">
-              <PixelFrame />
-              <Empty
-                title={query ? "没有找到匹配资源" : "这里还没有资源"}
-                description={
-                  query
-                    ? "试试其他名称，或清空搜索条件。"
-                    : "把资源放入对应目录，或从资源中心安装。"
-                }
-                action={
-                  query ? (
-                    <Button onClick={() => searchResources("")}>
-                      清空搜索
-                    </Button>
-                  ) : (
                     <Button
-                      onClick={() =>
-                        app.openResources(
-                          kind === "resourcepack" || kind === "shader"
-                            ? kind
-                            : "mod",
-                        )
-                      }
+                      disabled={currentModPage === 0}
+                      onClick={() => goToModPage(currentModPage - 1)}
                     >
-                      浏览资源中心
+                      上一页
                     </Button>
-                  )
-                }
-              />
-            </section>
-          )}
+                    <span
+                      className="page-indicator catalog-page-indicator has-surface"
+                      role="status"
+                      aria-atomic="true"
+                    >
+                      <PixelFrame />
+                      <span className="page-indicator-text">
+                        第 {currentModPage + 1} / {modPages} 页
+                      </span>
+                    </span>
+                    <Button
+                      disabled={currentModPage + 1 >= modPages}
+                      onClick={() => goToModPage(currentModPage + 1)}
+                    >
+                      下一页
+                    </Button>
+                  </nav>
+                )}
+              </>
+            ) : (
+              <section className="panel has-surface">
+                <PixelFrame />
+                <Empty
+                  title={query ? "没有找到匹配资源" : "这里还没有资源"}
+                  description={
+                    query
+                      ? "试试其他名称，或清空搜索条件。"
+                      : "把资源放入对应目录，或从资源中心安装。"
+                  }
+                  action={
+                    query ? (
+                      <Button onClick={() => searchResources("")}>
+                        清空搜索
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() =>
+                          app.openResources(
+                            kind === "resourcepack" || kind === "shader"
+                              ? kind
+                              : "mod",
+                          )
+                        }
+                      >
+                        浏览资源中心
+                      </Button>
+                    )
+                  }
+                />
+              </section>
+            )}
+          </LoadingState>
         </TabPanel>
       </div>
       {detail && (
@@ -573,11 +597,18 @@ function LocalResourceInfo({
       <div className="catalog-project-copy">
         <div className="catalog-project-title">
           <h3
-            data-tooltip={
-              compact ? resourceName(item.name, item.localizedName) : undefined
+            aria-label={
+              item.kind === "mod" ? undefined : localResourceTitle(item)
             }
+            data-tooltip={compact ? localResourceTitle(item) : undefined}
           >
-            {resourceName(item.name, item.localizedName)}
+            {item.kind === "mod" ? (
+              resourceName(item.name, item.localizedName)
+            ) : (
+              <MinecraftText
+                text={resourceName(item.name, item.localizedName)}
+              />
+            )}
           </h3>
           {isLocalResourceDirectory(item) && <Badge>文件夹</Badge>}
           {item.authors && (
@@ -600,14 +631,22 @@ function LocalResourceInfo({
                   {item.version}
                 </Badge>
               )}
-              {item.disabled && (
-                <Badge className="paused local-resource-status">
-                  <CirclePause size={12} aria-hidden="true" />
-                  已禁用
-                </Badge>
+              {(item.kind === "mod" || item.disabled) && (
+                <span
+                  className="local-resource-status-slot"
+                  data-disabled={item.disabled}
+                  aria-hidden={!item.disabled}
+                >
+                  <span className="local-resource-status-clip">
+                    <Badge className="paused local-resource-status">
+                      <CirclePause size={12} aria-hidden="true" />
+                      已禁用
+                    </Badge>
+                  </span>
+                </span>
               )}
             </div>
-            {item.entryType !== "directory" && (
+            {item.kind !== "mod" && item.entryType !== "directory" && (
               <span className="local-resource-size">
                 <HardDrive size={13} aria-hidden="true" />
                 {localResourceSize(item)}

@@ -140,6 +140,7 @@ try {
     .getByRole("button", { name: "游戏设置 1.21.4", exact: true })
     .click();
   await expect(option()).toHaveCount(0);
+  await page.getByRole("button", { name: "高级设置", exact: true }).click();
   const independent = page.getByRole("switch", {
     name: "高级启动参数：独立设置",
     exact: true,
