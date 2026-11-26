@@ -25,9 +25,6 @@ impl Catalog for RemoteCatalog<'_> {
                     .await?["data"]
                     .clone()
             };
-            if self.source == "modrinth" && value["client_side"] == "unsupported" {
-                bail!("前置 {id} 仅支持服务端，无法安装到客户端");
-            }
             let returned = identifier(&value["id"]).context("资源项目缺少 ID")?;
             if returned != id {
                 bail!("资源平台返回了其他项目");
@@ -41,6 +38,7 @@ impl Catalog for RemoteCatalog<'_> {
                 dependencies::curseforge_kind(&value)
             };
             Ok(ProjectMeta {
+                client_supported: value["client_side"] != "unsupported",
                 name: value[if self.source == "modrinth" {
                     "title"
                 } else {
@@ -81,7 +79,7 @@ impl Catalog for RemoteCatalog<'_> {
         })
     }
 
-    fn versions<'a>(&'a self, project: &'a str) -> BoxFuture<'a, Result<Vec<Candidate>>> {
+    fn versions<'a>(&'a self, project: &'a str, kind: super::ResourceKind) -> BoxFuture<'a, Result<Vec<Candidate>>> {
         Box::pin(async move {
             validate_id(project)?;
             let mut values = vec![];
@@ -103,7 +101,6 @@ impl Catalog for RemoteCatalog<'_> {
                 );
             } else {
                 // Follow pagination: a compatible stable version need not be in the first page.
-                let is_mod = self.project(project).await?.kind == super::ResourceKind::Mod;
                 let loader = match self.target.loader.to_lowercase().as_str() {
                     "forge" => "1",
                     "fabric" => "4",
@@ -118,7 +115,7 @@ impl Catalog for RemoteCatalog<'_> {
                         ("index".into(), offset.to_string()),
                         ("gameVersion".into(), self.target.game_version.clone()),
                     ];
-                    if is_mod {
+                    if kind == super::ResourceKind::Mod {
                         params.push(("modLoaderType".into(), loader.into()));
                     }
                     let response = self
@@ -225,6 +222,11 @@ pub(super) fn parse(source: &str, value: &Value) -> Result<Candidate> {
         name: file.name,
         version: file.version,
         date: file.date,
+        changelog: value["changelog"].as_str().unwrap_or_default().to_owned(),
+        primary: source != "modrinth"
+            || value["files"].as_array().is_some_and(|files| {
+                files.len() == 1 || files.iter().filter(|f| f["primary"] == true).count() == 1
+            }),
         game_versions: file.game_versions,
         loaders: file.loaders,
         file: file.file.context("资源文件缺少下载入口")?,
@@ -235,7 +237,11 @@ pub(super) fn parse(source: &str, value: &Value) -> Result<Candidate> {
         } else {
             value["releaseType"] == 1
         },
-        client_supported: value["environment"] != "server" && value["isServerPack"] != true,
+        client_supported: value["environment"] != "server"
+            && value["isServerPack"] != true
+            && !value["gameVersions"].as_array().is_some_and(|tags| {
+                tags.iter().any(|tag| tag == "Server") && !tags.iter().any(|tag| tag == "Client")
+            }),
     })
 }
 
@@ -291,6 +297,7 @@ impl Community {
                         Some(json!({"hashes": hashes, "algorithm": "sha1"})),
                     )
                     .await?;
+                let response = response.as_object().context("Modrinth 文件匹配响应无效")?;
                 for file in files {
                     if let Some(value) = response.get(&file.sha1) {
                         let mut candidate = parse(source, value)?;
@@ -301,6 +308,11 @@ impl Community {
                                     .is_some_and(|h| h.eq_ignore_ascii_case(&file.sha1))
                             })
                         {
+                            candidate.primary &= candidate
+                                .file
+                                .sha1
+                                .as_ref()
+                                .is_some_and(|hash| hash.eq_ignore_ascii_case(&file.sha1));
                             candidate.file = crate::downloads::DownloadSpec {
                                 path: actual["filename"]
                                     .as_str()
@@ -317,6 +329,7 @@ impl Community {
                 }
             }
         } else if source == "curseforge" {
+            let mut ambiguous = std::collections::HashSet::new();
             for files in inventory.files.chunks(100) {
                 let fingerprints = files
                     .iter()
@@ -332,8 +345,7 @@ impl Community {
                     .await?;
                 for matched in response["data"]["exactMatches"]
                     .as_array()
-                    .into_iter()
-                    .flatten()
+                    .context("CurseForge 文件匹配响应无效")?
                 {
                     let value = &matched["file"];
                     let candidate = parse(source, value)?;
@@ -344,7 +356,17 @@ impl Community {
                             .as_ref()
                             .is_some_and(|hash| hash.eq_ignore_ascii_case(&file.sha1))
                         {
-                            matches.insert(file.path.clone(), candidate.clone());
+                            if ambiguous.contains(&file.path) {
+                                continue;
+                            }
+                            if matches.get(&file.path).is_some_and(|previous| {
+                                previous.project != candidate.project || previous.id != candidate.id
+                            }) {
+                                matches.remove(&file.path);
+                                ambiguous.insert(file.path.clone());
+                            } else {
+                                matches.insert(file.path.clone(), candidate.clone());
+                            }
                         }
                     }
                 }
@@ -359,6 +381,25 @@ impl Community {
 pub(crate) fn identity(path: &std::path::Path) -> Result<(String, u32)> {
     let value = local_projects::identify_file(path)?;
     Ok((value.sha1, value.fingerprint))
+}
+
+pub(crate) fn mod_identity(
+    game: &std::path::Path,
+    path: &std::path::Path,
+) -> Result<crate::resources::install::LocalFile> {
+    let identity = local_projects::identify_mod(game, path)?;
+    let path = path
+        .strip_prefix(game)?
+        .to_str()
+        .context("无效的模组路径")?
+        .replace('\\', "/");
+    Ok(crate::resources::install::LocalFile {
+        disabled: path.starts_with("mods/.disabled/") || path.ends_with(".disabled"),
+        path,
+        sha1: identity.sha1,
+        fingerprint: identity.fingerprint,
+        mod_ids: vec![],
+    })
 }
 
 #[cfg(test)]

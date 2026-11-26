@@ -66,6 +66,7 @@
     "test:tooltips": "node scripts/verify-tooltips.mjs",
     "test:resource-dependency-tags": "node scripts/verify-resource-dependency-tags.mjs",
     "test:mod-dependencies": "node scripts/verify-mod-dependencies.mjs",
+    "test:local-mod-update": "node scripts/verify-local-mod-update.mjs",
     "test:curseforge-download": "node scripts/verify-curseforge-download.mjs",
     "test:install-components": "node scripts/verify-install-components.mjs",
     "test:resource-motion": "node scripts/verify-resource-motion.mjs",

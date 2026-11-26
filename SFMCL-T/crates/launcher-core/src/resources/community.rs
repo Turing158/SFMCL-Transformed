@@ -85,6 +85,9 @@ pub struct Community {
     dependency_cache: Mutex<dependencies::DependencyCache>,
     sources: Arc<crate::download_sources::SourceSelector>,
     search_cache: search::SearchCache,
+    // A source hint is tied to the file contents, including after a local rename.
+    mod_sources: Mutex<std::collections::VecDeque<(String, String)>>,
+    mod_source_cache: Option<std::path::PathBuf>,
 }
 impl Community {
     pub fn new(vault: Arc<Vault>) -> Result<Self> {
@@ -97,11 +100,77 @@ impl Community {
             dependency_cache: Mutex::new(Default::default()),
             sources: Arc::new(crate::download_sources::SourceSelector::default()),
             search_cache: Default::default(),
+            mod_sources: Default::default(),
+            mod_source_cache: None,
         })
     }
     pub fn with_sources(mut self, sources: Arc<crate::download_sources::SourceSelector>) -> Self {
         self.sources = sources;
         self
+    }
+    pub fn with_mod_source_cache(mut self, path: std::path::PathBuf) -> Self {
+        if let Some(entries) = std::fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        {
+            self.mod_sources = Mutex::new(entries);
+        }
+        self.mod_source_cache = Some(path);
+        self
+    }
+
+    pub fn remember_mod_source(&self, sha1: &str, source: &str) {
+        if !matches!(source, "modrinth" | "curseforge")
+            || sha1.len() != 40
+            || !sha1.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return;
+        }
+        let sha1 = sha1.to_ascii_lowercase();
+        let mut sources = self.mod_sources.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(index) = sources.iter().position(|(hash, _)| hash == &sha1) {
+            if sources[index].1 == source {
+                return;
+            }
+            sources.remove(index);
+        }
+        sources.push_front((sha1, source.to_owned()));
+        sources.truncate(2048);
+        if let Some(path) = &self.mod_source_cache {
+            if let Ok(bytes) = serde_json::to_vec(&*sources) {
+                // A missing cache only changes which platform is queried first.
+                let _ = crate::paths::atomic_write(path, &bytes);
+            }
+        }
+    }
+
+    pub(crate) fn mod_source(&self, sha1: &str) -> Option<String> {
+        self.mod_sources
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .find(|(hash, _)| hash == sha1)
+            .map(|(_, source)| source.clone())
+    }
+
+    pub(crate) async fn mod_changelog(
+        &self,
+        source: &str,
+        candidate: &crate::resources::install::Candidate,
+    ) -> Result<String> {
+        if source == "modrinth" {
+            return Ok(candidate.changelog.clone());
+        }
+        let path = format!(
+            "mods/{}/files/{}/changelog",
+            candidate.project, candidate.id
+        );
+        let response = self.get(source, &path, &[]).await?;
+        match response.get("data") {
+            Some(Value::Null) => Ok(String::new()),
+            Some(Value::String(log)) => Ok(log.clone()),
+            _ => bail!("更新日志响应无效"),
+        }
     }
     async fn get(&self, source: &str, path: &str, params: &[(String, String)]) -> Result<Value> {
         self.request(source, path, params, None).await

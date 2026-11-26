@@ -8,12 +8,16 @@ export function ResourceSubpage({
   title,
   titleContent,
   tab,
+  action,
   children,
+  afterBody,
 }: {
   title: string;
   titleContent?: ReactNode;
   tab: ResourceTab | "world";
+  action?: ReactNode;
   children: ReactNode;
+  afterBody?: ReactNode;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const Icon = {
@@ -40,6 +44,7 @@ export function ResourceSubpage({
           }
           headingRef={heading}
         />
+        {action}
       </header>
       <div
         className={`resource-subpage-body has-surface ${tab === "minecraft" ? "minecraft-config" : ""}`}
@@ -47,6 +52,7 @@ export function ResourceSubpage({
         <PixelFrame />
         {children}
       </div>
+      {afterBody}
     </section>
   );
 }

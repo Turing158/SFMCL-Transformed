@@ -20,6 +20,7 @@ pub(super) async fn resolve(
     installed: HashMap<String, Candidate>,
     project: &str,
     version: &str,
+    replacement_path: Option<&str>,
 ) -> Result<Vec<Selection>> {
     let mut solver = Solver {
         catalog,
@@ -54,10 +55,13 @@ pub(super) async fn resolve(
         let folder = folder(metadata.kind)?;
         valid_name(&candidate.file.path)?;
         let existing = solver.existing(candidate)?;
-        let path = existing
-            .as_ref()
-            .map(|file| file.path.clone())
-            .unwrap_or_else(|| format!("{folder}/{}", candidate.file.path));
+        let path = if let Some(path) = replacement_path.filter(|_| id == project) {
+            path.to_owned()
+        } else if let Some(file) = &existing {
+            file.path.clone()
+        } else {
+            format!("{folder}/{}", candidate.file.path)
+        };
         let status = match &existing {
             Some(file) if file.disabled => "disabled",
             Some(_) => "installed",
@@ -286,6 +290,9 @@ impl Solver<'_> {
                     .insert(project.clone(), self.catalog.project(project).await?);
             }
             let metadata = self.projects[project].clone();
+            if !metadata.client_supported {
+                bail!("{} 仅支持服务端，无法安装到客户端", metadata.name);
+            }
             folder(metadata.kind)
                 .with_context(|| format!("前置 {} 无法自动安装", metadata.name))?;
             let local = self
@@ -308,8 +315,10 @@ impl Solver<'_> {
                 local
             } else {
                 if !self.candidates.contains_key(project) {
-                    self.candidates
-                        .insert(project.clone(), self.catalog.versions(project).await?);
+                    self.candidates.insert(
+                        project.clone(),
+                        self.catalog.versions(project, metadata.kind).await?,
+                    );
                 }
                 self.candidates[project].clone()
             };

@@ -129,12 +129,17 @@
   min-width: 0;
 }
 .resource-subpage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
 }
 .resource-subpage-header h1:focus {
   outline: none;
 }
-.resource-subpage-body {
+.resource-subpage-body,
+.local-mod-update {
   --surface-stroke: 1px;
   --surface-inset-shape: var(--surface-shape-1);
   --surface-edge: var(--line);
@@ -2197,4 +2202,88 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
+}
+.local-mod-update {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  justify-items: start;
+}
+.local-mod-update :is(h3, p, ul) {
+  margin: 0;
+}
+.local-mod-update-heading {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-items: center;
+  justify-self: stretch;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.local-mod-update-summary {
+  flex: 1 1 min-content;
+  min-width: 0;
+}
+.local-mod-update-heading > .row-actions {
+  align-self: start;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+.local-mod-update-versions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.local-mod-install-button {
+  --show-install-cancel: 0;
+  display: grid;
+  place-items: center;
+}
+.local-mod-install-button[aria-disabled="true"] {
+  cursor: default;
+}
+.local-mod-install-status,
+.local-mod-install-cancel {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition:
+    opacity 220ms cubic-bezier(0.22, 0.8, 0.25, 1),
+    transform 220ms cubic-bezier(0.22, 0.8, 0.25, 1);
+}
+.local-mod-install-status {
+  opacity: calc(1 - var(--show-install-cancel));
+  transform: translateY(calc(-4px * var(--show-install-cancel)));
+}
+.local-mod-install-cancel {
+  opacity: var(--show-install-cancel);
+  transform: translateY(calc(4px * (1 - var(--show-install-cancel))));
+}
+/* Expose one accessible name while both labels are animating. */
+.local-mod-install-status-name {
+  visibility: var(--install-status, visible);
+}
+.local-mod-install-cancel-name {
+  visibility: var(--install-cancel, hidden);
+}
+.local-mod-install-button[data-can-cancel]:is(:hover, :focus-visible) {
+  --show-install-cancel: 1;
+  --install-status: hidden;
+  --install-cancel: visible;
+}
+@media (hover: none) {
+  .local-mod-install-button[data-can-cancel] {
+    --show-install-cancel: 1;
+    --install-status: hidden;
+    --install-cancel: visible;
+  }
+}
+.local-mod-changelog {
+  justify-self: stretch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 16rem;
+  overflow-y: auto;
 }

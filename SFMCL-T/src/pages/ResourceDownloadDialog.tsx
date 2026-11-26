@@ -187,6 +187,7 @@ export function ResourceDownloadDialog({
               } else
                 await api("resources.download", {
                   kind,
+                  source,
                   ...(destination === "version"
                     ? { versionId: targetId }
                     : { directory }),

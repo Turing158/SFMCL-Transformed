@@ -121,7 +121,11 @@ impl Runtime {
             client: sfmcl_t_core::http_client()?,
             settings: settings.clone(),
         });
-        let community = Arc::new(Community::new(vault)?.with_sources(downloads.sources()));
+        let community = Arc::new(
+            Community::new(vault)?
+                .with_sources(downloads.sources())
+                .with_mod_source_cache(directory.join("cache/mod-sources.json")),
+        );
         let official_notices = sfmcl_t_core::notices::OfficialNotices::new(
             directory.clone(),
             installer.client.clone(),
@@ -997,6 +1001,24 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                     .await?
             ))
         }
+        "resources.checkModUpdate" | "resources.modUpdatePlan" => {
+            let settings = r.settings.get();
+            let target =
+                ModInstallTarget::resolve(r.target_root(&p)?, text(&p, "versionId")?, &settings)?;
+            if op == "resources.checkModUpdate" {
+                Ok(json!(
+                    r.mod_installer
+                        .check_update(&r.community, target, PathBuf::from(text(&p, "path")?))
+                        .await?
+                ))
+            } else {
+                Ok(json!(
+                    r.mod_installer
+                        .preview_update(&r.community, target, text(&p, "token")?, &settings)
+                        .await?
+                ))
+            }
+        }
         "resources.discardInstallPlan" => {
             r.mod_installer.discard(text(&p, "token")?);
             Ok(json!(true))
@@ -1061,6 +1083,11 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                 crate::curseforge_download::resolve_with_sources(&app, &spec.url, &r.community)
                     .await?;
             let title = p["title"].as_str().unwrap_or("资源下载").into();
+            if kind == "mod" {
+                if let (Some(source), Some(hash)) = (p["source"].as_str(), &spec.sha1) {
+                    r.community.remember_mod_source(hash, source);
+                }
+            }
             let id = if p.get("directory").is_some() {
                 r.downloads
                     .enqueue_to_folder(title, root, vec![spec])

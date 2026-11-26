@@ -72,6 +72,7 @@ impl Community {
             };
             if let Some(id) = id {
                 validate_id(&id)?;
+                self.remember_mod_source(&identity.sha1, source);
                 Ok(Some(LocalProjectMatch { id }))
             } else {
                 Ok(None)
@@ -106,7 +107,7 @@ fn curseforge_match(value: &Value, identity: &ModIdentity) -> Result<Option<Stri
     Ok(None)
 }
 
-fn identify_mod(root: &Path, path: &Path) -> Result<ModIdentity> {
+pub(super) fn identify_mod(root: &Path, path: &Path) -> Result<ModIdentity> {
     let relative = path
         .strip_prefix(root)
         .context("模组必须位于所选游戏目录内")?;

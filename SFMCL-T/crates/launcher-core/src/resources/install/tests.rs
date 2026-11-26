@@ -42,6 +42,8 @@ fn candidate(project: &str, version: &str, required: Vec<Dependency>) -> Candida
         name: project.into(),
         version: version.into(),
         date: "2026-11-24".into(),
+        changelog: String::new(),
+        primary: true,
         stable: true,
         client_supported: true,
         game_versions: vec!["1.20.1".into()],
@@ -79,6 +81,7 @@ impl Catalog for Fake {
             Ok(ProjectMeta {
                 name: id.into(),
                 kind: ResourceKind::Mod,
+                client_supported: true,
             })
         })
     }
@@ -98,7 +101,11 @@ impl Catalog for Fake {
                 .context("找不到指定前置版本")
         })
     }
-    fn versions<'a>(&'a self, project: &'a str) -> BoxFuture<'a, Result<Vec<Candidate>>> {
+    fn versions<'a>(
+        &'a self,
+        project: &'a str,
+        _kind: ResourceKind,
+    ) -> BoxFuture<'a, Result<Vec<Candidate>>> {
         Box::pin(async move { Ok(self.versions.get(project).cloned().unwrap_or_default()) })
     }
 }
@@ -118,6 +125,7 @@ async fn nested_shared_and_cyclic_dependencies_install_once() {
         HashMap::new(),
         "main",
         "main1",
+        None,
     )
     .await
     .unwrap();
@@ -143,6 +151,7 @@ async fn incompatible_pins_block_instead_of_deduplicating_away_constraints() {
         HashMap::new(),
         "main",
         "m1",
+        None,
     )
     .await;
     assert!(result.unwrap_err().to_string().contains("不同版本"));
@@ -168,6 +177,7 @@ async fn backtracks_to_a_version_whose_transitive_pins_can_be_satisfied() {
         HashMap::new(),
         "main",
         "m1",
+        None,
     )
     .await
     .unwrap();
@@ -215,6 +225,7 @@ async fn existing_compatible_dependency_is_reused_even_after_renaming() {
         installed,
         "main",
         "m1",
+        None,
     )
     .await
     .unwrap();
@@ -236,6 +247,7 @@ async fn disabled_dependency_requires_enabling_existing_file() {
         installed,
         "main",
         "m1",
+        None,
     )
     .await
     .unwrap();
@@ -260,6 +272,7 @@ async fn existing_wrong_version_is_a_conflict_not_an_extra_install() {
         installed,
         "main",
         "m1",
+        None,
     )
     .await
     .unwrap_err();
@@ -282,7 +295,8 @@ async fn duplicate_existing_files_and_loader_mismatch_block() {
         &inventory,
         installed,
         "main",
-        "m1"
+        "m1",
+        None,
     )
     .await
     .is_err());
@@ -294,7 +308,8 @@ async fn duplicate_existing_files_and_loader_mismatch_block() {
         &Inventory { files: vec![] },
         HashMap::new(),
         "main",
-        "m1"
+        "m1",
+        None,
     )
     .await
     .is_err());
@@ -314,6 +329,7 @@ async fn explicit_incompatibility_with_installed_mod_blocks() {
         installed,
         "main",
         "m1",
+        None,
     )
     .await
     .unwrap_err();
@@ -341,7 +357,8 @@ async fn version_only_dependency_and_missing_filename_reference() {
             &Inventory { files: vec![] },
             HashMap::new(),
             "main",
-            "m1"
+            "m1",
+            None,
         )
         .await
         .unwrap()
@@ -363,7 +380,8 @@ async fn version_only_dependency_and_missing_filename_reference() {
         &Inventory { files: vec![] },
         HashMap::new(),
         "main",
-        "m1"
+        "m1",
+        None,
     )
     .await
     .unwrap_err()
@@ -372,17 +390,22 @@ async fn version_only_dependency_and_missing_filename_reference() {
 }
 
 fn jar(id: &str) -> Vec<u8> {
+    mod_jar(id, "1.0")
+}
+fn mod_jar(id: &str, version: &str) -> Vec<u8> {
+    fabric_jar(json!({"id": id, "name": id, "version": version}))
+}
+fn fabric_jar(metadata: serde_json::Value) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
     zip.start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
         .unwrap();
-    zip.write_all(
-        serde_json::to_string(&json!({"id": id, "name": id, "version": "1.0"}))
-            .unwrap()
-            .as_bytes(),
-    )
-    .unwrap();
+    zip.write_all(&serde_json::to_vec(&metadata).unwrap())
+        .unwrap();
     zip.finish().unwrap().into_inner()
 }
+
+#[path = "update_tests.rs"]
+mod update_tests;
 fn write_jar(root: &Path, path: &str, bytes: &[u8]) {
     let path = root.join(path);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -423,6 +446,7 @@ fn commit_installs_complete_group_and_preserves_existing_files() {
         &target(game.path()),
         &expected,
         &selections,
+        None,
         stage.path(),
         &CancellationToken::new(),
     )
@@ -446,6 +470,7 @@ fn hash_failure_cancellation_and_inventory_change_never_publish_partial_group() 
         &target(game.path()),
         &expected,
         &[selection.clone()],
+        None,
         stage.path(),
         &cancel
     )
@@ -456,6 +481,7 @@ fn hash_failure_cancellation_and_inventory_change_never_publish_partial_group() 
         &target(game.path()),
         &expected,
         &[invalid],
+        None,
         stage.path(),
         &CancellationToken::new()
     )
@@ -466,6 +492,7 @@ fn hash_failure_cancellation_and_inventory_change_never_publish_partial_group() 
         &target(game.path()),
         &expected,
         &[selection],
+        None,
         stage.path(),
         &CancellationToken::new()
     )
@@ -489,6 +516,7 @@ fn commit_detects_same_mod_under_different_filename_and_enables_without_copy() {
         &target(game.path()),
         &expected,
         &[selected],
+        None,
         stage.path(),
         &CancellationToken::new(),
     )
@@ -501,6 +529,7 @@ fn commit_detects_same_mod_under_different_filename_and_enables_without_copy() {
         &target(game.path()),
         &expected,
         &[selection("lib", &bytes)],
+        None,
         stage.path(),
         &CancellationToken::new()
     )
@@ -561,6 +590,7 @@ fn occupied_source_rolls_back_previously_published_files() {
         &target(game.path()),
         &Inventory::read(game.path()).unwrap(),
         &[selection("first", &first), selection("second", &second)],
+        None,
         stage.path(),
         &CancellationToken::new(),
     );
@@ -573,6 +603,15 @@ fn occupied_source_rolls_back_previously_published_files() {
 
 #[tokio::test]
 async fn failed_file_batch_retries_the_same_install_without_publishing_early() {
+    failed_batch(false).await;
+}
+
+#[tokio::test]
+async fn failed_update_download_then_cancel_keeps_the_original_disabled_jar() {
+    failed_batch(true).await;
+}
+
+async fn failed_batch(update: bool) {
     use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
     use std::sync::atomic::{AtomicBool, Ordering};
     let game = scratch();
@@ -581,7 +620,12 @@ async fn failed_file_batch_retries_the_same_install_without_publishing_early() {
     fs::write(game.path().join("versions/test/test.json"), serde_json::to_vec(&json!({"id":"test", "clientVersion":"1.20.1", "libraries":[{"name":"net.fabricmc:fabric-loader:0.16.9"}]})).unwrap()).unwrap();
     let settings = Arc::new(crate::config::ConfigStore::open(data.path()).unwrap());
     let target = Target::resolve(game.path().into(), "test", &settings.get()).unwrap();
-    let main = jar("main");
+    let original = jar("main");
+    let old_path = target.game.join("mods/.disabled/original.jar");
+    if update {
+        write_jar(&target.game, "mods/.disabled/original.jar", &original);
+    }
+    let main = mod_jar("main", "2.0");
     let lib = jar("lib");
     let failing = Arc::new(AtomicBool::new(true));
     let router = Router::new()
@@ -622,12 +666,15 @@ async fn failed_file_batch_retries_the_same_install_without_publishing_early() {
     lib_selection.item.main = false;
     lib_selection.candidate.file.url = format!("http://{address}/lib");
     let installer = ModInstaller::default();
+    let inventory = Inventory::read(&target.game).unwrap();
+    let replacing = inventory.files.first().cloned();
     installer.prepared.lock().unwrap().insert(
         "token".into(),
         Prepared {
             target: target.clone(),
-            inventory: Inventory::read(&target.game).unwrap(),
+            inventory,
             selections: vec![main_selection, lib_selection],
+            replacing,
             created: Instant::now(),
         },
     );
@@ -666,8 +713,13 @@ async fn failed_file_batch_retries_the_same_install_without_publishing_early() {
         jobs.get(&id).unwrap().snapshot().download_id.as_deref(),
         Some(batch.id.as_str())
     );
-    failing.store(false, Ordering::SeqCst);
-    downloads.resume(&batch.id).await.unwrap();
+    if update {
+        assert_eq!(fs::read(&old_path).unwrap(), original);
+        jobs.cancel(&id).unwrap();
+    } else {
+        failing.store(false, Ordering::SeqCst);
+        downloads.resume(&batch.id).await.unwrap();
+    }
     tokio::time::timeout(Duration::from_secs(20), async {
         loop {
             let status = jobs.get(&id).unwrap().snapshot().status;
@@ -678,7 +730,11 @@ async fn failed_file_batch_retries_the_same_install_without_publishing_early() {
             {
                 assert_eq!(
                     status,
-                    Status::Completed,
+                    if update {
+                        Status::Cancelled
+                    } else {
+                        Status::Completed
+                    },
                     "{:?}",
                     jobs.get(&id).unwrap().snapshot().error
                 );
@@ -689,7 +745,14 @@ async fn failed_file_batch_retries_the_same_install_without_publishing_early() {
     })
     .await
     .unwrap();
-    assert_eq!(Inventory::read(&target.game).unwrap().files.len(), 2);
+    if update {
+        let inventory = Inventory::read(&target.game).unwrap();
+        assert_eq!(inventory.files.len(), 1);
+        assert!(inventory.files[0].disabled);
+        assert_eq!(fs::read(&old_path).unwrap(), original);
+    } else {
+        assert_eq!(Inventory::read(&target.game).unwrap().files.len(), 2);
+    }
     assert!(downloads.snapshots().await.is_empty());
     server.abort();
     let _ = server.await;

@@ -2,6 +2,8 @@ mod resolver;
 #[cfg(test)]
 mod tests;
 mod transaction;
+mod update;
+pub use update::ModUpdate;
 
 use crate::{
     downloads::{DownloadManager, DownloadSpec, Status},
@@ -39,12 +41,7 @@ impl Target {
         let profile = crate::minecraft::versions::resolve(&root, id)?;
         let resolved = crate::minecraft::version_settings::resolve(&root, id, settings)?;
         let game = local::version_root(&root, id, resolved.isolation)?;
-        let game_version = profile["inheritsFrom"]
-            .as_str()
-            .or(profile["clientVersion"].as_str())
-            .or(profile["id"].as_str())
-            .context("无法确定 Minecraft 版本")?
-            .to_owned();
+        let game_version = crate::minecraft::versions::minecraft_version(&root, id, &profile)?;
         let loader = crate::minecraft::versions::loader(&profile).to_owned();
         let environment = serde_json::to_string(&serde_json::json!([profile, resolved.isolation]))?;
         Ok(Self {
@@ -72,6 +69,8 @@ pub(crate) struct Candidate {
     pub name: String,
     pub version: String,
     pub date: String,
+    pub changelog: String,
+    pub primary: bool,
     pub stable: bool,
     pub client_supported: bool,
     pub game_versions: Vec<String>,
@@ -85,6 +84,7 @@ pub(crate) struct Candidate {
 pub(crate) struct ProjectMeta {
     pub name: String,
     pub kind: ResourceKind,
+    pub client_supported: bool,
 }
 
 pub(crate) trait Catalog: Sync {
@@ -94,7 +94,11 @@ pub(crate) trait Catalog: Sync {
         project: Option<&'a str>,
         id: &'a str,
     ) -> BoxFuture<'a, Result<Candidate>>;
-    fn versions<'a>(&'a self, project: &'a str) -> BoxFuture<'a, Result<Vec<Candidate>>>;
+    fn versions<'a>(
+        &'a self,
+        project: &'a str,
+        kind: ResourceKind,
+    ) -> BoxFuture<'a, Result<Vec<Candidate>>>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -183,12 +187,14 @@ struct Prepared {
     target: Target,
     inventory: Inventory,
     selections: Vec<Selection>,
+    replacing: Option<LocalFile>,
     created: Instant,
 }
 
 #[derive(Default)]
 pub struct ModInstaller {
     prepared: Mutex<HashMap<String, Prepared>>,
+    checks: update::UpdateCache,
 }
 
 /// Serialize launch admission with installation admission for the actual game directory.
@@ -221,11 +227,34 @@ impl ModInstaller {
         version: &str,
         target: Target,
     ) -> Result<InstallPlan> {
+        self.prepare(community, source, project, version, target, None)
+            .await
+    }
+
+    async fn prepare(
+        &self,
+        community: &Community,
+        source: &str,
+        project: &str,
+        version: &str,
+        target: Target,
+        update: Option<&update::UpdateChoice>,
+    ) -> Result<InstallPlan> {
         let game = target.game.clone();
         let inventory = tokio::task::spawn_blocking(move || Inventory::read(&game)).await??;
+        let replacing = update
+            .map(|choice| {
+                inventory
+                    .files
+                    .iter()
+                    .find(|file| file.path == choice.path && file.sha1 == choice.sha1)
+                    .cloned()
+                    .context("原模组已变化，请重新检查更新")
+            })
+            .transpose()?;
         let catalog = community.install_catalog(source, &target)?;
         let result = tokio::time::timeout(Duration::from_secs(90), async {
-            let installed = community
+            let mut installed = community
                 .installed_versions(source, &inventory)
                 .await
                 .context("无法确认本地资源身份，请重试依赖检查")?;
@@ -237,9 +266,55 @@ impl ModInstaller {
                 })
                 .map(|file| file.path.clone())
                 .collect::<Vec<_>>();
-            let selections =
-                resolver::resolve(&catalog, &target, &inventory, installed, project, version)
-                    .await?;
+            let mut remaining;
+            let resolver_inventory = if let Some(choice) = update {
+                let current = installed
+                    .remove(&choice.path)
+                    .context("无法重新确认原模组身份")?;
+                if current.project != project
+                    || current.id != choice.current_id
+                    || installed.values().any(|other| other.project == project)
+                {
+                    bail!("原模组身份变化或存在多个副本，请检查本地文件");
+                }
+                remaining = inventory.clone();
+                remaining.files.retain(|file| file.path != choice.path);
+                &remaining
+            } else {
+                &inventory
+            };
+            let selections = resolver::resolve(
+                &catalog,
+                &target,
+                resolver_inventory,
+                installed,
+                project,
+                version,
+                update.map(|choice| choice.path.as_str()),
+            )
+            .await?;
+            if let Some(choice) = update {
+                let main = selections
+                    .iter()
+                    .find(|s| s.item.main)
+                    .context("缺少主模组")?;
+                if main.existing.is_some()
+                    || !main.candidate.stable
+                    || !main.candidate.primary
+                    || main.item.kind != ResourceKind::Mod
+                    || main.candidate.version != choice.release.version
+                    || !choice.same_file(&main.candidate.file)
+                {
+                    bail!("更新文件已发生变化，请重新检查更新");
+                }
+            }
+            for selection in &selections {
+                if selection.item.kind == ResourceKind::Mod {
+                    if let Some(hash) = &selection.candidate.file.sha1 {
+                        community.remember_mod_source(hash, source);
+                    }
+                }
+            }
             Ok::<_, anyhow::Error>((selections, unknown))
         })
         .await;
@@ -279,6 +354,7 @@ impl ModInstaller {
                 target,
                 inventory,
                 selections,
+                replacing,
                 created: Instant::now(),
             },
         );
@@ -350,9 +426,18 @@ impl ModInstaller {
             .find(|s| s.item.main)
             .map(|s| s.item.name.as_str())
             .unwrap_or("模组");
+        let update_path = prepared
+            .replacing
+            .as_ref()
+            .map(|old| safe_join(&target.game, &old.path))
+            .transpose()?;
         let job = jobs.create(
             JobKind::Install,
-            format!("安装模组 {title} 及前置"),
+            if prepared.replacing.is_some() {
+                format!("更新模组 {title}")
+            } else {
+                format!("安装模组 {title} 及前置")
+            },
             &[
                 "准备安装文件",
                 "下载模组与前置",
@@ -360,6 +445,9 @@ impl ModInstaller {
                 "校验并安装",
             ],
         );
+        if let Some(path) = update_path {
+            job.set_mod_update_path(path);
+        }
         let id = job.snapshot().id;
         tokio::spawn(async move {
             let _lock = lock;
@@ -384,7 +472,7 @@ impl ModInstaller {
                 }
                 let stage = work.path().to_owned();
                 let cancel = job.cancel.clone();
-                tokio::task::spawn_blocking(move || transaction::commit(&target, &prepared.inventory, &prepared.selections, &stage, &cancel)).await??;
+                tokio::task::spawn_blocking(move || transaction::commit(&target, &prepared.inventory, &prepared.selections, prepared.replacing.as_ref(), &stage, &cancel)).await??;
                 Ok(())
             }.await;
             // Await all workers before deleting a session's staging directory.

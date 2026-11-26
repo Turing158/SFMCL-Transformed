@@ -38,6 +38,7 @@ import {
 } from "../resourceNames";
 import { MinecraftText } from "../MinecraftText";
 import { usePageActive } from "../PageActivity";
+import { useTaskSelector } from "../tasks";
 import { useTabContentTransition } from "../useTabContentTransition";
 import { LoadingState } from "../LoadingState";
 import { LocalResourcePage } from "./LocalResourcePage";
@@ -123,6 +124,15 @@ export function LocalResources({
     ? version.path
     : minecraftDirectoryPath(version.directory ?? app.data.settings.activeDir);
   const selectedKind = kinds.find((item) => item.value === kind)!;
+  const modsPrefix = root.replaceAll("\\", "/").replace(/\/$/, "") + "/mods/";
+  const lastUpdate = useTaskSelector(
+    (tasks) =>
+      tasks.jobs.find(
+        (job) =>
+          job.status === "completed" &&
+          job.modUpdatePath?.replaceAll("\\", "/").startsWith(modsPrefix),
+      )?.id,
+  );
   const folder = `${root}/${selectedKind.folder}`;
   const compact = kind === "resourcepack" || kind === "world";
   const refresh = () => setRevision((current) => current + 1);
@@ -251,7 +261,7 @@ export function LocalResources({
     return () => {
       active = false;
     };
-  }, [version.id, root, revision]);
+  }, [version.id, root, revision, lastUpdate]);
   const items = (resources[kind] || []).filter((item) =>
     (kind === "shader"
       ? `${item.name} ${localResourceTitle(item)}`
@@ -568,8 +578,17 @@ export function LocalResources({
       </div>
       {detail && (
         <LocalResourcePage
-          key={detail.path}
-          item={detail}
+          key={JSON.stringify([
+            version.id,
+            root,
+            version.version,
+            version.loader,
+            detail.path,
+          ])}
+          item={
+            resources[detail.kind]?.find((item) => item.path === detail.path) ??
+            detail
+          }
           version={version}
           onOpenModProject={openModProject}
         />

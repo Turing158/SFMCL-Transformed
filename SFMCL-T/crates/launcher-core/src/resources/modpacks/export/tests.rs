@@ -80,6 +80,8 @@ fn candidate(file: &HashedFile, path: &str, project: &str, id: &str) -> Candidat
         version: "1.0".into(),
         date: "".into(),
         stable: true,
+        changelog: String::new(),
+        primary: true,
         client_supported: true,
         game_versions: vec!["1.20.1".into()],
         loaders: vec!["fabric".into()],

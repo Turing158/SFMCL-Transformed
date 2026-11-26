@@ -273,6 +273,9 @@ fn read_mod(path: &Path, resource: &mut LocalResource) -> Result<()> {
                 .map(str::to_owned)
         });
         resource.details = json!({"loader":"Fabric","id":value["id"]});
+        if let Some(environment) = value["environment"].as_str() {
+            resource.details["environment"] = json!(environment);
+        }
         if let Some(id) = value["id"].as_str() {
             mod_ids.push(id.to_owned());
         }
@@ -291,6 +294,9 @@ fn read_mod(path: &Path, resource: &mut LocalResource) -> Result<()> {
             .unwrap_or_default();
         icon = metadata["icon"].as_str().map(str::to_owned);
         resource.details = json!({"loader":"Quilt","id":value["quilt_loader"]["id"]});
+        if let Some(environment) = value["minecraft"]["environment"].as_str() {
+            resource.details["environment"] = json!(environment);
+        }
         if let Some(id) = value["quilt_loader"]["id"].as_str() {
             mod_ids.push(id.to_owned());
         }

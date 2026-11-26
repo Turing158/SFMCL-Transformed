@@ -27,9 +27,32 @@ pub struct VersionInfo {
     pub error: Option<String>,
 }
 
+pub(crate) fn neoforge_profile_version(profile: &Value) -> Option<&str> {
+    // The FancyModLoader library has its own version. Use the NeoForge launch
+    // argument or component version when the NeoForge library is absent.
+    profile["arguments"]["game"]
+        .as_array()
+        .and_then(|arguments| {
+            let pair = arguments
+                .windows(2)
+                .rev()
+                .find(|pair| pair[0].as_str() == Some("--fml.neoForgeVersion"))?;
+            pair[1].as_str().filter(|value| !value.starts_with("--"))
+        })
+        .or_else(|| {
+            profile["patches"]
+                .as_array()?
+                .iter()
+                .rev()
+                .find(|patch| matches!(patch["id"].as_str(), Some("neoforge" | "net.neoforged")))?
+                ["version"]
+                .as_str()
+        })
+}
+
 pub fn loader(version: &Value) -> &'static str {
     let libraries = version["libraries"].to_string().to_lowercase();
-    if libraries.contains("neoforged") {
+    if libraries.contains("neoforged") || neoforge_profile_version(version).is_some() {
         "NeoForge"
     } else if libraries.contains("minecraftforge") {
         "Forge"
@@ -125,6 +148,36 @@ pub fn favorites(settings: &Settings) -> Vec<FavoriteVersionInfo> {
         );
     }
     result
+}
+
+/// The installation name and intermediate loader profiles can differ from the game version.
+pub(crate) fn minecraft_version(root: &Path, id: &str, profile: &Value) -> Result<String> {
+    if let Some(version) = profile["clientVersion"].as_str().or_else(|| {
+        profile["patches"]
+            .as_array()?
+            .iter()
+            .find(|patch| matches!(patch["id"].as_str(), Some("game" | "net.minecraft")))?
+            ["version"]
+            .as_str()
+    }) {
+        valid_name(version)?;
+        return Ok(version.to_owned());
+    }
+    let mut base = id.to_owned();
+    let mut parent = profile["inheritsFrom"].as_str().map(str::to_owned);
+    let mut seen = HashSet::from([base.clone()]);
+    while let Some(id) = parent {
+        valid_name(&id)?;
+        if !seen.insert(id.clone()) || seen.len() > 32 {
+            bail!("版本继承循环或层数过多");
+        }
+        let path = safe_join(root, format!("versions/{id}/{id}.json"))?;
+        let value: Value = serde_json::from_slice(&std::fs::read(path)?)?;
+        parent = value["inheritsFrom"].as_str().map(str::to_owned);
+        base = id;
+    }
+    valid_name(&base)?;
+    Ok(base)
 }
 
 pub fn resolve(root: &Path, id: &str) -> Result<Value> {

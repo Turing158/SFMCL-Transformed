@@ -26,36 +26,7 @@ impl ExportTarget {
         let profile = versions::resolve(&root, id)?;
         let resolved = version_settings::resolve(&root, id, settings)?;
         let game = version_settings::game_directory(&root, id, settings)?;
-        // Follow the complete inheritance chain, including intermediate loader profiles.
-        let mut base = id.to_owned();
-        let mut seen = HashSet::new();
-        loop {
-            if !seen.insert(base.clone()) || seen.len() > 32 {
-                bail!("版本继承循环或层数过多");
-            }
-            let value: Value = serde_json::from_slice(&std::fs::read(safe_join(
-                &root,
-                format!("versions/{base}/{base}.json"),
-            )?)?)?;
-            if let Some(parent) = value["inheritsFrom"].as_str() {
-                base = parent.into();
-            } else {
-                break;
-            }
-        }
-        let minecraft = profile["clientVersion"]
-            .as_str()
-            .or_else(|| {
-                profile["patches"]
-                    .as_array()?
-                    .iter()
-                    .find(|v| matches!(v["id"].as_str(), Some("game" | "net.minecraft")))?
-                    ["version"]
-                    .as_str()
-            })
-            .unwrap_or(&base)
-            .to_owned();
-        crate::paths::valid_name(&minecraft)?;
+        let minecraft = versions::minecraft_version(&root, id, &profile)?;
         let mut found = BTreeMap::new();
         let forge_prefix = format!("{minecraft}-");
         let mut forge_fml_version = None;
@@ -96,7 +67,7 @@ impl ExportTarget {
             found.insert("Forge".to_owned(), version.to_owned());
         }
         if let Some(version) =
-            neoforge_profile_version(&profile).filter(|_| !found.contains_key("NeoForge"))
+            versions::neoforge_profile_version(&profile).filter(|_| !found.contains_key("NeoForge"))
         {
             crate::paths::valid_name(version)?;
             found.insert("NeoForge".to_owned(), version.to_owned());
@@ -156,29 +127,6 @@ impl ExportTarget {
             environment,
         })
     }
-}
-
-fn neoforge_profile_version(profile: &Value) -> Option<&str> {
-    // The FancyModLoader library has its own version. Use the NeoForge launch
-    // argument or component version when the NeoForge library is absent.
-    profile["arguments"]["game"]
-        .as_array()
-        .and_then(|arguments| {
-            let pair = arguments
-                .windows(2)
-                .rev()
-                .find(|pair| pair[0].as_str() == Some("--fml.neoForgeVersion"))?;
-            pair[1].as_str().filter(|value| !value.starts_with("--"))
-        })
-        .or_else(|| {
-            profile["patches"]
-                .as_array()?
-                .iter()
-                .rev()
-                .find(|patch| matches!(patch["id"].as_str(), Some("neoforge" | "net.neoforged")))?
-                ["version"]
-                .as_str()
-        })
 }
 
 pub(super) fn check_cancel(cancel: &CancellationToken) -> Result<()> {

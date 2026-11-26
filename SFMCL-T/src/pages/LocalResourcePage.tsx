@@ -7,6 +7,7 @@ import { LocalModChannels } from "./LocalModChannels";
 import { localResourceSize, openLocalResource } from "../localResources";
 import { localResourceTitle, resourceName } from "../resourceNames";
 import { MinecraftText } from "../MinecraftText";
+import { useLocalModUpdate } from "./useLocalModUpdate";
 
 export function LocalResourcePage({
   item,
@@ -18,6 +19,7 @@ export function LocalResourcePage({
   onOpenModProject: (project: Project, trigger: HTMLButtonElement) => void;
 }) {
   const app = useApp();
+  const update = useLocalModUpdate(item, version);
   const openFolder = () => void app.run(() => openLocalResource(item));
   const world = item.kind === "world";
   const tab = world ? "world" : "mod";
@@ -36,6 +38,8 @@ export function LocalResourcePage({
           )
         }
         tab={tab}
+        action={item.kind === "mod" && update.button}
+        afterBody={item.kind === "mod" && update.panel}
       >
         <div className="project-heading">
           <ResourceImage path={item.icon} alt="" />

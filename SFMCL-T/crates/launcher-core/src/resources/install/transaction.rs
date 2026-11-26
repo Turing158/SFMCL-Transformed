@@ -33,6 +33,7 @@ pub(super) fn commit(
     target: &Target,
     expected: &Inventory,
     selections: &[Selection],
+    replacing: Option<&LocalFile>,
     stage: &Path,
     cancel: &CancellationToken,
 ) -> Result<()> {
@@ -41,8 +42,13 @@ pub(super) fn commit(
         bail!("本地资源在下载期间发生变化，请重新检查前置依赖");
     }
     let mut changes = vec![];
+    let mut replacement = None;
     let mut mod_ids = HashSet::new();
-    for file in expected.files.iter().filter(|file| !file.disabled) {
+    for file in expected
+        .files
+        .iter()
+        .filter(|file| !file.disabled && Some(*file) != replacing)
+    {
         for id in &file.mod_ids {
             if !mod_ids.insert(id.clone()) {
                 bail!("本地已有重复模组 ID：{id}，请先处理后再安装");
@@ -50,9 +56,25 @@ pub(super) fn commit(
         }
     }
     let staged_mods = local::scan(stage, "mod")?;
+    let main_path = selections
+        .iter()
+        .find(|s| s.item.main)
+        .map(|s| safe_join(stage, &s.item.path))
+        .transpose()?;
     for resource in &staged_mods {
         if let Some(error) = &resource.error {
             bail!("下载的模组元数据无效：{}：{error}", resource.name);
+        }
+        if replacing.is_some() && resource.details["environment"] == "server" {
+            bail!(
+                "下载的模组 {} 声明为仅服务端，无法用于客户端更新",
+                resource.name
+            );
+        }
+        if replacing.is_some_and(|old| old.disabled)
+            && main_path.as_deref() == Some(Path::new(&resource.path))
+        {
+            continue;
         }
         for id in resource.details["modIds"]
             .as_array()
@@ -81,6 +103,12 @@ pub(super) fn commit(
             let mut spec = selection.candidate.file.clone();
             spec.path = selection.item.path.clone();
             verify_file_blocking(&source, &spec, cancel)?;
+            if selection.item.main {
+                if let Some(old) = replacing {
+                    replacement = Some((source, safe_join(&target.game, &old.path)?, &old.sha1));
+                    continue;
+                }
+            }
         }
         let destination = super::resolver::enabled_path(&selection.item.path)?;
         let path = safe_join(&target.game, &destination)?;
@@ -103,6 +131,9 @@ pub(super) fn commit(
             enable: selection.existing.is_some(),
         });
     }
+    if replacing.is_some() && replacement.is_none() {
+        bail!("更新清单缺少主模组文件");
+    }
     let journal = stage.join("recovery.json");
     // Write the complete intent before any rename. On failure the same record is
     // enough to reverse only this transaction's unchanged files.
@@ -124,6 +155,17 @@ pub(super) fn commit(
             committed += 1;
             fs::remove_file(&source)
                 .with_context(|| format!("无法完成文件移动：{}", change.source))?;
+        }
+        // Publish the main JAR last. A failed same-volume rename leaves the
+        // original name, bytes and disabled state intact while dependencies roll back.
+        if let Some((source, destination, hash)) = replacement {
+            if super::super::community::install_metadata::identity(&destination)?.0 != *hash {
+                bail!("原模组在安装期间发生变化，请重新检查更新");
+            }
+            check_cancel(cancel)?;
+            fs::rename(source, &destination).with_context(|| {
+                format!("无法替换原模组，文件可能被占用：{}", destination.display())
+            })?;
         }
         Ok(())
     })();
@@ -161,7 +203,9 @@ pub(super) fn commit(
         fs::remove_file(&journal)?;
         return Err(error);
     }
-    fs::remove_file(&journal)?;
+    // The staged directory is removed by the caller. Cleanup must not turn a
+    // committed atomic replacement into a reported failure.
+    let _ = fs::remove_file(&journal);
     Ok(())
 }
 

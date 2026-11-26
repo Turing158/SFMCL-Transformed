@@ -1140,9 +1140,20 @@ try {
     .locator(".resource-row .row-actions")
     .boundingBox();
   expect(localTitle.width).toBeGreaterThan(150);
-  expect(localActions.y).toBeGreaterThanOrEqual(
-    localTitle.y + localTitle.height,
+  expect(localActions.x).toBeGreaterThanOrEqual(
+    localTitle.x + localTitle.width - 1,
   );
+  expect(localActions.y).toBeLessThan(localTitle.y + localTitle.height);
+  const localRow = page.locator(".local-mod-row");
+  await expect(
+    localRow.getByRole("button", { name: "打开 1.21.4 Sodium 所在目录" }),
+  ).toBeVisible();
+  await expect(
+    localRow.getByRole("button", { name: "禁用 1.21.4 Sodium" }),
+  ).toBeVisible();
+  await expect(
+    localRow.getByRole("button", { name: "更新", exact: true }),
+  ).toHaveCount(0);
   checks.push(
     "Local resource migration covers per-version listing/counts, enable/disable, pack deletion, world detail, directories and mobile layout without changing the active launch version",
   );

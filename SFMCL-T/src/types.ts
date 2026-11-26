@@ -170,6 +170,7 @@ export interface CrashReport {
 }
 export interface Job {
   id: string;
+  modUpdatePath?: string;
   createdAt?: number;
   title: string;
   status: Status;
