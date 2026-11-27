@@ -87,6 +87,11 @@ const createPage = async (touch = false) => {
   return page;
 };
 const list = (page) => page.locator(".notice-home-list");
+const overlay = (page) => page.locator(".home-widget-drag-overlay");
+const editLayout = async (page) => {
+  await page.getByRole("button", { name: "编辑布局", exact: true }).click();
+  await expect(list(page)).toHaveAttribute("data-notice-sortable", "true");
+};
 const row = (page, id) =>
   list(page).locator(`[data-notice-key="notice:reorder:${id}"]`);
 const order = (page) =>
@@ -97,11 +102,17 @@ const point = async (locator) => {
   const bounds = await locator.boundingBox();
   return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
 };
+const size = (locator) =>
+  locator.evaluate((node) => ({
+    width: node.offsetWidth,
+    height: node.offsetHeight,
+  }));
 const hold = async (page, id) => {
   await expect(page.locator("html")).not.toHaveAttribute("data-startup");
-  const control = row(page, id).locator(".notice-toggle");
-  await control.scrollIntoViewIfNeeded();
-  const from = await point(control);
+  const item = row(page, id);
+  await expect(item).toHaveAttribute("data-notice-phase", "stable");
+  await item.scrollIntoViewIfNeeded();
+  const from = await point(item.locator(".notice-toggle"));
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.waitForTimeout(470);
@@ -112,12 +123,12 @@ const hold = async (page, id) => {
     "data-notice-placeholder",
     "true",
   );
-  await expect(page.locator(".notice-drag-overlay")).toHaveCount(1);
+  await expect(overlay(page)).toHaveCount(1);
   return from;
 };
 const release = async (page) => {
   await page.mouse.up();
-  await expect(page.locator(".notice-drag-overlay")).toHaveCount(0);
+  await expect(overlay(page)).toHaveCount(0);
   await expect(list(page).locator("[data-notice-placeholder]")).toHaveCount(0);
   await expect(page.locator("body")).not.toHaveAttribute(
     "data-notice-dragging",
@@ -135,27 +146,25 @@ const ready = async (page, layout = "masonry") => {
 try {
   const page = await createPage();
   await ready(page);
-  // Normal click and an early movement must not become a long press.
+  const defaultOrder = await order(page);
+  await expect(list(page)).toHaveAttribute("data-notice-sortable", "false");
   await row(page, 1).locator(".notice-toggle").click();
   await expect(row(page, 1).locator(".notice-toggle")).toHaveAttribute(
     "aria-expanded",
     "true",
   );
   await row(page, 1).locator(".notice-toggle").click();
-  const early = await point(row(page, 1).locator(".notice-toggle"));
-  await page.mouse.move(early.x, early.y);
+  const fromBrowsing = await point(row(page, 1).locator(".notice-toggle"));
+  const toBrowsing = await point(row(page, 3).locator(".notice-toggle"));
+  await page.mouse.move(fromBrowsing.x, fromBrowsing.y);
   await page.mouse.down();
-  await page.mouse.move(early.x + 24, early.y + 12);
   await page.waitForTimeout(470);
-  await expect(page.locator(".notice-drag-overlay")).toHaveCount(0);
+  await page.mouse.move(toBrowsing.x, toBrowsing.y, { steps: 4 });
+  await expect(list(page).locator("[data-notice-placeholder]")).toHaveCount(0);
   await page.mouse.up();
-  await row(page, 1)
-    .locator(".notice-toggle")
-    .evaluate((node) => {
-      if (node.getAttribute("aria-expanded") === "true") node.click();
-    });
+  expect(await order(page)).toEqual(defaultOrder);
   checks.push(
-    "A short click expands the card; movement before the long-press threshold cancels sorting.",
+    "A click expands the card in browsing mode. A long press followed by dragging leaves the layout unchanged.",
   );
 
   for (const layout of ["single", "parallel", "masonry"]) {
@@ -166,14 +175,13 @@ try {
     }, preference);
     await page.reload();
     await expect(list(page).locator(".notice-toggle")).toHaveCount(8);
+    await editLayout(page);
     const before = await order(page);
-    const dimensions = await row(page, 0).locator(".notice-card").boundingBox();
+    const dimensions = await size(row(page, 0).locator(".notice-card"));
     await hold(page, 0);
-    const slot = await row(page, 0)
-      .locator(".notice-drag-placeholder")
-      .boundingBox();
-    expect(slot.width).toBeCloseTo(dimensions.width, 0);
-    expect(slot.height).toBeCloseTo(dimensions.height, 0);
+    expect(await size(row(page, 0).locator(".notice-drag-placeholder"))).toEqual(
+      dimensions,
+    );
     const destination = await point(row(page, 3).locator(".notice-toggle"));
     await page.mouse.move(destination.x, destination.y);
     await expect
@@ -221,6 +229,7 @@ try {
     ).toEqual(after);
     await page.reload();
     await expect.poll(() => order(page)).toEqual(after);
+    await editLayout(page);
     // Rapidly reverse two swaps while prior displacement animations are running.
     await hold(page, 0);
     const first = await point(row(page, 1).locator(".notice-toggle"));
@@ -230,7 +239,7 @@ try {
     await page.mouse.move(next.x, next.y);
     await page.keyboard.press("Escape");
     await page.mouse.up();
-    await expect(page.locator(".notice-drag-overlay")).toHaveCount(0);
+    await expect(overlay(page)).toHaveCount(0);
     expect(await order(page)).toEqual(after);
     await expect(list(page).locator("[data-notice-placeholder]")).toHaveCount(
       0,
@@ -246,20 +255,17 @@ try {
   });
   await page.getByRole("button", { name: "刷新公告", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await row(page, 0).locator(".notice-toggle").click();
+  await row(page, 0).locator(".notice-toggle").press("Enter");
   await page.waitForTimeout(400);
-  const expandedHeight = (
-    await row(page, 0).locator(".notice-card").boundingBox()
-  ).height;
+  const expandedSize = await size(row(page, 0).locator(".notice-card"));
   await hold(page, 0);
   await expect(row(page, 0).locator(".notice-list-content")).toHaveCSS(
     "opacity",
     "0",
   );
-  expect(
-    (await row(page, 0).locator(".notice-drag-placeholder").boundingBox())
-      .height,
-  ).toBeCloseTo(expandedHeight, 0);
+  expect(await size(row(page, 0).locator(".notice-drag-placeholder"))).toEqual(
+    expandedSize,
+  );
   const other = await point(row(page, 2).locator(".notice-toggle"));
   await page.mouse.move(other.x, other.y);
   await page.screenshot({ path: `${evidence}/expanded-dark.png` });
@@ -281,13 +287,21 @@ try {
     "Expanded cards retain their full-height placeholder and expansion state; light/dark styling works and reduced-motion preference retains full sorting and drop animations.",
   );
 
+  await hold(page, 2);
+  await page
+    .getByRole("button", { name: "完成编辑", exact: true })
+    .evaluate((node) => node.click());
+  await expect(list(page)).toHaveAttribute("data-notice-sortable", "false");
+  await release(page);
+  await editLayout(page);
+
   // Leaving the retained home page must remove overlay, capture and body cursor.
   await hold(page, 2);
   await page
     .getByRole("navigation", { name: "主导航" })
     .getByRole("button", { name: "设置", exact: true })
     .evaluate((node) => node.click());
-  await expect(page.locator(".notice-drag-overlay")).toHaveCount(0);
+  await expect(overlay(page)).toHaveCount(0);
   await expect(page.locator("body")).not.toHaveAttribute(
     "data-notice-dragging",
   );
@@ -297,6 +311,8 @@ try {
     .getByRole("button", { name: "开始游戏", exact: true })
     .click();
   await expect(list(page).locator("[data-notice-placeholder]")).toHaveCount(0);
+  await expect(list(page)).toHaveAttribute("data-notice-sortable", "false");
+  await editLayout(page);
   await hold(page, 2);
   await page.evaluate(() => {
     window.__homeReorder.items = window.__homeReorder.items.filter(
@@ -304,14 +320,15 @@ try {
     );
     document.querySelector(".notice-refresh").click();
   });
-  await expect(page.locator(".notice-drag-overlay")).toHaveCount(0);
+  await expect(overlay(page)).toHaveCount(0);
   await page.mouse.up();
   await expect(list(page).locator(".notice-toggle")).toHaveCount(7);
   checks.push(
-    "Page navigation and removal by refresh cancel a drag without leftover overlays, placeholders or a stuck grabbing cursor.",
+    "Finishing editing, page navigation and removal by refresh cancel a drag and clear its overlays, placeholders and grabbing cursor.",
   );
 
   await ready(page, "single");
+  await editLayout(page);
   await page.evaluate(() => {
     const state = window.__homeReorder;
     state.items.push(
@@ -338,7 +355,7 @@ try {
     .toBeGreaterThan(scrollBefore + 150);
   await page.keyboard.press("Escape");
   await page.mouse.up();
-  await expect(page.locator(".notice-drag-overlay")).toHaveCount(0);
+  await expect(overlay(page)).toHaveCount(0);
   expect(await order(page)).toEqual(prior);
   checks.push(
     "Dragging near the page edge automatically scrolls a long announcement list; cancellation restores all 32 cards in their original order.",
@@ -347,6 +364,7 @@ try {
   const touch = await createPage(true);
   await touch.setViewportSize({ width: 600, height: 800 });
   await ready(touch);
+  await editLayout(touch);
   const client = await touch.context().newCDPSession(touch);
   const from = await point(row(touch, 0).locator(".notice-toggle"));
   await client.send("Input.dispatchTouchEvent", {
@@ -380,7 +398,7 @@ try {
     type: "touchEnd",
     touchPoints: [],
   });
-  await expect(touch.locator(".notice-drag-overlay")).toHaveCount(0);
+  await expect(overlay(touch)).toHaveCount(0);
   await expect(row(touch, 0).locator(".notice-toggle")).toHaveAttribute(
     "aria-expanded",
     "false",

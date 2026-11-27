@@ -317,13 +317,20 @@ try {
     expect(frame.range).toBe(pollingStart.scroll);
   }
   expect((await pollingCount()) - beforePolls).toBeGreaterThanOrEqual(3);
+  await page
+    .getByRole("button", { name: "编辑布局", exact: true })
+    .evaluate((element) => element.click());
+  const refreshStart = await read();
   await page.locator(".notice-refresh").evaluate((element) => element.click());
   await expect(page.locator(".notices")).toHaveAttribute("aria-busy", "false");
   const refreshFrames = await holdPosition(1100);
   for (const frame of refreshFrames) {
-    expect(frame.top).toBe(pollingStart.top);
-    expect(frame.range).toBe(pollingStart.scroll);
+    expect(frame.top).toBe(refreshStart.top);
+    expect(frame.range).toBe(refreshStart.scroll);
   }
+  await page
+    .getByRole("button", { name: "完成编辑", exact: true })
+    .evaluate((element) => element.click());
   await main.evaluate((element) => (element.scrollTop = 0));
   const newsBounds = await main.boundingBox();
   await page.mouse.move(newsBounds.x + 300, newsBounds.y + 150);

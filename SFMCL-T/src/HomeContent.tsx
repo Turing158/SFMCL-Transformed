@@ -6,13 +6,13 @@ import {
   Box,
   Check,
   ChevronDown,
+  Columns2,
   EyeOff,
   FileText,
   Link,
   NotebookPen,
   Play,
   Plus,
-  SlidersHorizontal,
   UsersRound,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -63,6 +63,13 @@ const icons: Record<HomeWidgetType, ReactNode> = {
   announcement: <ChevronDown size={17} />,
   links: <Link size={17} />,
   version: <Box size={17} />,
+};
+const widgetReorderOptions = {
+  ...noticeReorderOptions,
+  allowedControl:
+    ".notice-toggle, .home-announcement-toggle, .home-summary-action",
+  holdOnly: false,
+  overlayClass: "home-widget-drag-overlay",
 };
 const links = [
   ["Minecraft 官网", "https://www.minecraft.net/"],
@@ -392,20 +399,8 @@ export function HomeContent({
     [visible, catalog],
   );
   const keys = visible.map((item) => item.id);
-  const options = useMemo(
-    () => ({
-      ...noticeReorderOptions,
-      allowedControl:
-        ".notice-toggle, .home-announcement-toggle, .home-summary-action",
-      holdOnly: !editing,
-      overlayClass: editing
-        ? "home-widget-drag-overlay"
-        : "notice-drag-overlay",
-      acceptTarget: (_target: Element, row: HTMLElement) =>
-        editing || row.dataset.homeWidgetType === "notice",
-    }),
-    [editing],
-  );
+  const canReorder =
+    active && editing && !adding && content.ready && !content.saving;
   const title = (widget: HomeWidget) =>
     widget.type === "notice"
       ? catalog.get(widget.noticeKey)?.title || "新闻资讯"
@@ -476,30 +471,31 @@ export function HomeContent({
               {editing ? (
                 <Check size={16} aria-hidden="true" />
               ) : (
-                <SlidersHorizontal size={16} aria-hidden="true" />
+                <Columns2 size={16} aria-hidden="true" />
               )}
               <span className="home-content-action-label" aria-hidden="true">
                 <span>{editing ? "完成编辑" : "编辑布局"}</span>
               </span>
             </Button>
-            <Button
-              className="compact notice-add home-content-action"
-              disabled={!content.ready || content.saving}
-              aria-label="添加组件"
-              onClick={() => {
-                setEditing(false);
-                setAdding(true);
-              }}
-            >
-              <Plus size={16} aria-hidden="true" />
-              <span className="home-content-action-label" aria-hidden="true">
-                <span>添加组件</span>
-              </span>
-            </Button>
-            <NoticeRefreshButton
-              loading={notices.loading}
-              onRefresh={notices.refresh}
-            />
+            {editing && (
+              <>
+                <Button
+                  className="compact notice-add home-content-action"
+                  disabled={!content.ready || content.saving}
+                  aria-label="添加组件"
+                  onClick={() => setAdding(true)}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  <span className="home-content-action-label" aria-hidden="true">
+                    <span>添加组件</span>
+                  </span>
+                </Button>
+                <NoticeRefreshButton
+                  loading={notices.loading}
+                  onRefresh={notices.refresh}
+                />
+              </>
+            )}
           </div>
         }
       />
@@ -531,9 +527,9 @@ export function HomeContent({
         <AnimatedNoticeList<{ widget: HomeWidget; notice?: Notice } | null>
           className="notice-home-list home-widget-list"
           layout={app.data.settings.homeNoticeLayout}
-          reorderOptions={options}
+          reorderOptions={widgetReorderOptions}
           listProps={{ "data-home-editing": editing && active }}
-          onReorder={content.ready && !content.saving ? reorder : undefined}
+          onReorder={canReorder ? reorder : undefined}
           items={listItems}
           rowProps={(entry) => {
             const widget = entry?.widget;
@@ -552,7 +548,7 @@ export function HomeContent({
                     : undefined,
                   onKeyDown: (event) => {
                     if (
-                      !editing ||
+                      !canReorder ||
                       !event.altKey ||
                       !["ArrowUp", "ArrowDown"].includes(event.key) ||
                       event.target !== event.currentTarget

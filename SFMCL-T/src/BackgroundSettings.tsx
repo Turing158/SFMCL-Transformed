@@ -35,9 +35,9 @@ export function BackgroundSettings({
       <PixelFrame />
       <h2 id="background-settings-title">背景</h2>
       <div className="background-settings-controls">
-        <label className="field">
-          背景
+        <div className="field">
           <Select
+            aria-label="背景"
             value={draft.backgroundType}
             onValueChange={(value) => onChange({ backgroundType: value })}
           >
@@ -46,7 +46,7 @@ export function BackgroundSettings({
             <option value="local">本地图片</option>
             <option value="remote">网络图片</option>
           </Select>
-        </label>
+        </div>
         <div
           className="background-settings-disclosure background-settings-options"
           data-open={!disabled}

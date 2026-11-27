@@ -94,6 +94,59 @@ async function hold(page, locator) {
   await expect(toolbar(page)).toContainText("已选 1 项");
 }
 
+async function sampleBatchMotion(page, open, change) {
+  const observation = await page.evaluateHandle((open) => {
+    const sample = new Promise((resolve) => {
+      const observer = new MutationObserver(() => {
+        const bar = document.querySelector(".local-mod-batch-toolbar");
+        if (bar?.dataset.open !== String(open)) return;
+        clearTimeout(timeout);
+        observer.disconnect();
+        const read = (element) => {
+          const transitions = element.getAnimations();
+          const fade = transitions.find(
+            (animation) => animation.transitionProperty === "opacity",
+          );
+          return {
+            opacity: fade?.effect
+              .getKeyframes()
+              .map((frame) => Number(frame.opacity)),
+            slides: transitions.some(
+              (animation) => animation.transitionProperty === "transform",
+            ),
+            inert: element.inert,
+          };
+        };
+        const icons = document.querySelectorAll(
+          ".local-mod-row:first-child .local-resource-actions > button",
+        );
+        resolve({
+          toolbar: read(bar),
+          icons: [...icons].map(read),
+          count: bar.querySelector("[role=status]").textContent,
+        });
+      });
+      const timeout = setTimeout(() => {
+        observer.disconnect();
+        resolve(null);
+      }, 4000);
+      observer.observe(document.querySelector(".local-resources"), {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ["data-open"],
+      });
+    });
+    return { sample };
+  }, open);
+  try {
+    await change();
+    return await observation.evaluate(({ sample }) => sample);
+  } finally {
+    await observation.dispose();
+  }
+}
+
 try {
   const page = await openMods();
   const bar = toolbar(page);
@@ -112,7 +165,12 @@ try {
   await page.waitForTimeout(550);
   await page.mouse.up();
   await expect(bar).toHaveCount(0);
-  await hold(page, first);
+  const opening = await sampleBatchMotion(page, true, () => hold(page, first));
+  expect(opening).toEqual({
+    toolbar: { opacity: [0, 1], slides: true, inert: false },
+    icons: Array(2).fill({ opacity: [1, 0], slides: true, inert: true }),
+    count: "已选 1 项",
+  });
   await expect(button(page, "Batch 01")).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -126,8 +184,10 @@ try {
   ).toBeVisible();
   await expect(button(bar, "禁用").locator(".lucide-power")).toBeVisible();
   const rows = page.locator(".local-mod-row[data-selected]");
+  const rowActions = rows.locator(".local-resource-actions > button");
+  await expect(rowActions.first()).toBeHidden();
   await expect(
-    rows.locator(".local-resource-actions > :not(.local-resource-size)"),
+    rows.first().locator(".local-resource-actions").getByRole("button"),
   ).toHaveCount(0);
   for (const theme of ["light", "dark"]) {
     await page.evaluate(
@@ -230,9 +290,38 @@ try {
 
   await button(page, "Batch 01 详情").focus();
   await page.keyboard.press("Shift+Space");
-  await expect(bar).toHaveCount(1);
-  await page.keyboard.press("Escape");
+  await expect(bar).toHaveCSS("opacity", "1");
+  const reversed = await page.evaluate(async () => {
+    const bar = document.querySelector(".local-mod-batch-toolbar");
+    const row = document.activeElement;
+    row.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await Promise.resolve();
+    if (bar.dataset.open !== "false") return false;
+    row.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: " ",
+        code: "Space",
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    await Promise.resolve();
+    return bar.isConnected && bar.dataset.open === "true";
+  });
+  expect(reversed).toBe(true);
+  await expect(bar).toHaveCSS("opacity", "1");
+  const closing = await sampleBatchMotion(page, false, () =>
+    page.keyboard.press("Escape"),
+  );
+  expect(closing).toEqual({
+    toolbar: { opacity: [1, 0], slides: true, inert: true },
+    icons: Array(2).fill({ opacity: [0, 1], slides: true, inert: false }),
+    count: "已选 1 项",
+  });
   await expect(bar).toHaveCount(0);
+  await expect(page.locator(".local-mod-batch-toolbar")).toHaveCount(0);
   await hold(page, button(page, "Batch 01 详情"));
   await button(page, "Batch 02").click();
   await button(bar, "删除").click();
@@ -245,11 +334,19 @@ try {
   await page.close();
 
   const touchPage = await openMods({ hasTouch: true });
+  await touchPage.emulateMedia({ reducedMotion: "reduce" });
   const touch = await touchPage.context().newCDPSession(touchPage);
   const touchPoint = await point(button(touchPage, "Batch 01 详情"));
-  await touch.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [touchPoint],
+  const reduced = await sampleBatchMotion(touchPage, true, () =>
+    touch.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [touchPoint],
+    }),
+  );
+  expect(reduced).toEqual({
+    toolbar: { opacity: [0, 1], slides: false, inert: false },
+    icons: Array(2).fill({ opacity: [1, 0], slides: false, inert: true }),
+    count: "已选 1 项",
   });
   await expect(toolbar(touchPage)).toContainText("已选 1 项");
   await touch.send("Input.dispatchTouchEvent", {
@@ -261,7 +358,7 @@ try {
   await expect(toolbar(touchPage)).toHaveCount(0);
   expect(errors).toEqual([]);
   console.log(
-    "Mod batch passed: mouse and touch long press, keyboard, layouts, search, pagination, partial retry, enable, delete and cancel.",
+    "Mod batch passed: motion and reversal, mouse and touch long press, keyboard, layouts, search, pagination, partial retry, enable, delete and cancel.",
   );
 } finally {
   await browser.close();

@@ -223,6 +223,8 @@ const clickNoticeAction = async (button) => {
 };
 const editLayout = () =>
   page.getByRole("button", { name: "编辑布局", exact: true }).click();
+const finishEditing = () =>
+  page.getByRole("button", { name: "完成编辑", exact: true }).click();
 try {
   await ready();
   await expect(page.getByRole("heading", { name: "你好，Alex" })).toBeVisible();
@@ -349,6 +351,7 @@ try {
   await page.evaluate(() => {
     window.__homeNotices.fail = true;
   });
+  await editLayout();
   await refresh.click();
   await expect(notices.getByRole("alert")).toContainText("测试公告读取失败");
   await expect(toggles).toHaveCount(3);
@@ -377,6 +380,7 @@ try {
     .toBe(1);
   await expect(toggles).toHaveCount(3);
   await expect(dock).toBeVisible();
+  await editLayout();
   await expect(refresh).toBeDisabled();
   await page.evaluate(() => {
     const state = window.__homeNotices;
@@ -418,6 +422,7 @@ try {
     notices.locator(".notice-meta").filter({ hasText: "Java 快照" }),
   ).toHaveCount(1);
   await expect(bodies.locator("img")).toHaveCount(0);
+  await finishEditing();
   await page.screenshot({ path: `${evidence}/official-news-collapsed.png` });
   await page.setViewportSize({ width: 540, height: 640 });
   expect(
@@ -443,6 +448,7 @@ try {
     window.__homeNotices.refreshError =
       "中文 Minecraft Wiki暂时无法更新，正在显示缓存内容。";
   });
+  await editLayout();
   await refresh.click();
   await expect(notices.getByRole("alert")).toContainText("正在显示缓存内容");
   await expect(toggles).toHaveCount(5);
@@ -462,7 +468,6 @@ try {
   await page.evaluate(() => {
     window.__homeNotices.refreshError = "";
   });
-  await editLayout();
   await expect(hides).toHaveCount(5);
   for (const title of [
     "Official Minecraft news 1",
@@ -602,6 +607,7 @@ try {
   await expect(toggles).toHaveCount(2);
   await ready();
   await expect(toggles).toHaveCount(2);
+  await editLayout();
   await add.click();
 
   await expect(editor.getByRole("button", { name: /^恢复资讯：/ })).toHaveCount(
@@ -685,6 +691,7 @@ try {
       .filter((a) => a.id.startsWith("sfmcl-t-notice-list-"))
       .forEach((a) => a.finish());
   });
+  await finishEditing();
   await toggles.last().click();
   await expect(bodies.last().locator("strong")).toHaveText("本地公告内容");
   await ready();
@@ -703,6 +710,7 @@ try {
     state.hidden.push(state.custom[0].id);
     localStorage.setItem("notice-test-hidden", JSON.stringify(state.hidden));
   });
+  await editLayout();
   await refresh.click();
   await expect(refresh).toBeEnabled();
   await expect(toggles).toHaveCount(4);
@@ -719,6 +727,7 @@ try {
   ).toBeDisabled();
   await editor.getByRole("button", { name: "关闭对话框" }).click();
   await expect(editor).toHaveCount(0);
+  await finishEditing();
   await page.evaluate(() => {
     window.__homeNotices.deleteFail = true;
   });
@@ -740,8 +749,10 @@ try {
     state.pending = true;
     state.staleItems = structuredClone(state.items);
   });
+  await editLayout();
   await refresh.click();
   await expect(refresh).toBeDisabled();
+  await finishEditing();
   await clickNoticeAction(deletes.first());
   await expect(deletes.first()).toBeDisabled();
   expect(await page.evaluate(() => window.__homeNotices.deletes)).toBe(2);
@@ -762,7 +773,7 @@ try {
     state.pending = false;
     state.finish({ items: state.staleItems, error: "" });
   });
-  await expect(refresh).toBeEnabled();
+  await expect(notices).toHaveAttribute("aria-busy", "false");
   await expect(toggles).toHaveCount(3);
   await ready();
   await expect(toggles).toHaveCount(3);

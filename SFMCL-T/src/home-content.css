@@ -296,7 +296,7 @@
   transform-origin: center;
   will-change: transform;
 }
-.home-widget-list[data-home-editing="true"] .home-widget-row {
+.home-widget-list[data-notice-sortable="true"] .home-widget-row {
   touch-action: none;
   cursor: grab;
 }

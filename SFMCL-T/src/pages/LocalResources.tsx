@@ -122,6 +122,11 @@ export function LocalResources({
     () => new Set(),
   );
   const [batchPending, setBatchPending] = useState(false);
+  const [lastBatchSelection, setLastBatchSelection] = useState<{
+    count: number;
+    enabled: number;
+    disabled: number;
+  } | null>(null);
   const batchInFlight = useRef(false);
   const press = useRef<{
     timer: number;
@@ -169,6 +174,10 @@ export function LocalResources({
   );
   const enabledCount = selectedItems.filter((item) => !item.disabled).length;
   const disabledCount = selectedItems.length - enabledCount;
+  const selectedCount = selectedMods.size;
+  const toolbarSelection = selectingMods
+    ? { count: selectedCount, enabled: enabledCount, disabled: disabledCount }
+    : lastBatchSelection;
   const compact = kind === "resourcepack" || kind === "world";
   const refresh = () => setRevision((current) => current + 1);
 
@@ -186,6 +195,30 @@ export function LocalResources({
     consumedClick.current = null;
     return () => cancelPress();
   }, [targetKey, kind, pageActive, detail?.path, revision, lastUpdate]);
+
+  useLayoutEffect(() => {
+    if (selectingMods) {
+      setLastBatchSelection({
+        count: selectedCount,
+        enabled: enabledCount,
+        disabled: disabledCount,
+      });
+      return;
+    }
+    const toolbar = batchToolbar.current;
+    if (!toolbar) return;
+
+    // Keep the outgoing controls until their transition ends or is cancelled.
+    let exiting = true;
+    void Promise.allSettled(
+      toolbar.getAnimations().map((animation) => animation.finished),
+    ).then(() => {
+      if (exiting) setLastBatchSelection(null);
+    });
+    return () => {
+      exiting = false;
+    };
+  }, [selectingMods, selectedCount, enabledCount, disabledCount]);
 
   function changeModSelection(path: string) {
     setSelectedMods((current) => {
@@ -511,7 +544,7 @@ export function LocalResources({
     >
       <div
         hidden={!!detail}
-        className={selectingMods ? "local-mod-batch-mode" : undefined}
+        className={toolbarSelection ? "local-mod-batch-mode" : undefined}
       >
         <header className="local-resources-header">
           <Select
@@ -686,20 +719,20 @@ export function LocalResources({
                         </button>
                       )}
                       <div className="row-actions local-resource-actions">
-                        {!selectingMods && (
-                          <Button
-                            aria-label={`打开 ${localResourceTitle(item)} 所在目录`}
-                            data-tooltip="打开所在目录"
-                            onClick={() =>
-                              void app.run(() => openLocalResource(item))
-                            }
-                          >
-                            <FolderOpen size={17} />
-                          </Button>
-                        )}
-                        {kind === "mod" && !selectingMods && (
+                        <Button
+                          aria-label={`打开 ${localResourceTitle(item)} 所在目录`}
+                          data-tooltip="打开所在目录"
+                          inert={selectingMods}
+                          onClick={() =>
+                            void app.run(() => openLocalResource(item))
+                          }
+                        >
+                          <FolderOpen size={17} />
+                        </Button>
+                        {kind === "mod" && (
                           <Button
                             disabled={app.busy}
+                            inert={selectingMods}
                             aria-label={`${item.disabled ? "启用" : "禁用"} ${resourceName(item.name, item.localizedName)}`}
                             data-tooltip={
                               item.disabled ? "启用模组" : "禁用模组"
@@ -830,35 +863,38 @@ export function LocalResources({
             )}
           </LoadingState>
         </TabPanel>
-        {selectingMods && (
+        {toolbarSelection && (
           <div
             ref={batchToolbar}
             className="local-mod-batch-toolbar panel has-surface"
             role="group"
             aria-label="模组批量操作"
             aria-busy={batchPending}
+            data-open={selectingMods}
+            inert={!selectingMods}
+            aria-hidden={!selectingMods || undefined}
           >
             <PixelFrame />
-            <span role="status">已选 {selectedMods.size} 项</span>
-            {!!disabledCount && (
+            <span role="status">已选 {toolbarSelection.count} 项</span>
+            {!!toolbarSelection.disabled && (
               <button
                 type="button"
                 className="icon-button"
                 aria-label="启用"
                 disabled={batchPending || app.busy}
-                data-tooltip={`启用 ${disabledCount} 个已选模组`}
+                data-tooltip={`启用 ${toolbarSelection.disabled} 个已选模组`}
                 onClick={() => void runModBatch("enable")}
               >
                 <CirclePause size={16} aria-hidden="true" />
               </button>
             )}
-            {!!enabledCount && (
+            {!!toolbarSelection.enabled && (
               <button
                 type="button"
                 className="icon-button"
                 aria-label="禁用"
                 disabled={batchPending || app.busy}
-                data-tooltip={`禁用 ${enabledCount} 个已选模组`}
+                data-tooltip={`禁用 ${toolbarSelection.enabled} 个已选模组`}
                 onClick={() => void runModBatch("disable")}
               >
                 <Power size={16} aria-hidden="true" />

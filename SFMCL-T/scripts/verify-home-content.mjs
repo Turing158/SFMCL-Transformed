@@ -57,6 +57,20 @@ await page.addInitScript(() => {
 const url = process.env.SFMCL_T_UI_URL || "http://127.0.0.1:1420/";
 const home = page.locator('main[data-page="home"]');
 const rows = home.locator(".home-widget-row");
+const toolbar = home.locator(".home-content-actions");
+const editLayout = toolbar.getByRole("button", { name: "编辑布局", exact: true });
+const finishEditing = toolbar.getByRole("button", {
+  name: "完成编辑",
+  exact: true,
+});
+const addComponent = toolbar.getByRole("button", {
+  name: "添加组件",
+  exact: true,
+});
+const refreshNotices = toolbar.getByRole("button", {
+  name: "刷新公告",
+  exact: true,
+});
 const library = page.getByRole("dialog", { name: "添加组件", exact: true });
 const typeRow = (type) =>
   home.locator(`.home-widget-row[data-home-widget-type="${type}"]`);
@@ -65,7 +79,7 @@ const stored = () =>
 const ids = () =>
   rows.evaluateAll((nodes) => nodes.map((node) => node.dataset.homeWidgetId));
 const openLibrary = async (type) => {
-  await home.getByRole("button", { name: "添加组件", exact: true }).click();
+  await addComponent.click();
   if (type === "info" || type === "announcement")
     await library
       .getByRole("tab", {
@@ -98,12 +112,19 @@ try {
   await expect(page.locator("html")).not.toHaveAttribute("data-startup");
   await expect(rows).toHaveCount(3);
   await expect(home.locator(".notice-toggle")).toHaveCount(3);
+  await expect(toolbar.getByRole("button")).toHaveCount(1);
+  await expect(editLayout.locator(".lucide-columns2")).toBeVisible();
   const firstNews = home.locator(".notice-toggle").first();
   await firstNews.click();
   await expect(firstNews).toHaveAttribute("aria-expanded", "true");
   await page.evaluate(() => {
     window.__originalNews = document.querySelector(".notice-card");
   });
+  await editLayout.focus();
+  await page.keyboard.press("Enter");
+  await expect(finishEditing).toBeFocused();
+  await expect(addComponent).toBeVisible();
+  await expect(refreshNotices).toBeVisible();
   for (const type of ["player", "links", "version"]) await addFixed(type);
   await openLibrary("notices");
   await expect(library.getByRole("textbox")).toHaveCount(0);
@@ -201,6 +222,12 @@ try {
   for (const type of ["info", "announcement"])
     for (let i = 0; i < 2; i++)
       await addCustom(type, `${type === "info" ? "冒险清单" : "自定义公告"}`);
+  await finishEditing.click();
+  await expect(toolbar.getByRole("button")).toHaveCount(1);
+  await expect(editLayout).toBeFocused();
+  checks.push(
+    "普通模式仅显示双栏布局按钮，键盘进入编辑后显示添加组件与刷新公告，关闭组件库后继续编辑，完成编辑后恢复单按钮。",
+  );
   await expect(rows).toHaveCount(10);
   await expect(typeRow("info")).toHaveCount(2);
   await expect(typeRow("announcement")).toHaveCount(2);
@@ -224,7 +251,8 @@ try {
     "opacity",
     "1",
   );
-  await home.getByRole("button", { name: "刷新公告", exact: true }).click();
+  await editLayout.click();
+  await refreshNotices.click();
   await expect(firstNews).toHaveAttribute("aria-expanded", "true");
   expect(
     await page.evaluate(
@@ -236,7 +264,6 @@ try {
   );
 
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await home.getByRole("button", { name: "编辑布局", exact: true }).click();
   await expect(home.locator(".home-widget-hide")).toHaveCount(10);
   const motion = await rows.evaluateAll(async (nodes) => {
     const samples = nodes.map(() => []);
@@ -287,7 +314,6 @@ try {
   await library.locator('[data-home-template="player"]').click();
   await expect(library).toHaveCount(0);
   expect((await stored()).widgets).toEqual(beforeHide.widgets);
-  await home.getByRole("button", { name: "编辑布局", exact: true }).click();
   await rows.last().focus();
   const beforeReorder = await ids();
   await page.keyboard.press("Alt+ArrowUp");
@@ -355,8 +381,7 @@ try {
   checks.push(
     "每条新闻是独立布局元素，能与其他卡片交错排序；只隐藏指定新闻，其他新闻保留展开状态，单条恢复保留 ID 和位置。",
   );
-  await home.getByRole("button", { name: "编辑布局", exact: true }).click();
-  await home.getByRole("button", { name: "完成编辑", exact: true }).click();
+  await finishEditing.click();
   await expect(home.locator(".home-widget-hide")).toHaveCount(0);
   await expect(rows.first().locator(".home-widget-motion")).toHaveCSS(
     "animation-name",
@@ -374,7 +399,7 @@ try {
     .locator(".sidebar")
     .getByRole("button", { name: "开始游戏", exact: true })
     .click();
-  await home.getByRole("button", { name: "编辑布局", exact: true }).click();
+  await editLayout.click();
   await typeRow("version")
     .getByRole("button", { name: "管理版本", exact: true })
     .click({ force: true });
@@ -403,6 +428,7 @@ try {
   await page.evaluate(() => {
     window.__homeContentTest.fail = true;
   });
+  await editLayout.click();
   await openLibrary("info");
   await library
     .getByRole("button", { name: "添加到首页", exact: true })
@@ -446,7 +472,6 @@ try {
   await page.evaluate(() => {
     window.__homeContentTest.fail = true;
   });
-  await home.getByRole("button", { name: "编辑布局", exact: true }).click();
   await typeRow("player")
     .getByRole("button", { name: "隐藏：角色卡片", exact: true })
     .click({ force: true });
@@ -455,24 +480,27 @@ try {
   await page.evaluate(() => {
     window.__homeContentTest.fail = false;
   });
-  await home.getByRole("button", { name: "完成编辑", exact: true }).click();
+  await finishEditing.click();
   checks.push(
     "内容必填校验、保存失败保留草稿和原布局、慢保存时禁用关闭并拦截重复提交、隐藏失败恢复原卡片。",
   );
 
   await page.reload();
   await expect(rows).toHaveCount(11);
+  await editLayout.click();
 
   for (const type of ["info", "announcement"]) {
     const beforeCustomHide = await stored();
-    await home.getByRole("button", { name: "编辑布局", exact: true }).click();
-    await typeRow(type)
+    const cards = typeRow(type);
+    const count = await cards.count();
+    await cards
       .first()
       .getByRole("button", {
         name: type === "info" ? "隐藏：冒险清单" : "隐藏：自定义公告",
         exact: true,
       })
-      .click({ force: true });
+      .press("Enter");
+    await expect(cards).toHaveCount(count - 1);
     await openLibrary(type);
     await expect(
       library.locator(".home-library-restores .home-hidden-row"),
@@ -482,6 +510,7 @@ try {
       library.locator(".home-library-restores .home-hidden-row"),
     ).toHaveCount(0);
     await library.getByRole("button", { name: "关闭对话框" }).click();
+    await expect(library).toHaveCount(0);
     expect(await stored()).toEqual(beforeCustomHide);
   }
   checks.push(
@@ -535,10 +564,11 @@ try {
       accent: "forest",
     }),
   );
+  await finishEditing.click();
   await page.screenshot({ path: `${evidence}/implemented-home.png` });
-  await home.getByRole("button", { name: "编辑布局", exact: true }).click();
+  await editLayout.click();
   await page.screenshot({ path: `${evidence}/independent-news-editing.png` });
-  await home.getByRole("button", { name: "完成编辑", exact: true }).click();
+  await finishEditing.click();
   await rows.last().scrollIntoViewIfNeeded();
   const last = await rows
       .last()
@@ -591,6 +621,7 @@ try {
     ]);
   await expect(typeRow("info")).toContainText("原笔记正文");
   await expect(typeRow("info")).toContainText("原备注");
+  await editLayout.click();
   await openLibrary("notices");
   await library
     .getByRole("button", { name: "恢复资讯：原新闻 2", exact: true })
@@ -611,17 +642,14 @@ try {
   );
   await page.reload();
   await expect(home.getByRole("alert")).toContainText("读取首页组件失败");
-  await expect(
-    home.getByRole("button", { name: "添加组件", exact: true }),
-  ).toBeDisabled();
+  await expect(editLayout).toBeDisabled();
+  await expect(addComponent).toHaveCount(0);
   expect(
     await page.evaluate(() => localStorage.getItem("pixel-home-content")),
   ).toBe("damaged config");
   await page.evaluate(() => localStorage.removeItem("pixel-home-content"));
   await home.getByRole("button", { name: "重试", exact: true }).click();
-  await expect(
-    home.getByRole("button", { name: "添加组件", exact: true }),
-  ).toBeEnabled();
+  await expect(editLayout).toBeEnabled();
   await page.goto(`${url}?clean=on`);
   await expect(home.locator(".home-widget-list")).toHaveCount(0);
   await expect(page.locator(".launch-dock")).toBeVisible();
