@@ -1759,9 +1759,13 @@
   padding: 10px 14px 10px 0;
 }
 .local-resource-actions > .button {
+  --surface-depth: 0px;
   min-width: 32px;
   min-height: 32px;
   padding: 0;
+}
+.local-resource-actions > .button > .surface-frame {
+  display: none;
 }
 .local-resources .resource-row.local-mod-row {
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1777,11 +1781,50 @@
   justify-self: end;
   text-align: right;
 }
-.local-mod-row .local-resource-actions > .button {
-  --surface-depth: 0px;
+.local-mod-row {
+  user-select: none;
+  -webkit-touch-callout: none;
 }
-.local-mod-row .local-resource-actions > .button > .surface-frame {
-  display: none;
+.local-mod-batch-mode {
+  padding-bottom: 44px;
+}
+.local-mod-row[data-selected] {
+  cursor: pointer;
+}
+.local-mod-row[data-selected="true"] {
+  --surface-fill: color-mix(in srgb, var(--panel), var(--accent) 12%);
+  --surface-edge: var(--accent);
+}
+.local-mod-batch-toolbar.panel {
+  --surface-fill: var(--panel);
+  position: fixed;
+  z-index: 20;
+  right: var(--workspace-gutter);
+  bottom: calc(var(--footer-status-height) + 14px);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 2 * var(--workspace-gutter));
+  margin: 0;
+  padding: 3px 5px;
+  white-space: nowrap;
+}
+.local-mod-batch-toolbar > [role="status"] {
+  padding: 0 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.local-mod-batch-toolbar > .icon-button {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.local-mod-batch-toolbar > button.icon-button:disabled {
+  opacity: 0.46;
+}
+.app:has(.local-mod-batch-toolbar) .notification-deck {
+  --notification-bottom: 94px;
 }
 .resource-source {
   --channel-color: var(--surface-success);

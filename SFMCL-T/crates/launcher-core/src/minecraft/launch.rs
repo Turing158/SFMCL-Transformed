@@ -8,6 +8,7 @@ use super::{
 use crate::{
     jobs::{self, Job, JobKind, LaunchContext},
     paths::safe_join,
+    resources::mod_check,
 };
 use anyhow::{bail, Context, Result};
 use std::sync::Arc;
@@ -115,6 +116,7 @@ impl Installer {
                 if error
                     .downcast_ref::<super::commands::CommandFailure>()
                     .is_none()
+                    && error.downcast_ref::<mod_check::Issues>().is_none()
                 {
                     super::crash::startup_failure(
                         installer.settings.directory(),
@@ -139,6 +141,7 @@ impl Installer {
     ) -> Result<()> {
         job.step(0, "解析版本与兼容 Java");
         let version = versions::resolve(root, id)?;
+        let directory = versions::game_directory(root, id, settings.isolation)?;
         if settings.offline_lan {
             super::offline_lan::validate_version(&version)?;
         }
@@ -156,11 +159,12 @@ impl Installer {
             running: false,
         });
         // Reject an unsupported or missing direct-entry target before downloads begin.
-        super::quick_play::arguments(
-            &version,
-            &settings,
-            &versions::game_directory(root, id, settings.isolation)?,
-        )?;
+        super::quick_play::arguments(&version, &settings, &directory)?;
+        if !settings.pre_launch_command.enabled {
+            job.step(0, "检查已启用模组");
+            mod_check::check(directory.clone(), version.clone(), settings.isolation).await?;
+            job.step(0, "解析版本与兼容 Java");
+        }
         let java = java::select(
             &settings.java_path,
             &settings.java_paths,
@@ -213,7 +217,6 @@ impl Installer {
             // directly to Command (never through a shell).
             args.insert(0, argument);
         }
-        let directory = versions::game_directory(root, id, settings.isolation)?;
         std::fs::create_dir_all(&directory)?;
         if job.cancel.is_cancelled() {
             bail!(job.cancellation_message());
@@ -232,6 +235,10 @@ impl Installer {
             &job.cancel,
         )
         .await?;
+        if settings.pre_launch_command.enabled && !job.cancel.is_cancelled() {
+            job.log("检查启动前命令执行后的模组".into());
+            mod_check::check(directory.clone(), version, settings.isolation).await?;
+        }
         if job.cancel.is_cancelled() {
             bail!(job.cancellation_message());
         }
@@ -276,6 +283,86 @@ mod tests {
         jobs::Jobs,
     };
     use std::{fs::OpenOptions, time::Duration};
+
+    #[tokio::test]
+    async fn mod_preflight_uses_the_isolated_directory_and_blocks_before_downloads() {
+        use std::io::Write;
+        let temp = tempfile::tempdir().unwrap();
+        let settings = Arc::new(ConfigStore::open(&temp.path().join("config")).unwrap());
+        settings
+            .update(|settings| {
+                settings.active_dir = temp.path().join("game").to_string_lossy().into_owned();
+                settings.isolation = true;
+                settings.game_dirs = vec![GameDirectory {
+                    name: "test".into(),
+                    path: settings.active_dir.clone(),
+                }];
+            })
+            .unwrap();
+        let root = settings.get().active_game_root().unwrap();
+        let version = root.join("versions/test");
+        std::fs::create_dir_all(version.join("mods")).unwrap();
+        std::fs::write(
+            version.join("test.json"),
+            br#"{"id":"test","libraries":[{"name":"net.fabricmc:fabric-loader:0.16.9"}]}"#,
+        )
+        .unwrap();
+        let mut archive = zip::ZipWriter::new(
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(version.join("mods/ui.jar"))
+                .unwrap(),
+        );
+        archive
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive
+            .write_all(br#"{"id":"ui","depends":{"missing_library":"*"}}"#)
+            .unwrap();
+        archive.finish().unwrap();
+
+        let installer = Arc::new(Installer {
+            settings,
+            downloads: DownloadManager::open(&temp.path().join("downloads"), 2).unwrap(),
+            jobs: Arc::new(Jobs::default()),
+            client: reqwest::Client::new(),
+        });
+        let id = installer
+            .launch(
+                "test".into(),
+                LaunchIdentity {
+                    name: "Alex".into(),
+                    uuid: "test-player".into(),
+                    access_token: String::new(),
+                    online: false,
+                    auth_server: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(crate::resources::install::mod_edit_guard(&version, &installer.jobs).is_err());
+        let job = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if let Some(job) = installer
+                    .jobs
+                    .snapshots()
+                    .into_iter()
+                    .find(|job| job.id == id && job.status.terminal())
+                {
+                    break job;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(job.status, Status::Failed);
+        assert_eq!(job.current_step, 0);
+        assert!(job.error.unwrap().contains("ui.jar 需要 missing_library"));
+        assert!(installer.downloads.snapshots().await.is_empty());
+        assert!(crate::resources::install::mod_edit_guard(&version, &installer.jobs).is_ok());
+    }
 
     #[tokio::test]
     async fn same_version_launches_have_independent_jobs_and_share_deletion_guard() {

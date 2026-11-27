@@ -802,13 +802,26 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
         }
         "resources.toggle" => {
             let root = r.resource_root(&p)?;
-            let _guard = sfmcl_t_core::resources::install::launch_guard(&root)?;
+            let _guard = sfmcl_t_core::resources::install::mod_edit_guard(&root, &r.jobs)?;
             let path = PathBuf::from(text(&p, "path")?);
             Ok(json!(local::toggle_mod(
                 &root,
                 &path.strip_prefix(&root)?.to_string_lossy(),
                 p["disabled"].as_bool().unwrap_or(false)
             )?))
+        }
+        "resources.batchMods" => {
+            let root = r.resource_root(&p)?;
+            let action = decode(p["action"].clone())?;
+            let paths = decode(p["paths"].clone())?;
+            let guard = sfmcl_t_core::resources::install::mod_edit_guard(&root, &r.jobs)?;
+            Ok(json!(
+                tokio::task::spawn_blocking(move || {
+                    let _guard = guard;
+                    local::batch_mods(&root, paths, action)
+                })
+                .await?
+            ))
         }
         "resources.deletePack" => {
             let root = r.resource_root(&p)?;

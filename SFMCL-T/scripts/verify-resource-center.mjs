@@ -1073,6 +1073,22 @@ try {
   expect(await last("resources.local")).toMatchObject({
     versionId: "1.20.1-Fabric",
   });
+  const localRowButtons = page.locator(".local-resource-actions > button");
+  for (const [tab, count] of [
+    [/^材质包/, 2],
+    [/^光影/, 1],
+    [/^存档/, 1],
+    [/^模组/, 2],
+  ]) {
+    await page.getByRole("tab", { name: tab }).click();
+    await expect(localRowButtons).toHaveCount(count);
+    for (const action of await localRowButtons.all()) {
+      await expect(action).toBeVisible();
+      await expect(action).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(action).toHaveCSS("border-top-width", "0px");
+      await expect(action.locator(":scope > .surface-frame")).toBeHidden();
+    }
+  }
   await page
     .getByRole("button", { name: "禁用 1.20.1-Fabric Sodium", exact: true })
     .click();

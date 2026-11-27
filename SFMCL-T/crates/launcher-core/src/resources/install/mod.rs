@@ -202,6 +202,20 @@ pub fn launch_guard(game: &Path) -> Result<std::fs::File> {
     transaction::lock(game).context("模组及前置正在安装，请等待安装结束后启动游戏")
 }
 
+pub fn mod_edit_guard(game: &Path, jobs: &Jobs) -> Result<std::fs::File> {
+    let guard = transaction::lock(game)?;
+    if jobs.snapshots().iter().any(|snapshot| {
+        snapshot
+            .launch
+            .as_ref()
+            .is_some_and(|launch| !launch.running)
+            && launch_uses_game(snapshot, game)
+    }) {
+        bail!("此游戏目录正在启动，请等待启动完成后再修改模组");
+    }
+    Ok(guard)
+}
+
 fn launch_uses_game(snapshot: &crate::jobs::JobSnapshot, game: &Path) -> bool {
     let Some(launch) = &snapshot.launch else {
         return false;

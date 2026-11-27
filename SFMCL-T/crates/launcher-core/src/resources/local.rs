@@ -66,7 +66,10 @@ fn image(bytes: &[u8]) -> String {
         base64::engine::general_purpose::STANDARD.encode(bytes)
     )
 }
-fn read_entry(zip: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Result<Vec<u8>> {
+pub(super) fn read_entry<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
+    name: &str,
+) -> Result<Vec<u8>> {
     let mut entry = zip.by_name(name)?;
     if entry.size() > METADATA_LIMIT {
         bail!("资源元数据超过 4 MB");
@@ -177,7 +180,11 @@ pub fn scan(root: &Path, kind: &str) -> Result<Vec<LocalResource>> {
         if kind == "world" && (!is_directory || !path.join("level.dat").is_file()) {
             continue;
         }
+        if kind == "mod" && !is_mod_archive(&path) {
+            continue;
+        }
         if kind != "world"
+            && kind != "mod"
             && !is_directory
             && !path.extension().is_some_and(|e| {
                 ["jar", "zip", "litemod", "disabled"]
@@ -215,8 +222,7 @@ pub fn scan(root: &Path, kind: &str) -> Result<Vec<LocalResource>> {
             version: String::new(),
             authors: String::new(),
             icon: String::new(),
-            disabled: kind == "mod"
-                && (disabled || path.extension().is_some_and(|e| e == "disabled")),
+            disabled: kind == "mod" && (disabled || has_disabled_suffix(&path)),
             size: if is_directory {
                 // Directory sizes are requested separately after the list is visible.
                 None
@@ -482,31 +488,116 @@ fn read_world(path: &Path, resource: &mut LocalResource) -> Result<()> {
     }
     Ok(())
 }
-pub fn toggle_mod(root: &Path, relative: &str, disabled: bool) -> Result<PathBuf> {
+pub(super) fn has_disabled_suffix(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("disabled"))
+}
+
+pub(super) fn is_mod_archive(path: &Path) -> bool {
+    let archive = if has_disabled_suffix(path) {
+        Path::new(path.file_stem().unwrap_or_default())
+    } else {
+        path
+    };
+    archive.extension().is_some_and(|extension| {
+        ["jar", "zip", "litemod"]
+            .iter()
+            .any(|suffix| extension.eq_ignore_ascii_case(suffix))
+    })
+}
+
+fn mod_file(root: &Path, relative: &Path) -> Result<PathBuf> {
     let path = safe_join(root, relative)?;
     let mods = root.join("mods");
-    if !path.starts_with(&mods) || !path.is_file() {
+    if !matches!(path.parent(), Some(parent) if parent == mods || parent == mods.join(".disabled"))
+        || !is_mod_archive(&path)
+        || !std::fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.is_file())
+    {
         bail!("不是所选游戏中的模组文件");
     }
-    let file = path
-        .file_name()
-        .context("模组文件名为空")?
-        .to_string_lossy();
-    let target = if disabled {
-        safe_join(root, format!("mods/.disabled/{file}"))?
-    } else {
-        safe_join(root, format!("mods/{}", file.trim_end_matches(".disabled")))?
-    };
-    if path == target {
-        return Ok(target);
+    Ok(path)
+}
+
+fn set_mod_disabled(root: &Path, path: PathBuf, disabled: bool) -> Result<PathBuf> {
+    let suffixed = has_disabled_suffix(&path);
+    let in_disabled_folder = path.parent() == Some(root.join("mods/.disabled").as_path());
+    if disabled == (suffixed || in_disabled_folder) {
+        return Ok(path);
     }
-    if target.exists() {
+    let file = if suffixed {
+        path.file_stem()
+    } else {
+        path.file_name()
+    }
+    .context("模组文件名为空")?;
+    let target = if disabled {
+        safe_join(root, Path::new("mods/.disabled").join(file))?
+    } else {
+        safe_join(root, Path::new("mods").join(file))?
+    };
+    if target.try_exists()? {
         bail!("目标位置已有同名模组");
     }
     std::fs::create_dir_all(target.parent().unwrap())?;
     std::fs::rename(path, &target)?;
     Ok(target)
 }
+
+pub fn toggle_mod(root: &Path, relative: &str, disabled: bool) -> Result<PathBuf> {
+    set_mod_disabled(root, mod_file(root, Path::new(relative))?, disabled)
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ModBatchAction {
+    Enable,
+    Disable,
+    Delete,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModBatchResult {
+    path: PathBuf,
+    renamed_to: Option<PathBuf>,
+    error: Option<String>,
+}
+
+/// Each file is independent. Return every outcome so a retry can target only failures.
+pub fn batch_mods(root: &Path, paths: Vec<PathBuf>, action: ModBatchAction) -> Vec<ModBatchResult> {
+    let mut seen = std::collections::HashSet::new();
+    paths
+        .into_iter()
+        .filter(|path| seen.insert(path.clone()))
+        .map(|path| {
+            let result = (|| -> Result<Option<PathBuf>> {
+                let relative = path.strip_prefix(root).context("模组不在所选游戏目录中")?;
+                let file = mod_file(root, relative)?;
+                match action {
+                    ModBatchAction::Enable => set_mod_disabled(root, file, false).map(Some),
+                    ModBatchAction::Disable => set_mod_disabled(root, file, true).map(Some),
+                    ModBatchAction::Delete => {
+                        std::fs::remove_file(file)?;
+                        Ok(None)
+                    }
+                }
+            })();
+            match result {
+                Ok(renamed_to) => ModBatchResult {
+                    path,
+                    renamed_to,
+                    error: None,
+                },
+                Err(error) => ModBatchResult {
+                    path,
+                    renamed_to: None,
+                    error: Some(format!("{error:#}")),
+                },
+            }
+        })
+        .collect()
+}
+
 pub fn delete_pack(root: &Path, relative: &str) -> Result<()> {
     let path = safe_join(root, relative)?;
     if path.parent() != Some(root.join("resourcepacks").as_path()) {

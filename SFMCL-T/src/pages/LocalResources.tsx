@@ -1,5 +1,6 @@
 import { useSessionState } from "../windowSession";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { HTMLAttributes, PointerEvent } from "react";
 import {
   AlertTriangle,
   Box,
@@ -74,6 +75,14 @@ type ListedResource = LocalResource & {
   listKey: string;
   sizePending?: boolean;
 };
+type ModBatchAction = "enable" | "disable" | "delete";
+type ModBatchResult = {
+  path: string;
+  renamedTo: string | null;
+  error: string | null;
+};
+const batchLabels = { enable: "启用", disable: "禁用", delete: "删除" };
+const modHoldDuration = 500;
 
 export function LocalResources({
   version,
@@ -109,6 +118,19 @@ export function LocalResources({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
+  const [selectedMods, setSelectedMods] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [batchPending, setBatchPending] = useState(false);
+  const batchInFlight = useRef(false);
+  const press = useRef<{
+    timer: number;
+    pointer: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const consumedClick = useRef<string | null>(null);
+  const batchToolbar = useRef<HTMLDivElement>(null);
   const rootElement = useRef<HTMLElement>(null);
   const previousDetail = useRef(detail);
   const returnPosition = useRef<{
@@ -134,8 +156,186 @@ export function LocalResources({
       )?.id,
   );
   const folder = `${root}/${selectedKind.folder}`;
+  const targetKey = JSON.stringify([version.id, root, version.directory]);
+  const currentTarget = useRef(targetKey);
+  const selectingMods =
+    pageActive &&
+    kind === "mod" &&
+    !detail &&
+    !loading &&
+    selectedMods.size > 0;
+  const selectedItems = (resources.mod || []).filter((item) =>
+    selectedMods.has(item.path),
+  );
+  const enabledCount = selectedItems.filter((item) => !item.disabled).length;
+  const disabledCount = selectedItems.length - enabledCount;
   const compact = kind === "resourcepack" || kind === "world";
   const refresh = () => setRevision((current) => current + 1);
+
+  function cancelPress(pointer?: number) {
+    const active = press.current;
+    if (!active || (pointer !== undefined && active.pointer !== pointer))
+      return;
+    window.clearTimeout(active.timer);
+    press.current = null;
+  }
+
+  useLayoutEffect(() => {
+    currentTarget.current = targetKey;
+    setSelectedMods((current) => (current.size ? new Set() : current));
+    consumedClick.current = null;
+    return () => cancelPress();
+  }, [targetKey, kind, pageActive, detail?.path, revision, lastUpdate]);
+
+  function changeModSelection(path: string) {
+    setSelectedMods((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
+  function startModPress(
+    event: PointerEvent<HTMLElement>,
+    item: ListedResource,
+  ) {
+    if (!event.isPrimary || event.button !== 0) return;
+    cancelPress();
+    consumedClick.current = null;
+    if (selectingMods || app.busy || batchInFlight.current) return;
+    const row = event.currentTarget;
+    press.current = {
+      pointer: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      timer: window.setTimeout(() => {
+        press.current = null;
+        consumedClick.current = item.path;
+        row.querySelector<HTMLButtonElement>(".local-resource-title")?.focus({
+          preventScroll: true,
+        });
+        setSelectedMods(new Set([item.path]));
+      }, modHoldDuration),
+    };
+  }
+
+  function clearModSelection() {
+    if (batchToolbar.current?.contains(document.activeElement)) {
+      const list = rootElement.current;
+      const row =
+        list?.querySelector<HTMLButtonElement>(
+          "[data-selected='true'] .local-resource-title",
+        ) ??
+        list?.querySelector<HTMLButtonElement>(
+          ".local-mod-row .local-resource-title",
+        );
+      row?.focus({ preventScroll: true });
+    }
+    setSelectedMods(new Set());
+  }
+
+  function modRowEvents(item: ListedResource): HTMLAttributes<HTMLElement> {
+    const stopPress = (event: PointerEvent<HTMLElement>) =>
+      cancelPress(event.pointerId);
+    return {
+      onPointerDown: (event) => startModPress(event, item),
+      onPointerMove: (event) => {
+        const active = press.current;
+        if (
+          active?.pointer === event.pointerId &&
+          Math.hypot(event.clientX - active.x, event.clientY - active.y) > 8
+        )
+          stopPress(event);
+      },
+      onPointerUp: stopPress,
+      onPointerCancel: stopPress,
+      onPointerLeave: stopPress,
+      onContextMenu: (event) => {
+        if (press.current || consumedClick.current === item.path)
+          event.preventDefault();
+      },
+      onDragStart: (event) => event.preventDefault(),
+      onClickCapture: (event) => {
+        const held = event.detail > 0 && consumedClick.current === item.path;
+        if (!held && !selectingMods) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (held) consumedClick.current = null;
+        else if (!batchInFlight.current && !app.busy)
+          changeModSelection(item.path);
+      },
+    };
+  }
+
+  async function runModBatch(action: ModBatchAction) {
+    if (batchInFlight.current || app.busy) return;
+    const targets = selectedItems.filter(
+      (item) => action === "delete" || item.disabled === (action === "enable"),
+    );
+    if (!targets.length) return;
+    batchInFlight.current = true;
+    setBatchPending(true);
+    try {
+      if (
+        action === "delete" &&
+        !(await confirmAction(
+          `永久删除所选的 ${targets.length} 个模组？${isolation ? "" : "此操作也会影响共用该模组目录的游戏版本。"}`,
+        ))
+      )
+        return;
+      const results = await app.run(() =>
+        api<ModBatchResult[]>("resources.batchMods", {
+          versionId: version.id,
+          directory: version.directory,
+          action,
+          paths: targets.map((item) => item.path),
+        }),
+      );
+      if (!results || currentTarget.current !== targetKey) return;
+      const byPath = new Map(results.map((result) => [result.path, result]));
+      setResources((current) => ({
+        ...current,
+        mod: (current.mod || []).flatMap((item) => {
+          const result = byPath.get(item.path);
+          if (!result || result.error) return [item];
+          if (action === "delete") return [];
+          return [
+            {
+              ...item,
+              path: result.renamedTo ?? item.path,
+              disabled: action === "disable",
+            },
+          ];
+        }),
+      }));
+      const failed = results.filter((result) => result.error);
+      const succeeded = results.length - failed.length;
+      if (failed.length) {
+        const failedPaths = new Set(failed.map((result) => result.path));
+        setSelectedMods(
+          (current) =>
+            new Set([...current].filter((path) => failedPaths.has(path))),
+        );
+        app.reportError(
+          [
+            `${batchLabels[action]}完成 ${succeeded} 个，失败 ${failed.length} 个。`,
+            ...failed.map(
+              (result) =>
+                `${result.path.split(/[/\\]/).at(-1)}：${result.error}`,
+            ),
+          ].join("\n"),
+        );
+      } else {
+        clearModSelection();
+        app.notify(`已${batchLabels[action]} ${succeeded} 个模组`);
+      }
+    } finally {
+      batchInFlight.current = false;
+      setBatchPending(false);
+    }
+  }
+
   const openDetail = (resource: LocalResource, trigger: HTMLButtonElement) => {
     returnPosition.current = {
       scrollTop:
@@ -297,8 +497,22 @@ export function LocalResources({
       ref={rootElement}
       className="local-resources"
       aria-label="本地资源"
+      onKeyDown={(event) => {
+        if (
+          event.defaultPrevented ||
+          event.key !== "Escape" ||
+          !selectingMods ||
+          batchInFlight.current
+        )
+          return;
+        event.preventDefault();
+        clearModSelection();
+      }}
     >
-      <div hidden={!!detail}>
+      <div
+        hidden={!!detail}
+        className={selectingMods ? "local-mod-batch-mode" : undefined}
+      >
         <header className="local-resources-header">
           <Select
             className="local-version-select"
@@ -380,6 +594,10 @@ export function LocalResources({
                     <article
                       className={`catalog-project has-surface resource-row local ${compact ? "local-compact-row" : ""} ${kind === "mod" ? "local-mod-row" : ""} ${kind === "shader" ? "local-shader-row" : item.disabled ? "disabled-resource" : ""}`}
                       key={item.listKey}
+                      data-selected={
+                        selectingMods ? selectedMods.has(item.path) : undefined
+                      }
+                      {...(kind === "mod" ? modRowEvents(item) : {})}
                     >
                       <PixelFrame />
                       {kind === "shader" ? (
@@ -424,7 +642,42 @@ export function LocalResources({
                         <button
                           type="button"
                           className="catalog-project-info local-resource-title"
-                          aria-label={`${localResourceTitle(item)} 详情`}
+                          aria-label={
+                            selectingMods
+                              ? localResourceTitle(item)
+                              : `${localResourceTitle(item)} 详情`
+                          }
+                          aria-pressed={
+                            selectingMods
+                              ? selectedMods.has(item.path)
+                              : undefined
+                          }
+                          aria-keyshortcuts={
+                            kind === "mod" && !selectingMods
+                              ? "Shift+Space"
+                              : undefined
+                          }
+                          data-tooltip={
+                            kind === "mod" && !selectingMods
+                              ? "长按进入多选"
+                              : undefined
+                          }
+                          onKeyDown={
+                            kind === "mod"
+                              ? (event) => {
+                                  if (
+                                    !event.shiftKey ||
+                                    event.code !== "Space" ||
+                                    selectingMods ||
+                                    app.busy
+                                  )
+                                    return;
+                                  event.preventDefault();
+                                  if (!event.repeat)
+                                    changeModSelection(item.path);
+                                }
+                              : undefined
+                          }
                           onClick={(event) =>
                             openDetail(item, event.currentTarget)
                           }
@@ -433,16 +686,18 @@ export function LocalResources({
                         </button>
                       )}
                       <div className="row-actions local-resource-actions">
-                        <Button
-                          aria-label={`打开 ${localResourceTitle(item)} 所在目录`}
-                          data-tooltip="打开所在目录"
-                          onClick={() =>
-                            void app.run(() => openLocalResource(item))
-                          }
-                        >
-                          <FolderOpen size={17} />
-                        </Button>
-                        {kind === "mod" && (
+                        {!selectingMods && (
+                          <Button
+                            aria-label={`打开 ${localResourceTitle(item)} 所在目录`}
+                            data-tooltip="打开所在目录"
+                            onClick={() =>
+                              void app.run(() => openLocalResource(item))
+                            }
+                          >
+                            <FolderOpen size={17} />
+                          </Button>
+                        )}
+                        {kind === "mod" && !selectingMods && (
                           <Button
                             disabled={app.busy}
                             aria-label={`${item.disabled ? "启用" : "禁用"} ${resourceName(item.name, item.localizedName)}`}
@@ -575,6 +830,62 @@ export function LocalResources({
             )}
           </LoadingState>
         </TabPanel>
+        {selectingMods && (
+          <div
+            ref={batchToolbar}
+            className="local-mod-batch-toolbar panel has-surface"
+            role="group"
+            aria-label="模组批量操作"
+            aria-busy={batchPending}
+          >
+            <PixelFrame />
+            <span role="status">已选 {selectedMods.size} 项</span>
+            {!!disabledCount && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="启用"
+                disabled={batchPending || app.busy}
+                data-tooltip={`启用 ${disabledCount} 个已选模组`}
+                onClick={() => void runModBatch("enable")}
+              >
+                <CirclePause size={16} aria-hidden="true" />
+              </button>
+            )}
+            {!!enabledCount && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="禁用"
+                disabled={batchPending || app.busy}
+                data-tooltip={`禁用 ${enabledCount} 个已选模组`}
+                onClick={() => void runModBatch("disable")}
+              >
+                <Power size={16} aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              className="icon-button danger-text"
+              aria-label="删除"
+              data-tooltip="删除所选模组"
+              disabled={batchPending || app.busy}
+              onClick={() => void runModBatch("delete")}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="退出多选"
+              data-tooltip="退出多选"
+              disabled={batchPending}
+              onClick={clearModSelection}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
       {detail && (
         <LocalResourcePage
