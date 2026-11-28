@@ -62,6 +62,13 @@ fn multiplayer_component(url: &str) -> Option<Url> {
         ["x86_64", "i686"]
             .iter()
             .any(|arch| filename == format!("easytier-windows-{arch}-v{version}.zip"))
+    } else if let Some(filename) = official
+        .path()
+        .strip_prefix("/burningtnt/Terracotta/releases/download/v0.4.2/")
+    {
+        ["x86_64", "arm64"]
+            .iter()
+            .any(|arch| filename == format!("terracotta-0.4.2-windows-{arch}-pkg.tar.gz"))
     } else if let Some(release) = official
         .path()
         .strip_prefix("/cloudflare/cloudflared/releases/download/")

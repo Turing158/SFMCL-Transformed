@@ -8,8 +8,9 @@ export function useHomeScrollPadding(showContent: boolean) {
   useLayoutEffect(() => {
     const home = content.current;
     const page = home?.closest<HTMLElement>("main");
-    const card =
-      page?.parentElement?.querySelector<HTMLElement>(".launch-dock-main");
+    const card = page
+      ?.closest(".workspace")
+      ?.querySelector<HTMLElement>(".launch-dock-main");
     const dock = card?.closest<HTMLElement>(".launch-dock");
     const status = dock?.querySelector<HTMLElement>(".launch-status");
     if (

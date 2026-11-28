@@ -156,14 +156,17 @@ fn read_playtogether_api_url(path: &Path) -> Result<String> {
     struct Configuration {
         api_url: String,
     }
-    let plaintext = read_service_key(path).map_err(|_| anyhow::anyhow!("无法读取官方联机配置"))?;
+    let plaintext = read_service_key(path).map_err(|_| anyhow::anyhow!("无法读取SFMCL联机配置"))?;
     anyhow::ensure!(
         !plaintext.is_empty(),
-        "此启动器尚未配置官方联机，请联系维护者"
+        "此启动器尚未配置SFMCL联机，请联系维护者"
     );
     let configuration: Configuration =
-        serde_json::from_str(&plaintext).map_err(|_| anyhow::anyhow!("官方联机配置无效"))?;
-    anyhow::ensure!(!configuration.api_url.trim().is_empty(), "官方联机配置无效");
+        serde_json::from_str(&plaintext).map_err(|_| anyhow::anyhow!("SFMCL联机配置无效"))?;
+    anyhow::ensure!(
+        !configuration.api_url.trim().is_empty(),
+        "SFMCL联机配置无效"
+    );
     Ok(configuration.api_url.trim().to_owned())
 }
 

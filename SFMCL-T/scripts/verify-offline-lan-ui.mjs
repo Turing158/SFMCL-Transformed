@@ -295,11 +295,13 @@ try {
     ).height,
   ).toBe(36);
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.addInitScript(() => {
+    window.__pixelTest.data.settings.activeVersion = "";
+  });
   await page.reload();
   await nav("联机");
-  await expect(option()).not.toBeChecked();
-  await option().click();
-  await waitForAutoSave(page);
+  await page.getByRole("tab", { name: "SFMCL联机", exact: true }).click();
+  await expect(option()).toBeDisabled();
 
   const chooseVersion = async (id) => {
     await nav("版本管理");
@@ -311,6 +313,11 @@ try {
       .toBe(id);
     await nav("联机");
   };
+  await chooseVersion("1.21.4");
+  await expect(option()).toBeEnabled();
+  await expect(option()).not.toBeChecked();
+  await option().click();
+  await waitForAutoSave(page);
   const guide = () =>
     page.getByRole("button", { name: "离线联机", exact: true });
   for (const [id, loader, gameVersion] of [

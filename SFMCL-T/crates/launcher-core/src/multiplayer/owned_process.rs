@@ -105,6 +105,7 @@ impl OwnedProcess {
             executable.parent().context("组件目录无效")?,
             config.as_bytes(),
             false,
+            None,
         )
         .map(|(process, _)| process)
     }
@@ -112,8 +113,25 @@ impl OwnedProcess {
     /// Capture only the component's output, never room credentials. Creation
     /// and job assignment are atomic, just as for the EasyTier engine.
     pub fn spawn_logged(executable: &Path, args: &[&str], cwd: &Path) -> Result<(Self, File)> {
-        let (process, output) = Self::launch(executable, args, cwd, &[], true)?;
+        let (process, output) = Self::launch(executable, args, cwd, &[], true, None)?;
         Ok((process, output.context("无法读取隧道启动状态")?))
+    }
+
+    pub fn spawn_terracotta(
+        executable: &Path,
+        private_temp: &Path,
+        handshake: &Path,
+    ) -> Result<Self> {
+        let args = ["--hmcl", handshake.to_str().context("陶瓦握手路径无效")?];
+        Self::launch(
+            executable,
+            &args,
+            private_temp,
+            &[],
+            false,
+            Some(private_temp),
+        )
+        .map(|(process, _)| process)
     }
 
     fn launch(
@@ -122,6 +140,7 @@ impl OwnedProcess {
         cwd: &Path,
         input_bytes: &[u8],
         capture: bool,
+        private_temp: Option<&Path>,
     ) -> Result<(Self, Option<File>)> {
         let app = wide(executable);
         let arguments = std::iter::once(quote(&executable.to_string_lossy()))
@@ -134,11 +153,19 @@ impl OwnedProcess {
         let mut vars: Vec<_> = std::env::vars_os()
             .filter(|(key, _)| {
                 let key = key.to_string_lossy().to_ascii_uppercase();
+                if private_temp.is_some() && matches!(key.as_str(), "TMP" | "TEMP") {
+                    return false;
+                }
                 !["ET_", "TUNNEL_", "CLOUDFLARED_", "CF_"]
                     .iter()
                     .any(|prefix| key.starts_with(prefix))
             })
             .collect();
+        if let Some(path) = private_temp {
+            for name in ["TMP", "TEMP"] {
+                vars.push((name.into(), path.as_os_str().into()));
+            }
+        }
         vars.sort_by_key(|(key, _)| key.to_string_lossy().to_uppercase());
         for (key, value) in vars {
             environment.extend(key.encode_wide());
@@ -241,6 +268,74 @@ impl OwnedProcess {
     pub fn running(&self) -> bool {
         unsafe { WaitForSingleObject(self.process.as_raw_handle(), 0) == WAIT_TIMEOUT }
     }
+    pub fn job_running(&self) -> Result<bool> {
+        let mut info = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
+        unsafe {
+            checked(QueryInformationJobObject(
+                self.job.as_raw_handle(),
+                JobObjectBasicAccountingInformation,
+                (&mut info as *mut JOBOBJECT_BASIC_ACCOUNTING_INFORMATION).cast(),
+                std::mem::size_of_val(&info) as u32,
+                std::ptr::null_mut(),
+            ))?;
+        }
+        Ok(info.ActiveProcesses != 0)
+    }
+
+    pub fn owns_listener(&self, port: u16) -> Result<bool> {
+        use windows_sys::Win32::{NetworkManagement::IpHelper::*, Networking::WinSock::AF_INET};
+        // DWORD-aligned buffer for the variable-length Win32 table. Listener counts can
+        // change between calls, so resize on ERROR_INSUFFICIENT_BUFFER.
+        let mut table = vec![0u32; 128];
+        loop {
+            let mut size = (table.len() * 4) as u32;
+            let result = unsafe {
+                GetExtendedTcpTable(
+                    table.as_mut_ptr().cast(),
+                    &mut size,
+                    0,
+                    AF_INET.into(),
+                    TCP_TABLE_OWNER_PID_LISTENER,
+                    0,
+                )
+            };
+            if result == ERROR_INSUFFICIENT_BUFFER {
+                table.resize((size as usize).div_ceil(4), 0);
+                continue;
+            }
+            ensure!(result == NO_ERROR, "无法检查陶瓦控制端口归属");
+            let n = table[0] as usize;
+            ensure!(
+                n * std::mem::size_of::<MIB_TCPROW_OWNER_PID>() <= (table.len() - 1) * 4,
+                "控制端口表无效"
+            );
+            let rows = unsafe {
+                std::slice::from_raw_parts(table.as_ptr().add(1).cast::<MIB_TCPROW_OWNER_PID>(), n)
+            };
+            for row in rows {
+                if row.dwLocalAddr.to_ne_bytes() != [127, 0, 0, 1]
+                    || u16::from_be(row.dwLocalPort as u16) != port
+                {
+                    continue;
+                }
+                unsafe {
+                    let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, row.dwOwningPid);
+                    if handle.is_null() {
+                        return Ok(false);
+                    }
+                    let process = OwnedHandle::from_raw_handle(handle);
+                    let mut belongs = 0;
+                    checked(IsProcessInJob(
+                        process.as_raw_handle(),
+                        self.job.as_raw_handle(),
+                        &mut belongs,
+                    ))?;
+                    return Ok(belongs != 0);
+                }
+            }
+            return Ok(false);
+        }
+    }
     pub fn stop(&self) -> Result<()> {
         unsafe {
             checked(TerminateJobObject(self.job.as_raw_handle(), 0))?;
@@ -248,6 +343,11 @@ impl OwnedProcess {
                 WaitForSingleObject(self.process.as_raw_handle(), 10000) == WAIT_OBJECT_0,
                 "联机进程仍在退出，请稍后重试"
             );
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while self.job_running()? {
+            ensure!(std::time::Instant::now() < deadline, "联机工作进程仍在退出");
+            std::thread::sleep(std::time::Duration::from_millis(20));
         }
         Ok(())
     }

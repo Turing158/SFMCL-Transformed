@@ -110,7 +110,8 @@ try {
       })
       .click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("tab")).toHaveText(["下载到文件夹"]);
+    await expect(dialog.getByRole("tab")).toHaveText(["安装到存档", "下载到文件夹"]);
+    await dialog.getByRole("tab", { name: "下载到文件夹", exact: true }).click();
     await expect(dialog).toContainText("存档的 datapacks 文件夹");
     await expect(
       dialog.getByRole("button", { name: "开始下载", exact: true }),

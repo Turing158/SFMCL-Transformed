@@ -1,4 +1,5 @@
 import type {
+  DatapackBrowseTarget,
   LocalResource,
   ManifestVersion,
   Page,
@@ -54,6 +55,7 @@ export type ResourceNavigationEntry = {
   page: "resources";
   tab?: ResourceTab;
   resource?: ResourcePage;
+  datapackTarget?: DatapackBrowseTarget;
   returnTo?: PrimaryNavigationEntry;
   detail?: never;
 };
@@ -215,7 +217,7 @@ export function pagePath(entry: NavigationEntry): NavigationEntry[] {
     };
     return [...pagePath(parent), ...(entry.login ? [players] : []), entry];
   }
-  if (entry.page === "resources" && entry.resource)
+  if (entry.page === "resources" && (entry.resource || entry.returnTo))
     return [
       ...(entry.returnTo
         ? pagePath(entry.returnTo)

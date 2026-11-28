@@ -133,6 +133,10 @@ async fn wait_ready(manager: &Multiplayer, seconds: u64) {
     panic!("session not ready: {:?}", manager.snapshot().error);
 }
 
+#[cfg(windows)]
+#[path = "terracotta/native_tests.rs"]
+mod terracotta_native;
+
 fn manager(root: &std::path::Path) -> std::sync::Arc<Multiplayer> {
     Multiplayer::new(
         root.into(),
@@ -198,6 +202,11 @@ async fn minecraft_fixture() -> (u16, tokio::task::JoinHandle<()>) {
             tokio::spawn(async move {
                 let mut request = [0; 256];
                 if stream.read(&mut request).await.unwrap_or(0) == 0 {
+                    return;
+                }
+                // Terracotta periodically checks the legacy Minecraft server-list ping.
+                if request[0] == 0xfe {
+                    let _ = stream.write_all(&[0xff]).await;
                     return;
                 }
                 let json = br#"{"version":{"name":"1.21.4","protocol":769},"players":{"max":8,"online":1},"description":{"text":"fixture"}}"#;

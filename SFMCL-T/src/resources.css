@@ -1355,6 +1355,18 @@
   flex-direction: column;
   gap: 12px;
 }
+.datapack-world-selector {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  min-width: 0;
+}
+.datapack-world-selector > .button {
+  justify-self: start;
+}
+.datapack-world-selector .helper {
+  overflow-wrap: anywhere;
+}
 .resource-download-dependencies {
   display: flex;
   flex-direction: column;
@@ -1540,6 +1552,48 @@
   max-height: none;
   overflow: visible;
 }
+.world-datapacks {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  min-width: 0;
+  --surface-fill: var(--panel);
+}
+.world-datapacks-header,
+.world-datapack-row,
+.world-datapacks-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.world-datapacks-header,
+.world-datapack-row {
+  justify-content: space-between;
+}
+.world-datapacks-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.world-datapack-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.world-datapack-row {
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+}
+.world-datapack-row:last-child {
+  padding-bottom: 0;
+}
+.world-datapack-info {
+  display: grid;
+  flex: 1 1 180px;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 @property --resource-select-fill {
   syntax: "<color>";
   inherits: false;
@@ -1620,13 +1674,18 @@
 .local-resources-toolbar .tabs {
   margin: 0;
 }
-.local-resources-toolbar .search-field {
-  flex: 1 1 160px;
-}
-.local-resources-toolbar .local-resources-actions {
-  flex: 0 0 auto;
-  margin-left: auto;
+.local-resources-controls {
+  display: flex;
+  flex: 1 1 280px;
+  align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.local-resources-controls > .search-field {
+  flex: 1;
+}
+.local-resources-controls > .button {
+  flex: none;
 }
 .local-resources .resource-list {
   gap: 8px;

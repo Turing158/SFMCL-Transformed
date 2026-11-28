@@ -76,10 +76,9 @@ function ProjectDownloads({ count }: { count: number }) {
 export function Resources() {
   const app = useApp();
   const pageActive = usePageActive();
-  const tab =
-    app.route.page === "resources"
-      ? (app.route.tab ?? "minecraft")
-      : "minecraft";
+  const route = app.route.page === "resources" ? app.route : undefined;
+  const tab = route?.tab ?? "minecraft";
+  const datapackTarget = tab === "datapack" ? route?.datapackTarget : undefined;
   const isMinecraft = tab === "minecraft";
   const [filters, setFilters] = useSessionState(
     "Resources.filters",
@@ -141,7 +140,15 @@ export function Resources() {
       trigger: document.activeElement,
     };
     app.clearError();
-    app.navigate({ page: "resources", tab, resource });
+    app.navigate({
+      page: "resources",
+      tab,
+      resource:
+        datapackTarget && resource.kind === "project"
+          ? { ...resource, gameVersion: datapackTarget.version.version }
+          : resource,
+      ...(datapackTarget && route ? { datapackTarget, returnTo: route } : {}),
+    });
   };
   const backToList = () => app.openResources(tab);
   useLayoutEffect(() => {
@@ -735,6 +742,7 @@ export function Resources() {
             view={view}
             onViewChange={setView}
             initialTab={detail.initialTab}
+            datapackTarget={datapackTarget}
           />
         )}
       </TabPanel>

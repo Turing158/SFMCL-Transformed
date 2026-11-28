@@ -1,6 +1,7 @@
 import { useId } from "react";
 import {
   ArrowRight,
+  Blocks,
   Check,
   Copy,
   DoorOpen,
@@ -16,17 +17,25 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { Badge, Button, PixelFrame, TabList, TabPanel } from "../components";
+import {
+  Badge,
+  Button,
+  ErrorBanner,
+  PixelFrame,
+  TabList,
+  TabPanel,
+} from "../components";
 import { Input, Select, Textarea } from "../controls";
 import { PageHeader } from "../PageHeader";
 import { api, confirmAction, desktop, pick } from "../api";
 import { useApp } from "../store";
 import { useTasks } from "../tasks";
-import { useMultiplayer } from "../useMultiplayer";
+import { useMultiplayer, type MultiplayerService } from "../useMultiplayer";
 import { useTabContentTransition } from "../useTabContentTransition";
 import { getHostLaunch, getHostLaunches, getLaunchTask } from "../launchState";
 import { MultiplayerOfflineLan } from "./MultiplayerOfflineLan";
 import { MultiplayerInviteInput } from "./MultiplayerInviteInput";
+import { TerracottaOptions, hasTerracottaCode } from "./MultiplayerTerracotta";
 import "../multiplayer.css";
 
 const labels = {
@@ -39,6 +48,8 @@ const labels = {
   failed: "连接未完成",
 };
 const routes: Record<string, string> = {
+  host: "房主",
+  guest: "好友",
   local: "本机",
   direct: "直连",
   relay: "中继",
@@ -69,9 +80,6 @@ export function Multiplayer() {
   const hostLaunch = getHostLaunch(hostGames, mp.hostLaunchId);
   const hostContext = hosting ? hostLaunch?.launch : undefined;
   const usingHostGame = hosting && hostGames.length > 0;
-  const canCreate = usingHostGame
-    ? !!hostContext?.running
-    : !!version && !!player;
   const gameVersion = hostContext?.gameVersion || version?.version;
   const mismatch =
     !!gameVersion && !!s.gameVersion && gameVersion !== s.gameVersion;
@@ -79,18 +87,51 @@ export function Multiplayer() {
     mp.busy || mp.loading || mp.inspecting || !desktop || preparing;
   const service = s.service || mp.service;
   const official = service === "official";
-  const needsTunnel = !official && hosting && mp.connectionMode === "tunnel";
-  const componentsReady = s.componentReady && (!needsTunnel || s.tunnelReady);
+  const terracotta = service === "terracotta";
+  const custom = service === "custom";
+  const unsupported = terracotta && !!s.terracottaUnavailable;
+  const canCreate =
+    !locked &&
+    !unsupported &&
+    (terracotta || usingHostGame
+      ? !!hostContext?.running
+      : !!version && !!player);
+  const needsTunnel = custom && hosting && mp.connectionMode === "tunnel";
+  const componentsReady = terracotta
+    ? s.terracottaReady
+    : s.componentReady && (!needsTunnel || s.tunnelReady);
+  const componentName = terracotta ? "Terracotta" : "EasyTier";
+  const componentVersion = terracotta
+    ? s.terracottaVersion
+    : s.componentVersion;
+  const primaryReady = terracotta ? s.terracottaReady : s.componentReady;
+  const displayCode =
+    official && s.inviteCode ? formatOfficialCode(s.inviteCode) : s.inviteCode;
+  const scanning =
+    s.terracottaPhase === "host-scanning" && s.state === "waiting";
+  const phases: Record<string, string> = {
+    "host-scanning": "正在查找已对局域网开放的世界",
+    "host-starting": "正在创建陶瓦房间",
+    "guest-connecting": "正在查找房主",
+    "guest-starting": "正在连接房主世界",
+  };
+  const roomStatus =
+    (s.state !== "leaving" && phases[s.terracottaPhase ?? ""]) ||
+    labels[s.state];
   const showComponentNotice =
     !inSession &&
-    (mp.loading ||
+    (unsupported ||
+      mp.loading ||
       mp.statusUnavailable ||
       !componentsReady ||
       s.state !== "idle" ||
       !!s.sessionId);
-  const serviceContent = useTabContentTransition(official ? 0 : 1, !inSession);
+  const serviceContent = useTabContentTransition(
+    official ? 0 : terracotta ? 1 : 2,
+    !inSession,
+  );
   const roomContent = useTabContentTransition(hosting ? 0 : 1, !inSession);
-  const usingSharedNode = !official && mp.connectionMode === "shared";
+  const usingSharedNode = custom && mp.connectionMode === "shared";
   const hostVersion =
     hostContext &&
     app.versions.find(
@@ -147,6 +188,40 @@ export function Multiplayer() {
     );
     await app.refresh();
   }
+  const options = (
+    <TerracottaOptions
+      host={hosting}
+      disabled={locked}
+      room={mp.oldRoom}
+      setRoom={mp.setOldRoom}
+      nodes={mp.nodes}
+      setNodes={mp.setNodes}
+    />
+  );
+  function submitTerracotta() {
+    if (hosting ? !canCreate : locked || unsupported) return;
+    const code = hosting ? mp.oldRoom.trim() : mp.invitation.trim();
+    if ((!hosting || code) && !hasTerracottaCode(code)) {
+      app.reportError("陶瓦邀请码格式或校验位有误，请粘贴完整的 U/ 邀请码");
+      return;
+    }
+    const publicNodes = mp.nodes
+      .split(/\r?\n/)
+      .map((v) => v.trim())
+      .filter(Boolean);
+    void mp.action(
+      hosting ? "multiplayer.terracotta.create" : "multiplayer.terracotta.join",
+      {
+        ...(hosting
+          ? {
+              ...(code ? { room: code } : {}),
+              launchId: hostLaunch?.id,
+            }
+          : { invitation: code }),
+        publicNodes,
+      },
+    );
+  }
   const notice = (
     <section
       className="multiplayer-notice panel has-surface"
@@ -160,11 +235,13 @@ export function Multiplayer() {
             ? "读取联机状态…"
             : mp.statusUnavailable
               ? "联机状态暂不可用"
-              : s.state === "idle"
-                ? componentsReady
-                  ? "组件已就绪"
-                  : "需要准备组件"
-                : labels[s.state]}
+              : unsupported
+                ? s.terracottaUnavailable
+                : s.state === "idle"
+                  ? componentsReady
+                    ? "组件已就绪"
+                    : "需要准备组件"
+                  : labels[s.state]}
         </strong>
         {mp.loading && !mp.statusUnavailable && (
           <small>正在读取组件状态…</small>
@@ -172,16 +249,16 @@ export function Multiplayer() {
         {!mp.loading && !mp.statusUnavailable && (
           <div className="multiplayer-component-list" aria-label="联机组件">
             <Badge
-              className={s.componentReady ? "completed" : "failed"}
+              className={primaryReady ? "completed" : "failed"}
               role="img"
-              aria-label={`EasyTier ${s.componentVersion} · ${s.componentReady ? "已就绪" : "待准备"}`}
+              aria-label={`${componentName} ${componentVersion} · ${primaryReady ? "已就绪" : "待准备"}`}
             >
-              {s.componentReady ? (
+              {primaryReady ? (
                 <Check size={12} aria-hidden="true" />
               ) : (
                 <X size={12} aria-hidden="true" />
               )}
-              EasyTier {s.componentVersion}
+              {componentName} {componentVersion}
             </Badge>
             {needsTunnel && (
               <Badge
@@ -201,10 +278,12 @@ export function Multiplayer() {
         )}
       </div>
       {preparing ? (
-        <Button onClick={() => app.setPage("downloads")}>
-          <Download size={16} />
-          查看下载
-        </Button>
+        s.componentJobId && (
+          <Button onClick={() => app.setPage("downloads")}>
+            <Download size={16} />
+            查看下载
+          </Button>
+        )
       ) : s.sessionId && !inSession ? (
         <Button
           disabled={locked || s.state === "leaving"}
@@ -215,12 +294,15 @@ export function Multiplayer() {
           <X size={16} />
           {s.role ? (hosting ? "关闭房间" : "离开房间") : "取消"}
         </Button>
-      ) : !mp.loading && !componentsReady ? (
+      ) : !mp.loading && !componentsReady && !unsupported ? (
         <>
           <Button
             disabled={locked}
             onClick={() =>
-              void mp.action("multiplayer.prepare", { tunnel: needsTunnel })
+              void mp.action(
+                "multiplayer.prepare",
+                terracotta ? { service } : { tunnel: needsTunnel },
+              )
             }
           >
             <Download size={16} />
@@ -230,17 +312,20 @@ export function Multiplayer() {
             disabled={locked}
             onClick={() =>
               void app.run(async () => {
-                const archive = await pick(false, ["zip"]);
+                const archive = await pick(
+                  false,
+                  terracotta ? ["gz"] : ["zip"],
+                );
                 if (archive)
                   await mp.action("multiplayer.prepare", {
                     archive,
-                    tunnel: needsTunnel,
+                    ...(terracotta ? { service } : { tunnel: needsTunnel }),
                   });
               })
             }
           >
             <Upload size={16} />
-            导入组件
+            {terracotta ? "导入官方 tar.gz" : "导入组件"}
           </Button>
         </>
       ) : null}
@@ -274,16 +359,21 @@ export function Multiplayer() {
                 id={`${id}-service`}
                 label="联机服务"
                 value={service}
-                disabled={locked || !!s.sessionId}
+                disabled={mp.busy || mp.loading || !desktop || !!s.sessionId}
                 className="multiplayer-service-tabs"
                 onValueChange={(value) =>
-                  mp.changeService(value as "official" | "custom")
+                  mp.changeService(value as MultiplayerService)
                 }
                 items={[
                   {
                     value: "official",
-                    label: "官方",
+                    label: "SFMCL联机",
                     icon: <ShieldCheck size={17} />,
+                  },
+                  {
+                    value: "terracotta",
+                    label: "陶瓦联机",
+                    icon: <Blocks size={17} />,
                   },
                   {
                     value: "custom",
@@ -326,12 +416,23 @@ export function Multiplayer() {
                         aria-hidden="true"
                       />
                     )}
-                    <strong>{labels[s.state]}</strong>
+                    <strong>{roomStatus}</strong>
                   </div>
-                  <Badge>{s.gameVersion || `v${s.componentVersion}`}</Badge>
+                  <Badge>
+                    {s.gameVersion ||
+                      `${terracotta ? "Terracotta " : "v"}${componentVersion}`}
+                  </Badge>
                 </div>
               </div>
-              {!hosting && (
+              {scanning && (
+                <p>请在目标世界中选择「对局域网开放」，启动器会继续查找。</p>
+              )}
+              {terracotta && !hosting && s.worldOpen && (
+                <p>
+                  在游戏的多人游戏列表中双击「陶瓦联机大厅」，或使用下方地址直连。
+                </p>
+              )}
+              {!hosting && (!terracotta || s.address) && (
                 <div className="multiplayer-address">
                   <small>连接地址</small>
                   <code>{s.address || "等待分配"}</code>
@@ -345,24 +446,27 @@ export function Multiplayer() {
                   </Button>
                 </div>
               )}
-              {hosting && official && s.inviteCode && (
+              {hosting && (official || terracotta) && displayCode && (
                 <div
                   className="multiplayer-official-code"
-                  aria-label="官方房间邀请码"
+                  data-terracotta={terracotta || undefined}
+                  aria-label={
+                    terracotta ? "陶瓦房间邀请码" : "SFMCL联机房间邀请码"
+                  }
                 >
                   <div>
                     <small>邀请码</small>
                     <button
                       type="button"
                       className="multiplayer-invite-copy"
-                      aria-label={`复制邀请码 ${formatOfficialCode(s.inviteCode)}`}
+                      aria-label={`复制邀请码 ${displayCode}`}
                       disabled={locked || s.state === "leaving"}
                       onClick={() => void copy("invitation")}
                     >
-                      <code>{formatOfficialCode(s.inviteCode)}</code>
+                      <code>{displayCode}</code>
                     </button>
                   </div>
-                  <Badge>官方</Badge>
+                  <Badge>{terracotta ? "陶瓦联机" : "SFMCL联机"}</Badge>
                 </div>
               )}
               <div className="multiplayer-members-heading">
@@ -386,7 +490,7 @@ export function Multiplayer() {
                     <UserRound size={18} />
                     <div>
                       <strong>{member.name}</strong>
-                      <small>{member.ip}</small>
+                      {member.ip && <small>{member.ip}</small>}
                     </div>
                     <Badge>
                       {routes[member.connection] || "未知"}
@@ -452,7 +556,7 @@ export function Multiplayer() {
                   }
                 >
                   <X size={16} />
-                  {hosting ? "关闭房间" : "离开房间"}
+                  {scanning ? "取消扫描" : hosting ? "关闭房间" : "离开房间"}
                 </Button>
               </div>
               {mismatch && (
@@ -493,7 +597,11 @@ export function Multiplayer() {
                     noValidate
                     onSubmit={(event) => {
                       event.preventDefault();
-                      if (locked || !canCreate) return;
+                      if (terracotta) {
+                        submitTerracotta();
+                        return;
+                      }
+                      if (!canCreate) return;
                       if (!mp.roomName.trim()) {
                         app.reportError("请输入房间名称");
                         return;
@@ -538,57 +646,72 @@ export function Multiplayer() {
                         </Select>
                       </div>
                     )}
-                    {usingHostGame && !hostContext?.running && (
+                    {!terracotta && usingHostGame && !hostContext?.running && (
                       <p className="multiplayer-host-hint" role="status">
                         {!hostContext
                           ? "检测到多个游戏，请选择用于创建房间的游戏。"
                           : "游戏还在启动，请进入世界并对局域网开放后创建房间。"}
                       </p>
                     )}
-                    <div className="multiplayer-field">
-                      <label htmlFor={`${id}-name`}>房间名称</label>
-                      <Input
-                        id={`${id}-name`}
-                        required
-                        disabled={preparing}
-                        value={mp.roomName}
-                        onChange={(event) => mp.setRoomName(event.target.value)}
-                        maxLength={48}
-                        placeholder="周末的生存世界"
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="multiplayer-field">
-                      <label htmlFor={`${id}-port`}>游戏端口</label>
-                      <div className="multiplayer-port-row">
-                        <Input
-                          id={`${id}-port`}
-                          required
-                          value={mp.port}
-                          onChange={(event) =>
-                            mp.changePort(event.target.value)
-                          }
-                          disabled={preparing || mp.checkingPort}
-                          pattern="[0-9]{1,5}"
-                          inputMode="numeric"
-                          maxLength={5}
-                          placeholder="游戏中显示的端口"
-                          autoComplete="off"
+                    {terracotta ? (
+                      <>
+                        <ErrorBanner
+                          message="请先启动游戏进入存档并开启局域网后，才能创建房间。若同时运行多个游戏，只对目标世界开放。"
+                          tone="info"
+                          compact
                         />
-                        <Button
-                          disabled={locked || mp.checkingPort}
-                          onClick={() => void mp.checkPort()}
-                        >
-                          {mp.checkingPort ? (
-                            <LoaderCircle size={16} className="spin" />
-                          ) : (
-                            <Network size={16} />
-                          )}
-                          {mp.checkingPort ? "检查中…" : "检查端口"}
-                        </Button>
-                      </div>
-                    </div>
-                    {!official && (
+                        {options}
+                      </>
+                    ) : (
+                      <>
+                        <div className="multiplayer-field">
+                          <label htmlFor={`${id}-name`}>房间名称</label>
+                          <Input
+                            id={`${id}-name`}
+                            required
+                            disabled={preparing}
+                            value={mp.roomName}
+                            onChange={(event) =>
+                              mp.setRoomName(event.target.value)
+                            }
+                            maxLength={48}
+                            placeholder="周末的生存世界"
+                            autoComplete="off"
+                          />
+                        </div>
+                        <div className="multiplayer-field">
+                          <label htmlFor={`${id}-port`}>游戏端口</label>
+                          <div className="multiplayer-port-row">
+                            <Input
+                              id={`${id}-port`}
+                              required
+                              value={mp.port}
+                              onChange={(event) =>
+                                mp.changePort(event.target.value)
+                              }
+                              disabled={preparing || mp.checkingPort}
+                              pattern="[0-9]{1,5}"
+                              inputMode="numeric"
+                              maxLength={5}
+                              placeholder="游戏中显示的端口"
+                              autoComplete="off"
+                            />
+                            <Button
+                              disabled={locked || mp.checkingPort}
+                              onClick={() => void mp.checkPort()}
+                            >
+                              {mp.checkingPort ? (
+                                <LoaderCircle size={16} className="spin" />
+                              ) : (
+                                <Network size={16} />
+                              )}
+                              {mp.checkingPort ? "检查中…" : "检查端口"}
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {custom && (
                       <div className="multiplayer-field">
                         <label htmlFor={`${id}-connection-mode`}>
                           联机方式
@@ -644,7 +767,7 @@ export function Multiplayer() {
                         type="submit"
                         className="multiplayer-room-action"
                         primary
-                        disabled={locked || !canCreate}
+                        disabled={!canCreate}
                       >
                         {mp.busy ? (
                           <LoaderCircle size={17} className="spin" />
@@ -656,8 +779,53 @@ export function Multiplayer() {
                       <MultiplayerOfflineLan
                         key={JSON.stringify(offlineLanTarget)}
                         version={offlineLanTarget}
-                        disabled={locked || (usingHostGame && !hostContext)}
+                        disabled={
+                          locked ||
+                          unsupported ||
+                          (usingHostGame && !hostContext) ||
+                          ((official || terracotta) && !offlineLanTarget)
+                        }
                       />
+                    </div>
+                  </form>
+                ) : terracotta ? (
+                  <form
+                    noValidate
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      submitTerracotta();
+                    }}
+                  >
+                    <div className="multiplayer-field">
+                      <label htmlFor={id + "-terracotta-code"}>
+                        陶瓦邀请码
+                      </label>
+                      <Input
+                        id={id + "-terracotta-code"}
+                        value={mp.invitation}
+                        disabled={locked || unsupported}
+                        onChange={(e) => mp.changeInvitation(e.target.value)}
+                        maxLength={4096}
+                        spellCheck={false}
+                        autoComplete="off"
+                        aria-invalid={
+                          !!mp.invitation && !hasTerracottaCode(mp.invitation)
+                        }
+                        placeholder="U/XXXX-XXXX-XXXX-XXXX"
+                      />
+                    </div>
+                    {options}
+                    <div className="multiplayer-submit">
+                      <Button
+                        primary
+                        type="submit"
+                        disabled={
+                          locked || unsupported || !mp.invitation.trim()
+                        }
+                      >
+                        <DoorOpen size={17} />
+                        加入房间
+                      </Button>
                     </div>
                   </form>
                 ) : (

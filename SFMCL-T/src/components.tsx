@@ -13,6 +13,7 @@ import { AnimatedSwap } from "./AnimatedSwap";
 import { useModalMotion } from "./useModalMotion";
 import "./error-banner.css";
 import "./split-button.css";
+import "./collapsible-panel.css";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -20,7 +21,15 @@ import type {
   ReactNode,
   Ref,
 } from "react";
-import { Box, Check, ChevronRight, LoaderCircle, X } from "lucide-react";
+import {
+  Box,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  LoaderCircle,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { statusLabel } from "./api";
 import type { Player, Status, Step } from "./types";
 
@@ -28,6 +37,56 @@ import type { Player, Status, Step } from "./types";
 // or creating a containing block for fixed-position menus.
 export function PixelFrame() {
   return <i className="surface-frame" aria-hidden="true" />;
+}
+
+export function CollapsiblePanel({
+  className,
+  title,
+  icon: Icon,
+  open,
+  onToggle,
+  children,
+}: {
+  className: string;
+  title: string;
+  icon: LucideIcon;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <article className={`panel has-surface collapsible-panel ${className}`}>
+      <PixelFrame />
+      <h2>
+        <button
+          type="button"
+          className="collapsible-panel-toggle"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={onToggle}
+        >
+          <Icon size={17} aria-hidden="true" />
+          <span>{title}</span>
+          <ChevronDown
+            className="collapsible-panel-chevron"
+            size={18}
+            aria-hidden="true"
+          />
+        </button>
+      </h2>
+      <div
+        id={id}
+        className="collapsible-panel-reveal"
+        aria-hidden={!open}
+        inert={!open}
+      >
+        <div>
+          <div className="collapsible-panel-body">{children}</div>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 export function Button({

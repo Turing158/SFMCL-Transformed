@@ -11,6 +11,8 @@ import {
 } from "../resourceDownloads";
 import { useApp } from "../store";
 import type {
+  DatapackBrowseTarget,
+  DatapackWorld,
   LocalizedName,
   ResourceDependency,
   ResourceFile,
@@ -26,6 +28,7 @@ export function ResourceDownloadDialog({
   title,
   localizedName,
   kind,
+  datapackTarget,
   queued,
   onQueued,
   onOpenDependency,
@@ -37,22 +40,24 @@ export function ResourceDownloadDialog({
   title: string;
   localizedName?: LocalizedName | null;
   kind: Exclude<ResourceTab, "minecraft">;
+  datapackTarget?: DatapackBrowseTarget;
   queued: string[];
   onQueued: (key: string) => void;
   onOpenDependency: (
     dependency: ResourceDependency,
     target?: Version,
+    world?: DatapackBrowseTarget,
   ) => Promise<(() => void) | void>;
   onClose: () => void;
 }) {
   const app = useApp();
-  const folderOnly = kind === "datapack";
+  const datapack = kind === "datapack";
   const downloadName = title.split(/\s+[-–—]\s+/, 1)[0].trim();
-  const versions = app.versions.filter((version) =>
-    compatibleResourceVersion(resource, version, kind),
-  );
+  const versions = (
+    datapackTarget ? [datapackTarget.version] : app.versions
+  ).filter((version) => compatibleResourceVersion(resource, version, kind));
   const [destination, setDestination] = useState(
-    !folderOnly && versions.length ? "version" : "folder",
+    datapack || versions.length ? "version" : "folder",
   );
   const [targetId, setTargetId] = useState(
     versions.find((version) => version.id === app.data.settings.activeVersion)
@@ -61,6 +66,13 @@ export function ResourceDownloadDialog({
       "",
   );
   const [directory, setDirectory] = useState("");
+  const [worldId, setWorldId] = useState(datapackTarget?.target.worldId ?? "");
+  const [worldsState, setWorldsState] = useState<{
+    key: string;
+    worlds?: DatapackWorld[];
+    error?: string;
+  }>();
+  const [worldsRevision, setWorldsRevision] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [openingDependency, setOpeningDependency] = useState<number | null>(
     null,
@@ -79,6 +91,47 @@ export function ResourceDownloadDialog({
     if (readyToClose && !app.busy) onClose();
   }, [readyToClose, app.busy, onClose]);
   const target = versions.find((version) => version.id === targetId);
+  const gameDirectory =
+    datapackTarget?.target.directory ??
+    target?.directory ??
+    app.data.settings.activeDir;
+  const worldsKey = JSON.stringify([
+    gameDirectory,
+    target?.id,
+    target?.isolation,
+    worldsRevision,
+  ]);
+  const loadedWorlds = worldsState?.key === worldsKey ? worldsState : undefined;
+  const selectedWorld = loadedWorlds?.worlds?.find(
+    (world) => world.id === worldId,
+  );
+  const worldTarget =
+    target && selectedWorld
+      ? {
+          directory: gameDirectory,
+          versionId: target.id,
+          worldId: selectedWorld.id,
+        }
+      : undefined;
+  const installDatapack = datapack && destination === "version";
+  useEffect(() => {
+    if (!installDatapack || !targetId || !target) return;
+    let current = true;
+    void api<DatapackWorld[]>("resources.datapacks.worlds", {
+      directory: gameDirectory,
+      versionId: targetId,
+    }).then(
+      (worlds) => {
+        if (current) setWorldsState({ key: worldsKey, worlds });
+      },
+      (error) => {
+        if (current) setWorldsState({ key: worldsKey, error: String(error) });
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [installDatapack, targetId, gameDirectory, worldsKey, !!target]);
   const installDependencies =
     kind === "mod" && destination === "version" && autoDependencies;
   const planKey = JSON.stringify([
@@ -140,7 +193,7 @@ export function ResourceDownloadDialog({
       ? [app.data.settings.activeDir, targetId]
       : directory,
   ]);
-  const alreadyQueued = queued.includes(key);
+  const alreadyQueued = !installDatapack && queued.includes(key);
   const canDownload =
     !!resource.file &&
     !app.busy &&
@@ -152,7 +205,11 @@ export function ResourceDownloadDialog({
           (item) =>
             item.status !== "disabled" || enablePaths.includes(item.path),
         ))) &&
-    (destination === "version" ? !!target : !!directory);
+    (destination === "version"
+      ? datapack
+        ? !!worldTarget
+        : !!target
+      : !!directory);
   const dependencyGroups = new Map<
     ResourceDependency["kind"],
     { dependency: ResourceDependency; index: number }[]
@@ -177,7 +234,13 @@ export function ResourceDownloadDialog({
           void app.run(async () => {
             setSubmitting(true);
             try {
-              if (installDependencies) {
+              if (installDatapack) {
+                await api("resources.datapacks.install", {
+                  target: worldTarget,
+                  file: resource.file,
+                  title: `${title} → ${selectedWorld?.name}`,
+                });
+              } else if (installDependencies) {
                 await api("resources.install", {
                   token: plan!.token,
                   directory: app.data.settings.activeDir,
@@ -194,12 +257,14 @@ export function ResourceDownloadDialog({
                   file: resource.file,
                   title,
                 });
-              onQueued(key);
+              if (!installDatapack) onQueued(key);
               setReadyToClose(true);
               app.notify(
                 installDependencies
                   ? "模组与前置已加入安装队列"
-                  : "已加入下载队列",
+                  : installDatapack
+                    ? "数据包已加入存档安装队列"
+                    : "已加入下载队列",
               );
             } catch (error) {
               if (installDependencies) setRetryPlan((value) => value + 1);
@@ -261,6 +326,9 @@ export function ResourceDownloadDialog({
                                   destination === "version"
                                     ? target
                                     : undefined,
+                                  installDatapack && target && worldTarget
+                                    ? { version: target, target: worldTarget }
+                                    : undefined,
                                 );
                               } finally {
                                 // Keep the tag mounted until its loading space has collapsed.
@@ -301,15 +369,11 @@ export function ResourceDownloadDialog({
             value={destination}
             onValueChange={setDestination}
             items={[
-              ...(!folderOnly
-                ? [
-                    {
-                      value: "version",
-                      label: "安装到游戏",
-                      icon: <Gamepad2 size={16} />,
-                    },
-                  ]
-                : []),
+              {
+                value: "version",
+                label: datapack ? "安装到存档" : "安装到游戏",
+                icon: <Gamepad2 size={16} />,
+              },
               {
                 value: "folder",
                 label: "下载到文件夹",
@@ -323,9 +387,13 @@ export function ResourceDownloadDialog({
                 <Select
                   aria-label="本地游戏版本"
                   value={targetId}
-                  onValueChange={setTargetId}
-                  disabled={!versions.length || app.busy}
-                  autoFocus
+                  onValueChange={(value) => {
+                    setTargetId(value);
+                    setWorldId("");
+                    setWorldsRevision((revision) => revision + 1);
+                  }}
+                  disabled={!versions.length || app.busy || !!datapackTarget}
+                  autoFocus={!datapackTarget}
                 >
                   <option value="">选择兼容版本</option>
                   {versions.map((version) => (
@@ -345,6 +413,80 @@ export function ResourceDownloadDialog({
                       ? "请选择一个兼容的本地游戏版本。"
                       : "没有兼容的本地游戏版本，可改为下载到文件夹。"}
                 </p>
+                {datapack && target && (
+                  <div className="datapack-world-selector">
+                    <Select
+                      aria-label="目标存档"
+                      value={selectedWorld?.id ?? ""}
+                      onValueChange={setWorldId}
+                      disabled={
+                        !loadedWorlds?.worlds?.length ||
+                        app.busy ||
+                        !!datapackTarget
+                      }
+                    >
+                      <option value="">选择存档</option>
+                      {loadedWorlds?.worlds
+                        ?.filter(
+                          (world) =>
+                            !datapackTarget ||
+                            world.id === datapackTarget.target.worldId,
+                        )
+                        .map((world) => (
+                          <option key={world.id} value={world.id}>
+                            {`${world.name} · ${world.id} · ${world.version || "保存版本未知"}`}
+                          </option>
+                        ))}
+                    </Select>
+                    {!loadedWorlds && (
+                      <p className="helper" role="status">
+                        正在读取存档…
+                      </p>
+                    )}
+                    {loadedWorlds?.error && (
+                      <>
+                        <p className="inline-error" role="alert">
+                          {loadedWorlds.error}
+                        </p>
+                        <Button
+                          disabled={app.busy}
+                          onClick={() =>
+                            setWorldsRevision((revision) => revision + 1)
+                          }
+                        >
+                          重试
+                        </Button>
+                      </>
+                    )}
+                    {loadedWorlds?.worlds &&
+                      (datapackTarget
+                        ? !selectedWorld
+                        : !loadedWorlds.worlds.length) && (
+                        <p className="helper">
+                          {datapackTarget
+                            ? "该存档已不在所选版本的存档目录中。"
+                            : "所选版本还没有存档，可改为下载到文件夹。"}
+                        </p>
+                      )}
+                    {selectedWorld && (
+                      <>
+                        <p className="helper">
+                          {target.id} → {selectedWorld.name}（{selectedWorld.id}
+                          ）
+                          {!(target.isolation ?? app.data.settings.isolation) &&
+                            " · 共享存档"}
+                        </p>
+                        {selectedWorld.version &&
+                          target.version !== selectedWorld.version && (
+                            <p className="helper">
+                              此存档上次由 Minecraft {selectedWorld.version}{" "}
+                              保存。
+                            </p>
+                          )}
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -371,7 +513,7 @@ export function ResourceDownloadDialog({
                   </Button>
                 </div>
                 <p className="helper">
-                  {folderOnly
+                  {datapack
                     ? "数据包需要放入存档的 datapacks 文件夹。可直接选择该文件夹，或下载后手动移入。"
                     : "将资源文件直接保存到所选文件夹。"}
                 </p>
@@ -503,7 +645,7 @@ export function ResourceDownloadDialog({
               ? "已加入队列"
               : submitting
                 ? "正在准备下载…"
-                : installDependencies
+                : installDependencies || installDatapack
                   ? "开始安装"
                   : "开始下载"}
           </Button>

@@ -140,6 +140,20 @@ export interface FavoriteVersion extends Version {
   directory: string;
   directoryName: string;
 }
+export interface DatapackTarget {
+  directory: string;
+  versionId: string;
+  worldId: string;
+}
+export interface DatapackBrowseTarget {
+  target: DatapackTarget;
+  version: Version;
+}
+export interface DatapackWorld {
+  id: string;
+  name: string;
+  version: string;
+}
 export interface Java {
   path: string;
   version: string;
@@ -171,6 +185,7 @@ export interface CrashReport {
 export interface Job {
   id: string;
   modUpdatePath?: string;
+  datapackWorld?: string;
   createdAt?: number;
   title: string;
   status: Status;

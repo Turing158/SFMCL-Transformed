@@ -74,8 +74,7 @@
   flex-shrink: 0;
   color: var(--accent);
 }
-.home-widget-heading h2,
-.home-announcement h2 {
+.home-widget-heading h2 {
   margin: 0;
   font-size: 14px;
   overflow-wrap: anywhere;
@@ -215,48 +214,6 @@
 }
 .home-quick-links .button {
   flex: 1 1 100px;
-}
-.home-announcement-toggle {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-  border: 0;
-  padding: 18px;
-  color: var(--ink);
-  background: transparent;
-}
-.home-announcement-toggle > span {
-  flex: 1;
-  min-width: 0;
-}
-.home-announcement-toggle > svg {
-  color: var(--accent);
-  flex-shrink: 0;
-}
-.home-announcement-toggle > svg:last-child {
-  transition: transform 240ms ease;
-}
-.home-announcement[data-open="true"]
-  .home-announcement-toggle
-  > svg:last-child {
-  transform: rotate(180deg);
-}
-.home-announcement-reveal {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 260ms ease;
-}
-.home-announcement-reveal > div {
-  min-height: 0;
-  overflow: hidden;
-}
-.home-announcement[data-open="true"] .home-announcement-reveal {
-  grid-template-rows: 1fr;
-}
-.home-announcement .home-widget-body {
-  padding-top: 0;
 }
 .home-widget-hide {
   position: absolute;

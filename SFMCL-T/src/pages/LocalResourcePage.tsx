@@ -8,20 +8,25 @@ import { localResourceSize, openLocalResource } from "../localResources";
 import { localResourceTitle, resourceName } from "../resourceNames";
 import { MinecraftText } from "../MinecraftText";
 import { useLocalModUpdate } from "./useLocalModUpdate";
+import { WorldDatapacks } from "./WorldDatapacks";
 
 export function LocalResourcePage({
   item,
   version,
   onOpenModProject,
+  onBrowseDatapacks,
 }: {
   item: LocalResource;
   version: Version;
   onOpenModProject: (project: Project, trigger: HTMLButtonElement) => void;
+  onBrowseDatapacks: (trigger: HTMLButtonElement) => void;
 }) {
   const app = useApp();
   const update = useLocalModUpdate(item, version);
   const openFolder = () => void app.run(() => openLocalResource(item));
   const world = item.kind === "world";
+  const hasWorldDetails = Object.keys(item.details).length > 0 && !item.error;
+  const worldId = item.path.split(/[/\\]/).at(-1);
   const tab = world ? "world" : "mod";
   const d = item.details;
   const rules =
@@ -62,8 +67,8 @@ export function LocalResourcePage({
           </div>
         </div>
         {world ? (
-          Object.keys(d).length > 0 && !item.error ? (
-            <>
+          <>
+            {hasWorldDetails && (
               <div className="world-details has-surface">
                 <PixelFrame />
                 {[
@@ -91,51 +96,66 @@ export function LocalResourcePage({
                   </div>
                 ))}
               </div>
-              <div className="seed-row">
-                <span>
-                  世界种子 <code>{String(d.seed || "0")}</code>
-                </span>
-                <Button
-                  aria-label="复制世界种子"
-                  onClick={() =>
-                    void app.run(
-                      () =>
-                        navigator.clipboard.writeText(String(d.seed || "0")),
-                      "种子已复制",
-                    )
-                  }
-                >
-                  <Copy size={16} />
-                  复制
-                </Button>
-              </div>
-              <h3>
-                游戏规则 <small>点击复制 /gamerule 命令</small>
-              </h3>
-              <div className="gamerules">
-                {rules.map(([key, value]) => (
-                  <button
-                    type="button"
-                    key={key}
-                    aria-label={`复制游戏规则 ${key}`}
+            )}
+            {worldId && (
+              <WorldDatapacks
+                target={{
+                  directory: version.directory ?? app.data.settings.activeDir,
+                  versionId: version.id,
+                  worldId,
+                }}
+                worldPath={item.path}
+                onBrowse={onBrowseDatapacks}
+              />
+            )}
+            {hasWorldDetails && (
+              <>
+                <div className="seed-row">
+                  <span>
+                    世界种子 <code>{String(d.seed || "0")}</code>
+                  </span>
+                  <Button
+                    aria-label="复制世界种子"
                     onClick={() =>
                       void app.run(
                         () =>
-                          navigator.clipboard.writeText(
-                            `/gamerule ${key} ${String(value)}`,
-                          ),
-                        "游戏规则已复制",
+                          navigator.clipboard.writeText(String(d.seed || "0")),
+                        "种子已复制",
                       )
                     }
                   >
-                    <code>{key}</code>
-                    <span>{String(value)}</span>
-                    <Copy size={13} />
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : null
+                    <Copy size={16} />
+                    复制
+                  </Button>
+                </div>
+                <h3>
+                  游戏规则 <small>点击复制 /gamerule 命令</small>
+                </h3>
+                <div className="gamerules">
+                  {rules.map(([key, value]) => (
+                    <button
+                      type="button"
+                      key={key}
+                      aria-label={`复制游戏规则 ${key}`}
+                      onClick={() =>
+                        void app.run(
+                          () =>
+                            navigator.clipboard.writeText(
+                              `/gamerule ${key} ${String(value)}`,
+                            ),
+                          "游戏规则已复制",
+                        )
+                      }
+                    >
+                      <code>{key}</code>
+                      <span>{String(value)}</span>
+                      <Copy size={13} />
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         ) : (
           <div className="world-details has-surface">
             <PixelFrame />

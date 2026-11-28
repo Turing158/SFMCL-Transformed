@@ -1,0 +1,48 @@
+.collapsible-panel {
+  min-width: 0;
+  padding: 0;
+}
+.collapsible-panel > h2 {
+  margin: 0;
+}
+.collapsible-panel-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 18px;
+  color: var(--ink);
+  text-align: left;
+  font-size: 14px;
+}
+.collapsible-panel-toggle > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.collapsible-panel-toggle > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.collapsible-panel-chevron {
+  transition: transform 240ms ease;
+}
+.collapsible-panel-toggle[aria-expanded="true"] > .collapsible-panel-chevron {
+  transform: rotate(180deg);
+}
+.collapsible-panel-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 260ms ease;
+}
+.collapsible-panel-reveal[aria-hidden="false"] {
+  grid-template-rows: 1fr;
+}
+.collapsible-panel-reveal > div {
+  min-height: 0;
+  overflow: hidden;
+}
+.collapsible-panel-body {
+  padding: 0 18px 18px;
+  overflow-wrap: anywhere;
+}

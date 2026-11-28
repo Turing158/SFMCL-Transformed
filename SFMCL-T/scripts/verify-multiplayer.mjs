@@ -25,6 +25,8 @@ await page.addInitScript(() => {
     componentVersion: "2.6.4",
     tunnelReady: false,
     tunnelVersion: "2026.10.7",
+    terracottaVersion: "0.4.2",
+    terracottaReady: false,
     componentJobId: null,
     role: null,
     name: "",
@@ -37,7 +39,7 @@ await page.addInitScript(() => {
     inviteCode: null,
   };
   const state = (window.__multiplayerTest = {
-    snapshot: { ...idle, componentReady: true },
+    snapshot: { ...idle, componentReady: true, terracottaReady: true },
     calls: [],
     copied: "",
     failStatus: true,
@@ -242,6 +244,10 @@ await page.addInitScript(() => {
         if (state.failStatus) throw Error("unavailable");
         return structuredClone(state.snapshot);
       case "multiplayer.prepare":
+        if (args.payload?.service === "terracotta") {
+          state.snapshot = { ...idle, terracottaReady: true };
+          break;
+        }
         beginPreparation(null, !!args.payload?.archive, !!args.payload?.tunnel);
         break;
       case "multiplayer.leave":
@@ -249,6 +255,7 @@ await page.addInitScript(() => {
           ...idle,
           componentReady: true,
           tunnelReady: state.snapshot.tunnelReady,
+          terracottaReady: state.snapshot.terracottaReady,
         };
         break;
       case "multiplayer.check-local-port":
@@ -272,10 +279,39 @@ await page.addInitScript(() => {
             state.finishPreview = resolve;
           });
         return {
-          name: "官方生存房间",
+          name: "周末生存房间",
           gameVersion: "1.21.4",
           server: "wss://relay.example.com",
         };
+      case "multiplayer.terracotta.create":
+      case "multiplayer.terracotta.join": {
+        const host = args.operation.endsWith("create");
+        state.snapshot = {
+          ...idle,
+          sessionId: "terracotta-session",
+          service: "terracotta",
+          terracottaReady: true,
+          state: host ? "waiting" : "ready",
+          role: host ? "host" : "guest",
+          name: "陶瓦联机房间",
+          terracottaPhase: host ? "host-scanning" : "guest-ok",
+          worldOpen: !host,
+          address: host ? null : "127.0.0.1:45678",
+          members: host
+            ? []
+            : [
+                {
+                  id: "1",
+                  name: "Alex",
+                  connection: "host",
+                  ip: "",
+                  latency: null,
+                  local: false,
+                },
+              ],
+        };
+        break;
+      }
       case "multiplayer.create":
       case "multiplayer.join":
       case "multiplayer.official.create":
@@ -285,6 +321,8 @@ await page.addInitScript(() => {
         break;
       }
       case "multiplayer.invitation":
+        if (state.snapshot.service === "terracotta")
+          return state.snapshot.inviteCode;
         if (state.snapshot.service === "official") return "A1B2C3D4";
         return state.server
           ? "SFMCL1.fixture-private-invitation"
@@ -338,6 +376,10 @@ try {
     window.__multiplayerTest.failStatus = false;
   });
   await main.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(componentNotice).toHaveCount(0);
+  const clay = main.getByRole("tab", { name: "陶瓦联机", exact: true });
+  await clay.click();
+  await expect(clay).toHaveAttribute("aria-selected", "true");
   await expect(componentNotice).toHaveCount(0);
   await main.getByRole("tab", { name: "自定义", exact: true }).click();
   await statusFailure.click();
@@ -641,11 +683,11 @@ try {
   await expect(componentList).toHaveCount(0);
   await main.getByRole("tab", { name: "创建房间", exact: true }).click();
   await expect(componentList).toHaveCount(0);
-  await main.getByRole("tab", { name: "官方", exact: true }).click();
+  await main.getByRole("tab", { name: "SFMCL联机", exact: true }).click();
   await expect(componentList).toHaveCount(0);
   await main.getByRole("tab", { name: "自定义", exact: true }).click();
   pass(
-    "选择 Cloudflare 后显示缺失组件状态、提前下载、取消重试、导入时获取隧道、全部就绪后隐藏状态卡片，切换官方和加入模式保持隐藏",
+    "选择 Cloudflare 后显示缺失组件状态、提前下载、取消重试、导入时获取隧道、全部就绪后隐藏状态卡片，切换 SFMCL联机和加入模式保持隐藏",
   );
   const connectionRow = main.locator(".multiplayer-connection-row");
   await expect
@@ -1062,14 +1104,246 @@ try {
   pass(
     "邀请预览、非法输入、临时启动目标、世界关闭禁用、暗色与窄布局、凭据不持久化",
   );
-  const official = main.getByRole("tab", { name: "官方", exact: true });
+  const official = main.getByRole("tab", { name: "SFMCL联机", exact: true });
   await page.evaluate(() => {
     window.__multiplayerTest.prepareRoom = false;
   });
   const custom = main.getByRole("tab", { name: "自定义", exact: true });
+  const clayInput = main.getByLabel("陶瓦邀请码", { exact: true });
+  const advanced = main.getByRole("button", { name: "高级选项", exact: true });
+  const advancedPanel = main.locator(".multiplayer-terracotta-options");
+  const extraNodes = main.getByRole("textbox", { name: "备用公共节点" });
+  const oldRoom = main.getByRole("textbox", { name: "自定义邀请码" });
+  await main.getByLabel("联机邀请码").fill("SFMCL2.draft");
   await custom.focus();
   await page.keyboard.press("ArrowLeft");
+  await expect(clay).toBeFocused();
+  await expect(main.getByText(/burningtnt|许可与 IPC 例外/)).toHaveCount(0);
+  await expect(main.getByRole("button", { name: "查看房间" })).toHaveCount(0);
+  await clayInput.fill("好友分享 u/7ooo-oooo-oooo-oooo");
+  await official.click();
+  await main.getByLabel("邀请码", { exact: true }).fill("12345678");
+  await custom.click();
+  await expect(main.getByLabel("联机邀请码")).toHaveValue("SFMCL2.draft");
+  await clay.click();
+  await expect(clayInput).toHaveValue("好友分享 u/7ooo-oooo-oooo-oooo");
+  await expect(
+    componentNotice.getByRole("img", { name: "Terracotta 0.4.2 · 待准备" }),
+  ).toBeVisible();
+  await componentNotice
+    .getByRole("button", { name: "准备组件", exact: true })
+    .click();
+  await expect(componentNotice).toHaveCount(0);
+  await expect(advanced).toHaveAttribute("aria-expanded", "false");
+  await advanced.press("Enter");
+  await expect(advanced).toHaveAttribute("aria-expanded", "true");
+  await expect(oldRoom).toHaveCount(0);
+  await advanced.press("Tab");
+  await expect(extraNodes).toBeFocused();
+  await extraNodes.fill("tcp://guest.example.test:1000");
+  await advanced.press("Space");
+  await expect(extraNodes).toHaveCount(0);
+  await advanced.press("Tab");
+  await expect(
+    main.getByRole("button", { name: "加入房间", exact: true }),
+  ).toBeFocused();
+  await clayInput.press("Enter");
+  await expect(main.getByText("127.0.0.1:45678")).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.__multiplayerTest.calls
+        .filter((c) => c.operation === "multiplayer.terracotta.join")
+        .map((c) => c.payload.publicNodes),
+    ),
+  ).toEqual([["tcp://guest.example.test:1000"]]);
+  await expect(main.getByText(/burningtnt|许可与 IPC 例外/)).toHaveCount(0);
+  await expect(main.getByText(/双击「陶瓦联机大厅」/)).toBeVisible();
+  await go("版本管理");
+  await go("联机");
+  await expect(
+    main.getByRole("heading", { name: "陶瓦联机房间" }),
+  ).toBeVisible();
+  await main.getByRole("button", { name: "复制地址" }).click();
+  expect(await page.evaluate(() => window.__multiplayerTest.copied)).toBe(
+    "127.0.0.1:45678",
+  );
+  await notification("连接地址已复制", "success").click();
+  await main.getByRole("button", { name: "离开房间" }).click();
+  await main.getByRole("tab", { name: "创建房间" }).click();
+  const lanBanner = main
+    .locator('.error-banner[data-tone="info"]')
+    .getByRole("status");
+  await expect(lanBanner).toHaveText(
+    "请先启动游戏进入存档并开启局域网后，才能创建房间。若同时运行多个游戏，只对目标世界开放。",
+  );
+  await expect(componentNotice).toHaveCount(0);
+  await expect(main.getByLabel("房间名称")).toHaveCount(0);
+  await expect(main.getByLabel("游戏端口")).toHaveCount(0);
+  const clayCreate = main.getByRole("button", { name: "创建房间", exact: true });
+  const clayHost = main.getByRole("combobox", { name: "房主游戏", exact: true });
+  await expect(clayCreate).toBeDisabled();
+  await clayCreate.evaluate((button) => button.form.requestSubmit());
+  expect(
+    await page.evaluate(() =>
+      window.__multiplayerTest.calls.some(
+        (call) => call.operation === "multiplayer.terracotta.create",
+      ),
+    ),
+  ).toBe(false);
+  await page.evaluate(() => {
+    const games = ["1.21.4", "1.20.1"].map((version) => ({
+      id: `terracotta-host-${version}`,
+      title: `启动 ${version}`,
+      status: "running",
+      currentStep: 0,
+      steps: [],
+      log: [],
+      launch: {
+        versionId: version,
+        gameVersion: version,
+        directory: "C:/Pixel-Test/Minecraft",
+        playerName: "Alex",
+        offlineLan: false,
+        running: false,
+      },
+    }));
+    window.__pixelTest.tasks.jobs.unshift(...games);
+  });
+  await expect(clayHost).toContainText("选择用于创建房间的游戏");
+  await expect(clayCreate).toBeDisabled();
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.jobs[0].launch.running = true;
+  });
+  await expect(clayCreate).toBeEnabled();
+  await clayCreate.click();
+  await expect(main.getByText("正在查找已对局域网开放的世界")).toBeVisible();
+  await main.getByRole("button", { name: "取消扫描" }).click();
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.jobs[1].launch.running = true;
+  });
+  await expect(clayCreate).toBeDisabled();
+  await clayHost.click();
+  await page.getByRole("option").filter({ hasText: "1.21.4" }).click();
+  await expect(advanced).toHaveAttribute("aria-expanded", "false");
+  await advancedPanel.screenshot({
+    path: `${evidence}/terracotta-options-closed.png`,
+    animations: "disabled",
+  });
+  await advanced.click();
+  const hostRoom = "U/7000-0000-0000-0000";
+  const hostNodes = "tcp://example.test:1000\nhttps://example.test/path";
+  await oldRoom.fill(hostRoom);
+  await extraNodes.fill(hostNodes);
+  await advanced.click();
+  await expect(oldRoom).toHaveCount(0);
+  await expect(extraNodes).toHaveCount(0);
+  await page.setViewportSize({ width: 375, height: 700 });
+  for (const theme of ["dark", "light"]) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    await expect(lanBanner).toBeVisible();
+    expect(
+      await lanBanner.evaluate((element) => {
+        const form = element.closest("form");
+        const { left, right } = element.getBoundingClientRect();
+        const formBounds = form.getBoundingClientRect();
+        return (
+          Math.abs(left - formBounds.left) <= 1 &&
+          Math.abs(right - formBounds.right) <= 1 &&
+          element.scrollWidth <= element.clientWidth + 1
+        );
+      }),
+    ).toBe(true);
+  }
+  await advanced.click();
+  await expect(advanced).toHaveAttribute("aria-expanded", "true");
+  await expect(oldRoom).toHaveValue(hostRoom);
+  await expect(extraNodes).toHaveValue(hostNodes);
+  await expect(advanced.locator(".collapsible-panel-chevron")).toHaveCSS(
+    "transform",
+    "matrix(-1, 0, 0, -1, 0, 0)",
+  );
+  await expect(notification("连接地址已复制", "success")).toHaveCount(0);
+  expect(
+    await main.evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+  ).toBe(true);
+  await advancedPanel.screenshot({
+    path: `${evidence}/terracotta-options-open-compact.png`,
+    animations: "disabled",
+  });
+  await clayCreate.click();
+  const request = await page.evaluate(
+    () =>
+      window.__multiplayerTest.calls
+        .filter((c) => c.operation === "multiplayer.terracotta.create")
+        .at(-1).payload,
+  );
+  expect(request).toEqual({
+    room: "U/7000-0000-0000-0000",
+    launchId: "terracotta-host-1.21.4",
+    publicNodes: ["tcp://example.test:1000", "https://example.test/path"],
+  });
+  await page.evaluate(() =>
+    Object.assign(window.__multiplayerTest.snapshot, {
+      state: "ready",
+      terracottaPhase: "host-ok",
+      worldOpen: true,
+      inviteCode: "U/7000-0000-0000-0000",
+    }),
+  );
+  await main
+    .getByRole("button", { name: "复制邀请码 U/7000-0000-0000-0000" })
+    .click();
+  expect(await page.evaluate(() => window.__multiplayerTest.copied)).toBe(
+    "U/7000-0000-0000-0000",
+  );
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(
+      (theme) => (document.documentElement.dataset.theme = theme),
+      theme,
+    );
+    await page.setViewportSize({ width: 375, height: 700 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+    await main.screenshot({ path: `${evidence}/terracotta-room-${theme}.png` });
+  }
+  await main.getByRole("button", { name: "关闭房间" }).click();
+  await expect(clayCreate).toBeEnabled();
+  await page.evaluate(
+    () =>
+      (window.__multiplayerTest.snapshot.terracottaUnavailable =
+        "陶瓦未提供此 Windows 架构的组件，请选择「SFMCL联机」或「自定义」"),
+  );
+  await expect(clayCreate).toBeDisabled();
+  await expect(componentNotice).toContainText(
+    "陶瓦未提供此 Windows 架构的组件",
+  );
+  await expect(
+    main.getByRole("button", { name: "准备组件", exact: true }),
+  ).toHaveCount(0);
+  await page.evaluate(() => {
+    window.__pixelTest.tasks.jobs = window.__pixelTest.tasks.jobs.filter(
+      (job) => !job.id.startsWith("terracotta-host-"),
+    );
+    window.__multiplayerTest.snapshot.terracottaUnavailable = null;
+  });
+  await expect(componentNotice).toHaveCount(0);
+  await expect(clayHost).toHaveCount(0);
+  await expect(clayCreate).toBeDisabled();
+  await main.getByRole("tab", { name: "加入房间" }).click();
+  await clay.focus();
+  await page.keyboard.press("ArrowLeft");
   await expect(official).toBeFocused();
+  await expect(main.getByLabel("邀请码", { exact: true })).toHaveValue(
+    "12345678",
+  );
+  pass(
+    "陶瓦组件、三服务草稿、启动前后及多实例建房限制、创建提示在双主题窄窗横向铺满、高级选项键盘折叠与草稿保留、直接加入、零输入扫描与取消、旧码与节点、会话恢复和不支持架构提示",
+  );
   await expect(official).toHaveAttribute("aria-selected", "true");
   await expect(main.getByLabel("邀请码", { exact: true })).toBeVisible();
   await main.getByLabel("邀请码", { exact: true }).fill("ABCD!234");
@@ -1220,7 +1494,7 @@ try {
   );
   await main.getByLabel("邀请码", { exact: true }).fill("a1b2c3d4");
   await main.getByRole("button", { name: "查看房间", exact: true }).click();
-  await expect(main.getByText("官方生存房间", { exact: true })).toBeVisible();
+  await expect(main.getByText("周末生存房间", { exact: true })).toBeVisible();
   await main.getByRole("button", { name: "加入房间", exact: true }).click();
   await expect(main.getByRole("region", { name: "当前房间" })).toBeVisible();
   await expect(main.locator(".multiplayer-service-tabs")).toBeHidden();
@@ -1232,7 +1506,8 @@ try {
           .at(-1).payload.invitation,
     ),
   ).toBe("A1B2C3D4");
-  await expect(main.getByLabel("官方房间邀请码")).toHaveCount(0);
+  const sfmclInvite = main.getByLabel("SFMCL联机房间邀请码");
+  await expect(sfmclInvite).toHaveCount(0);
   await expect(main.locator(".multiplayer-invite-copy")).toHaveCount(0);
   await main.getByRole("button", { name: "离开房间", exact: true }).click();
   await expect(main.getByRole("tablist", { name: "联机服务" })).toBeVisible();
@@ -1252,7 +1527,10 @@ try {
           .at(-1).payload.server,
     ),
   ).toBeUndefined();
-  await expect(main.getByLabel("官方房间邀请码")).toContainText("A1B2-C3D4");
+  await expect(sfmclInvite).toContainText("A1B2-C3D4");
+  await expect(
+    sfmclInvite.getByText("SFMCL联机", { exact: true }),
+  ).toBeVisible();
   await main
     .getByRole("button", { name: "复制邀请码 A1B2-C3D4", exact: true })
     .click();
@@ -1265,7 +1543,7 @@ try {
   );
   await go("版本管理");
   await go("联机");
-  await expect(main.getByLabel("官方房间邀请码")).toContainText("A1B2-C3D4");
+  await expect(sfmclInvite).toContainText("A1B2-C3D4");
   await main.screenshot({ path: `${evidence}/official-room-dark.png` });
   await main.getByRole("button", { name: "关闭房间", exact: true }).click();
   await expect(main.getByRole("tablist", { name: "联机服务" })).toBeVisible();
@@ -1339,7 +1617,7 @@ try {
       { name, nested },
     );
   for (const [name, direction] of [
-    ["官方", -1],
+    ["SFMCL联机", -1],
     ["自定义", 1],
   ]) {
     const frame = await sampleTransition(name);
@@ -1370,8 +1648,14 @@ try {
     )
     .toBe(0);
   pass(
-    "官方/自定义伸展 Tab、键盘切换、8 位校验、查询加载与陈旧响应、官方创建加入复制、切页保持、双主题四种宽度、两层内容切换动画及系统偏好下的完整动画",
+    "SFMCL联机/自定义伸展 Tab、键盘切换、8 位校验、查询加载与陈旧响应、SFMCL联机创建加入复制、切页保持、双主题四种宽度、两层内容切换动画及系统偏好下的完整动画",
   );
+  await go("设置");
+  await page.getByRole("tab", { name: "关于", exact: true }).click();
+  const credits = page.getByRole("list", { name: "特别鸣谢" });
+  await expect(
+    credits.getByRole("link", { name: /Terracotta 陶瓦联机.*© burningtnt/ }),
+  ).toBeVisible();
   expect(errors).toEqual([]);
   await writeFile(
     `${evidence}/report.json`,

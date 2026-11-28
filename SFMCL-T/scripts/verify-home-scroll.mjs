@@ -75,7 +75,7 @@ await page.addInitScript(() => {
   };
 });
 const main = page.locator("main.page");
-const card = page.locator(".launch-dock-main");
+const card = page.locator(".launch-dock-card");
 const toggles = page.locator("main.page .notice-toggle");
 const read = () =>
   page.evaluate(() => {

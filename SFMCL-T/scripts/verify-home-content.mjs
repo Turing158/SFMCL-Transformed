@@ -236,7 +236,7 @@ try {
   );
   await typeRow("announcement")
     .first()
-    .locator(".home-announcement-toggle")
+    .getByRole("button", { name: "自定义公告", exact: true })
     .click();
   await expect(
     typeRow("announcement").first().locator(".markdown"),
@@ -569,7 +569,8 @@ try {
   await editLayout.click();
   await page.screenshot({ path: `${evidence}/independent-news-editing.png` });
   await finishEditing.click();
-  await rows.last().scrollIntoViewIfNeeded();
+  // The floating dock can cover a row that Playwright considers in view.
+  await home.evaluate((element) => (element.scrollTop = element.scrollHeight));
   const last = await rows
       .last()
       .locator(".home-widget-panel, .notice-card")

@@ -33,6 +33,13 @@ const acknowledgements = [
     icon: <CodeXml size={18} />,
   },
   {
+    name: "Terracotta 陶瓦联机",
+    description: "© burningtnt 与 Terracotta 贡献者",
+    url: "https://github.com/burningtnt/Terracotta/blob/v0.4.2/README.md#许可",
+    tone: "amber",
+    icon: <Network size={17} />,
+  },
+  {
     name: "HMCL",
     description: "感谢 @HMCL 提供的模组与整合包中文名称数据",
     url: "https://hmcl.huangyuhui.net/",

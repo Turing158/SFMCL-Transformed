@@ -403,6 +403,32 @@ export function LocalResources({
       },
     });
   };
+  const browseDatapacks = (trigger: HTMLButtonElement) => {
+    if (!detail) return;
+    const worldId = detail.path.split(/[/\\]/).at(-1);
+    if (!worldId) return;
+    channelReturn.current = {
+      scrollTop:
+        rootElement.current?.closest<HTMLElement>(".page")?.scrollTop ?? 0,
+      trigger,
+    };
+    app.navigate({
+      page: "resources",
+      tab: "datapack",
+      returnTo: {
+        page: "versions",
+        detail: { kind: "resources", version, resource: detail },
+      },
+      datapackTarget: {
+        version,
+        target: {
+          directory: version.directory ?? app.data.settings.activeDir,
+          versionId: version.id,
+          worldId,
+        },
+      },
+    });
+  };
   useLayoutEffect(() => {
     if (!pageActive || !channelReturn.current) return;
     const saved = channelReturn.current;
@@ -586,13 +612,13 @@ export function LocalResources({
               count: resources[item.value]?.length,
             }))}
           />
-          <SearchField
-            label="搜索本地资源"
-            placeholder="搜索本地资源…"
-            value={query}
-            onValueChange={searchResources}
-          />
-          <div className="row-actions local-resources-actions">
+          <div className="local-resources-controls">
+            <SearchField
+              label="搜索本地资源"
+              placeholder="搜索本地资源…"
+              value={query}
+              onValueChange={searchResources}
+            />
             <Button
               aria-label="打开目录"
               data-tooltip="打开目录"
@@ -938,6 +964,7 @@ export function LocalResources({
           }
           version={version}
           onOpenModProject={openModProject}
+          onBrowseDatapacks={browseDatapacks}
         />
       )}
     </section>

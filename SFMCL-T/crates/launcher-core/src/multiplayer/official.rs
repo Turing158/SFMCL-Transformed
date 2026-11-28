@@ -97,7 +97,7 @@ pub(super) fn normalize_code(value: &str) -> Result<String> {
 fn deadline(room: &Room, started: Instant) -> Result<Instant> {
     let parse = |value: &str| {
         chrono::DateTime::parse_from_rfc3339(value)
-            .map_err(|_| anyhow::anyhow!("官方房间有效期无效"))
+            .map_err(|_| anyhow::anyhow!("SFMCL联机房间有效期无效"))
     };
     let expires = parse(&room.expires_at)?;
     let heartbeat = parse(&room.last_heartbeat_at)?;
@@ -105,7 +105,7 @@ fn deadline(room: &Room, started: Instant) -> Result<Instant> {
     let millis = (expires - heartbeat).num_milliseconds();
     ensure!(
         room.status == "active" && millis > 0 && millis <= 90_000 && expires <= maximum,
-        "官方房间已失效，请重新创建"
+        "SFMCL联机房间已失效，请重新创建"
     );
     // Use server-relative time and the beginning of the request. This avoids
     // relying on the user's wall clock and conservatively includes network RTT.
@@ -119,7 +119,7 @@ impl RoomApi {
 
     fn from_base(base: &str) -> Result<Self> {
         let url =
-            reqwest::Url::parse(base).map_err(|_| anyhow::anyhow!("官方房间 API 地址无效"))?;
+            reqwest::Url::parse(base).map_err(|_| anyhow::anyhow!("SFMCL联机房间 API 地址无效"))?;
         ensure!(
             url.scheme() == "https"
                 && url.host_str().is_some()
@@ -128,7 +128,7 @@ impl RoomApi {
                 && matches!(url.path(), "" | "/")
                 && url.query().is_none()
                 && url.fragment().is_none(),
-            "官方房间 API 需要 HTTPS 根地址"
+            "SFMCL联机房间 API 需要 HTTPS 根地址"
         );
         Ok(Self {
             client: Client::builder()
@@ -159,7 +159,7 @@ impl RoomApi {
         let mut response = request.send().await.map_err(|_| ApiFailure {
             status: 0,
             retry_after: None,
-            message: "无法连接官方房间服务，请检查网络后重试",
+            message: "无法连接SFMCL联机房间服务，请检查网络后重试",
         })?;
         let status = response.status();
         let retry_after = response
@@ -172,24 +172,27 @@ impl RoomApi {
         while let Some(chunk) = response
             .chunk()
             .await
-            .map_err(|_| anyhow::anyhow!("读取官方房间服务失败"))?
+            .map_err(|_| anyhow::anyhow!("读取SFMCL联机房间服务失败"))?
         {
-            ensure!(bytes.len() + chunk.len() <= 16 * 1024, "官方房间响应过大");
+            ensure!(
+                bytes.len() + chunk.len() <= 16 * 1024,
+                "SFMCL联机房间响应过大"
+            );
             bytes.extend_from_slice(&chunk);
         }
-        let value: Value =
-            serde_json::from_slice(&bytes).map_err(|_| anyhow::anyhow!("官方房间服务响应无效"))?;
+        let value: Value = serde_json::from_slice(&bytes)
+            .map_err(|_| anyhow::anyhow!("SFMCL联机房间服务响应无效"))?;
         if !status.is_success() {
             let message = match value["error"]["code"].as_str().unwrap_or_default() {
                 "room_unavailable" => "房间不存在、已关闭或已过期，请向房主获取新邀请码",
-                "room_expired" | "room_closed" => "官方房间已关闭或已过期，请重新创建",
+                "room_expired" | "room_closed" => "SFMCL联机房间已关闭或已过期，请重新创建",
                 "owner_token_required" | "invalid_owner_token" => {
-                    "官方房间管理权限已失效，请重新创建"
+                    "SFMCL联机房间管理权限已失效，请重新创建"
                 }
                 "rate_limited" => "请求过于频繁，请稍后重试",
-                "active_room_limit" => "当前网络的官方房间数量已达上限，请先关闭闲置房间",
+                "active_room_limit" => "当前网络的SFMCL联机房间数量已达上限，请先关闭闲置房间",
                 "invalid_parameters" => "房间信息无效，请检查名称、版本、端口或 8 位邀请码",
-                _ => "官方房间服务暂不可用，请稍后重试",
+                _ => "SFMCL联机房间服务暂不可用，请稍后重试",
             };
             return Err(ApiFailure {
                 status: status.as_u16(),
@@ -212,8 +215,11 @@ impl RoomApi {
             )
             .await?;
         let resolved: Resolved =
-            serde_json::from_value(value).map_err(|_| anyhow::anyhow!("官方房间配置无效"))?;
-        ensure!(resolved.room.invite_code == code, "官方房间邀请码不匹配");
+            serde_json::from_value(value).map_err(|_| anyhow::anyhow!("SFMCL联机房间配置无效"))?;
+        ensure!(
+            resolved.room.invite_code == code,
+            "SFMCL联机房间邀请码不匹配"
+        );
         Ok(resolved)
     }
 
@@ -248,16 +254,16 @@ impl RoomApi {
             )
             .await?;
         let resolved: Resolved =
-            serde_json::from_value(value).map_err(|_| anyhow::anyhow!("官方房间配置无效"))?;
+            serde_json::from_value(value).map_err(|_| anyhow::anyhow!("SFMCL联机房间配置无效"))?;
         let token = resolved
             .owner_token
             .as_deref()
-            .context("官方房间未返回管理权限")?;
-        ensure!(token_valid(token), "官方房间管理凭据无效");
+            .context("SFMCL联机房间未返回管理权限")?;
+        ensure!(token_valid(token), "SFMCL联机房间管理凭据无效");
         let interval = resolved
             .heartbeat_interval_seconds
-            .context("官方房间未返回心跳间隔")?;
-        ensure!((1..=30).contains(&interval), "官方房间心跳间隔无效");
+            .context("SFMCL联机房间未返回心跳间隔")?;
+        ensure!((1..=30).contains(&interval), "SFMCL联机房间心跳间隔无效");
         let owner = Owner {
             api: self.clone(),
             id: resolved.room.id,
@@ -279,24 +285,24 @@ impl Resolved {
                 && self.room.game_port > 0
                 && token_valid(&self.easytier.network_secret)
                 && invitation::text_field(&self.easytier.network_name, 128),
-            "官方房间配置无效"
+            "SFMCL联机房间配置无效"
         );
         let host_ip: Ipv4Addr = self
             .room
             .host_virtual_ipv4
             .parse()
-            .map_err(|_| anyhow::anyhow!("官方房间虚拟地址无效"))?;
+            .map_err(|_| anyhow::anyhow!("SFMCL联机房间虚拟地址无效"))?;
         ensure!(
             host_ip.is_private() && (1..=254).contains(&host_ip.octets()[3]),
-            "官方房间虚拟地址无效"
+            "SFMCL联机房间虚拟地址无效"
         );
         ensure!(
             (1..=5).contains(&self.easytier.relay_urls.len()),
-            "官方联机节点配置无效"
+            "SFMCL联机节点配置无效"
         );
         for relay in &self.easytier.relay_urls {
             let url =
-                reqwest::Url::parse(relay).map_err(|_| anyhow::anyhow!("官方联机节点地址无效"))?;
+                reqwest::Url::parse(relay).map_err(|_| anyhow::anyhow!("SFMCL联机节点地址无效"))?;
             ensure!(
                 relay.len() <= 512
                     && matches!(url.scheme(), "tcp" | "udp" | "ws" | "wss" | "quic")
@@ -304,7 +310,7 @@ impl Resolved {
                     && url.port_or_known_default().is_some_and(|port| port > 0)
                     && url.username().is_empty()
                     && url.password().is_none(),
-                "官方联机节点地址无效"
+                "SFMCL联机节点地址无效"
             );
         }
         let code = normalize_code(&self.room.invite_code)?;
@@ -358,7 +364,7 @@ impl Owner {
                         biased;
                         _ = stopped.cancelled() => return Ok(()),
                         _ = session.cancelled() => return Ok(()),
-                        _ = tokio::time::sleep_until(expires) => anyhow::bail!("官方房间心跳超时，请重新创建"),
+                        _ = tokio::time::sleep_until(expires) => anyhow::bail!("SFMCL联机房间心跳超时，请重新创建"),
                         _ = tokio::time::sleep(delay) => {}
                     }
                     let started = Instant::now();
@@ -366,8 +372,8 @@ impl Owner {
                     // heartbeat race with explicit room closure.
                     match api.request(Method::POST, &format!("/api/rooms/{id}/heartbeat"), None, Some(&token)).await {
                         Ok(value) => {
-                            let room: Room = serde_json::from_value(value["room"].clone()).map_err(|_| anyhow::anyhow!("官方房间心跳响应无效"))?;
-                            ensure!(room.id == id, "官方房间心跳不匹配");
+                            let room: Room = serde_json::from_value(value["room"].clone()).map_err(|_| anyhow::anyhow!("SFMCL联机房间心跳响应无效"))?;
+                            ensure!(room.id == id, "SFMCL联机房间心跳不匹配");
                             expires = deadline(&room, started)?;
                             failures = 0;
                             delay = interval;
@@ -377,7 +383,7 @@ impl Owner {
                             if failure.is_some_and(|f| matches!(f.status, 401 | 403 | 404 | 410)) { return Err(error); }
                             failures += 1;
                             delay = Duration::from_secs(failure.and_then(|f| f.retry_after).unwrap_or((failures as u64 * 5).min(15)).min(86400));
-                            ensure!(Instant::now() + delay < expires, "官方房间心跳超时，请重新创建");
+                            ensure!(Instant::now() + delay < expires, "SFMCL联机房间心跳超时，请重新创建");
                         }
                     }
                 }
@@ -403,7 +409,7 @@ impl Lease {
         self.stop.cancel();
         let heartbeat = task
             .await
-            .context("官方房间心跳任务结束失败")
+            .context("SFMCL联机房间心跳任务结束失败")
             .and_then(|result| result);
         let closed = owner
             .api

@@ -168,7 +168,7 @@ impl Invitation {
         Ok(())
     }
     pub fn encode(&self) -> Result<String> {
-        ensure!(self.official.is_none(), "官方房间请使用 8 位邀请码");
+        ensure!(self.official.is_none(), "SFMCL联机房间请使用 8 位邀请码");
         self.validate()?;
         Ok(format!(
             "{}{}",
@@ -189,7 +189,7 @@ impl Invitation {
             (
                 value
                     .strip_prefix(PREFIX)
-                    .context("请输入完整的 SFMCL 联机邀请码")?,
+                    .context("请输入完整的自定义联机邀请码")?,
                 1,
             )
         };

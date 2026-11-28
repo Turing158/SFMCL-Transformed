@@ -63,6 +63,7 @@ export function resourceCenterFixture() {
     localItems,
     kind: "mod",
     selectedDirectory: null,
+    worldDatapacks: {},
   };
   window.__TAURI_INTERNALS__.invoke = async (command, args) => {
     if (command === "plugin:dialog|message") return "确认";
@@ -86,6 +87,64 @@ export function resourceCenterFixture() {
         setTimeout(resolve, state.delays[operation]),
       );
     if (state.failures[operation]) throw new Error(state.failures[operation]);
+    if (operation === "resources.datapacks.worlds") {
+      const item = localItems[payload.versionId]?.world[0];
+      if (!item) return [];
+      return [
+        {
+          id: item.path.split("/").at(-1),
+          name: item.name,
+          version: payload.versionId.split("-")[0],
+        },
+        { id: "backup", name: item.name, version: "1.19.4" },
+      ];
+    }
+    if (
+      operation.startsWith("resources.datapacks.") &&
+      operation !== "resources.datapacks.open"
+    ) {
+      const { versionId, worldId } = payload.target;
+      const key = JSON.stringify([versionId, worldId]);
+      const packs = (state.resources.worldDatapacks[key] ??= []);
+      if (operation === "resources.datapacks.list")
+        return { packs: structuredClone(packs) };
+      if (operation === "resources.datapacks.import") {
+        packs.push({
+          name: payload.path.split(/[/\\]/).at(-1),
+          description: "本地导入的数据包",
+          directory: false,
+          state: "pending",
+        });
+        return true;
+      }
+      if (operation === "resources.datapacks.edit") {
+        const index = packs.findIndex((pack) => pack.name === payload.name);
+        if (payload.action === "delete") packs.splice(index, 1);
+        else packs[index].state = payload.action === "enable" ? "enabled" : "disabled";
+        return true;
+      }
+      if (operation === "resources.datapacks.install") {
+        packs.push({
+          name: payload.file.path,
+          description: "在线安装的数据包",
+          directory: false,
+          state: "pending",
+        });
+        const jobId = `datapack-job-${state.tasks.jobs.length}`;
+        const world = localItems[versionId]?.world.find((item) => item.path.endsWith(`/${worldId}`));
+        state.tasks.jobs.push({
+          id: jobId,
+          title: payload.title,
+          status: "completed",
+          datapackWorld: world?.path,
+          currentStep: 0,
+          steps: [],
+          log: [],
+        });
+        return jobId;
+      }
+    }
+    if (operation === "resources.datapacks.open") return true;
     if (operation === "resources.categories") {
       if (state.resources.failCategories) throw new Error("分类服务暂不可用");
       return [

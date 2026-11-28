@@ -7,8 +7,10 @@ mod official;
 #[cfg(windows)]
 mod owned_process;
 mod session;
+mod terracotta;
 mod tunnel;
 pub use session::{CreateRequest, LaunchTarget, Multiplayer, Snapshot};
+pub use terracotta::Request as TerracottaRequest;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod integration_tests;

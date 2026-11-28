@@ -672,6 +672,46 @@ try {
     .getByRole("button", { name: "打开所在目录", exact: true })
     .click();
   expect((await last("path.open")).path).toContain("/saves/test.zip");
+  const datapacks = details.getByRole("region", { name: "数据包", exact: true });
+  await expect(datapacks).toContainText("此存档暂无数据包");
+  await page.evaluate(() => {
+    window.__pixelTest.resources.selectedDirectory = "C:/Pixel-Test/local.zip";
+  });
+  await datapacks.getByRole("button", { name: "导入本地 ZIP" }).click();
+  await expect(datapacks).toContainText("待游戏加载");
+  const localPack = datapacks.getByRole("listitem").filter({ hasText: "local.zip" });
+  await localPack.getByRole("button", { name: "启用 local.zip" }).click();
+  await expect(localPack).toContainText("已启用");
+  await localPack.getByRole("button", { name: "禁用 local.zip" }).click();
+  await expect(localPack).toContainText("已禁用");
+  await localPack.getByRole("button", { name: "删除 local.zip" }).click();
+  await answerConfirmation(page, false);
+  await expect(localPack).toBeVisible();
+  await localPack.getByRole("button", { name: "删除 local.zip" }).click();
+  await answerConfirmation(page, true);
+  await expect(localPack).toHaveCount(0);
+  await datapacks.getByRole("button", { name: "打开数据包目录" }).click();
+  expect(await last("resources.datapacks.open")).toMatchObject({
+    target: { versionId: "1.20.1-Fabric", worldId: "test.zip" },
+  });
+  await datapacks.getByRole("button", { name: "浏览数据包" }).click();
+  await expect(breadcrumbs).toContainText("1.20.1-Fabric 我的世界");
+  await page.getByRole("button", { name: "查看 Sodium 详情", exact: true }).click();
+  await page.getByRole("tab", { name: /^下载/ }).click();
+  await expect(page.locator("button.project-file")).toHaveCount(1);
+  await page.locator("button.project-file").click();
+  const install = page.getByRole("dialog");
+  await expect(install.getByRole("combobox", { name: "本地游戏版本" })).toBeDisabled();
+  await expect(install.getByRole("combobox", { name: "目标存档" })).toContainText("test.zip");
+  await install.getByRole("button", { name: "开始安装", exact: true }).click();
+  await expect(install).toHaveCount(0);
+  expect(await last("resources.datapacks.install")).toMatchObject({
+    target: { versionId: "1.20.1-Fabric", worldId: "test.zip" },
+  });
+  await back();
+  await back();
+  await expect(datapacks).toContainText("test-0.zip");
+  checks.push("World details can import, enable, disable and delete packs, then browse with a preselected world and refresh after an online install.");
   for (const theme of ["light", "dark"]) {
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value;

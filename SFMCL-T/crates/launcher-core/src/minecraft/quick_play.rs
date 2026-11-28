@@ -90,6 +90,7 @@ pub fn arguments(version: &Value, settings: &Settings, directory: &Path) -> Resu
 pub struct World {
     pub id: String,
     pub name: String,
+    pub version: String,
 }
 
 pub fn worlds(directory: &Path) -> Result<Vec<World>> {
@@ -111,7 +112,7 @@ pub fn worlds(directory: &Path) -> Result<Vec<World>> {
         if !level.is_file() {
             continue;
         }
-        let name = (|| -> Result<String> {
+        let (name, version) = (|| -> Result<(String, String)> {
             let mut bytes = Vec::new();
             std::fs::File::open(&level)?
                 .take(4 * 1024 * 1024 + 1)
@@ -120,10 +121,14 @@ pub fn worlds(directory: &Path) -> Result<Vec<World>> {
                 bail!("存档元数据过大");
             }
             let value = crate::resources::local::parse_world_data(&bytes)?;
-            Ok(value["Data"]["LevelName"].as_str().unwrap_or(&id).into())
+            let data = &value["Data"];
+            Ok((
+                data["LevelName"].as_str().unwrap_or(&id).into(),
+                data["Version"]["Name"].as_str().unwrap_or_default().into(),
+            ))
         })()
-        .unwrap_or_else(|_| id.clone());
-        worlds.push(World { id, name });
+        .unwrap_or_else(|_| (id.clone(), String::new()));
+        worlds.push(World { id, name, version });
     }
     worlds.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
     Ok(worlds)

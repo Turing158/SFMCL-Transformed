@@ -25,11 +25,12 @@ use sfmcl_t_core::{
     paths::{atomic_write, minecraft_root, safe_join},
     resources::{
         community::Community,
+        datapacks,
         install::{ModInstaller, Target as ModInstallTarget},
         local,
         modpacks::export::{ExportDraft, ExportPlanRequest, ExportTarget, ModpackExporter},
-        modpacks::{ModpackRequest, Modpacks, UrlResolver},
         modpacks::update::{self as modpack_update, ApplyRequest, PrepareRequest},
+        modpacks::{ModpackRequest, Modpacks, UrlResolver},
     },
     vault::Vault,
 };
@@ -245,10 +246,39 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
     }
     match op {
         "multiplayer.status" => Ok(json!(r.multiplayer.snapshot())),
-        "multiplayer.prepare" => Ok(json!(r.multiplayer.prepare(
-            p["archive"].as_str().map(PathBuf::from),
-            p["tunnel"].as_bool().unwrap_or(false),
-        )?)),
+        "multiplayer.prepare" => {
+            let archive = p["archive"].as_str().map(PathBuf::from);
+            Ok(json!(match p["service"].as_str() {
+                Some("terracotta") => r.multiplayer.prepare_terracotta(archive)?,
+                None | Some("official" | "custom") => r
+                    .multiplayer
+                    .prepare(archive, p["tunnel"].as_bool().unwrap_or(false))?,
+                _ => bail!("未知联机服务"),
+            }))
+        }
+        "multiplayer.terracotta.create" | "multiplayer.terracotta.join" => {
+            let request: sfmcl_t_core::multiplayer::TerracottaRequest =
+                decode(p).map_err(|_| anyhow::anyhow!("陶瓦房间参数无效"))?;
+            let host = op.ends_with(".create");
+            let (player, version) = if host {
+                let game =
+                    sfmcl_t_core::multiplayer::host_launch(&r.jobs, request.launch_id.as_deref())?
+                        .context("请先通过启动器启动游戏，再创建房间")?;
+                (Some(game.player_name), game.game_version)
+            } else {
+                let settings = r.settings.get();
+                let player = r
+                    .accounts
+                    .list()
+                    .into_iter()
+                    .find(|p| p.uuid == settings.active_player)
+                    .map(|p| p.name);
+                (player, String::new())
+            };
+            Ok(json!(r
+                .multiplayer
+                .terracotta_room(request, host, player, version)?))
+        }
         "multiplayer.preview" => Ok(json!(
             sfmcl_t_core::multiplayer::invitation::Invitation::decode(text(&p, "invitation")?)?
                 .preview()
@@ -781,6 +811,83 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                 tokio::task::spawn_blocking(move || local::scan(&root, &kind)).await??
             ))
         }
+        "resources.datapacks.worlds" => {
+            let root = r.resource_root(&p)?;
+            Ok(json!(
+                tokio::task::spawn_blocking(move || {
+                    sfmcl_t_core::minecraft::quick_play::worlds(&root)
+                })
+                .await??
+            ))
+        }
+        "resources.datapacks.list"
+        | "resources.datapacks.open"
+        | "resources.datapacks.import"
+        | "resources.datapacks.edit" => {
+            let selection = decode(p["target"].clone())?;
+            let store = r.settings.clone();
+            let jobs = r.jobs.clone();
+            let action = op.strip_prefix("resources.datapacks.").unwrap().to_owned();
+            let result = tokio::task::spawn_blocking(move || -> Result<Value> {
+                let settings = store.get();
+                let target = datapacks::Target::resolve(&settings, selection)?;
+                match action.as_str() {
+                    "list" => Ok(json!(datapacks::list(&target)?)),
+                    "open" => Ok(json!(target.open_folder(&settings, &jobs)?)),
+                    "import" => Ok(json!(datapacks::install_file(
+                        &target,
+                        &store,
+                        &jobs,
+                        Path::new(text(&p, "path")?),
+                        &Default::default(),
+                    )?)),
+                    "edit" => {
+                        let name = text(&p, "name")?;
+                        datapacks::edit(
+                            &target,
+                            &settings,
+                            &jobs,
+                            name,
+                            decode(p["action"].clone())?,
+                        )?;
+                        Ok(json!(true))
+                    }
+                    _ => unreachable!(),
+                }
+            })
+            .await??;
+            if op == "resources.datapacks.open" {
+                app.opener().open_path(
+                    result.as_str().context("数据包文件夹路径无效")?,
+                    None::<&str>,
+                )?;
+                return Ok(json!(true));
+            }
+            Ok(result)
+        }
+        "resources.datapacks.install" => {
+            let target =
+                datapacks::Target::resolve(&r.settings.get(), decode(p["target"].clone())?)?;
+            let title = format!("安装数据包 {}", text(&p, "title")?);
+            let community = r.community.clone();
+            let resolver: UrlResolver = Arc::new(move |url| {
+                let app = app.clone();
+                let community = community.clone();
+                Box::pin(async move {
+                    crate::curseforge_download::resolve_with_sources(&app, &url, &community).await
+                })
+            });
+            Ok(json!(datapacks::enqueue(
+                target,
+                decode(p["file"].clone())?,
+                title,
+                &r.directory,
+                resolver,
+                r.downloads.clone(),
+                r.jobs.clone(),
+                r.settings.clone(),
+            )?))
+        }
         "resources.localSize" => {
             let root = r.resource_root(&p)?;
             let kind = text(&p, "kind")?.to_owned();
@@ -934,9 +1041,11 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             let id = text(&p, "id")?.to_owned();
             Ok(tokio::task::spawn_blocking(move || modpack_update::info(&root, &id)).await??)
         }
-        "modpacks.update.versions" => {
-            Ok(json!(r.community.modpack_releases(text(&p, "source")?, text(&p, "projectId")?).await?))
-        }
+        "modpacks.update.versions" => Ok(json!(
+            r.community
+                .modpack_releases(text(&p, "source")?, text(&p, "projectId")?)
+                .await?
+        )),
         "modpacks.update.discover" => {
             let root = r.target_root(&p)?;
             let id = text(&p, "id")?.to_owned();
@@ -944,7 +1053,9 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             Ok(json!(tokio::time::timeout(
                 std::time::Duration::from_secs(40),
                 modpack_update::discover(&root, &id, &community)
-            ).await.context("在线整合包查询超时，请使用本地更新或稍后重试")??))
+            )
+            .await
+            .context("在线整合包查询超时，请使用本地更新或稍后重试")??))
         }
         "modpacks.update.prepare" => {
             let root = r.target_root(&p)?;
@@ -959,7 +1070,11 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
                     crate::curseforge_download::resolve_with_sources(&app, &url, &community).await
                 })
             });
-            Ok(json!(r.modpacks.prepare_update(request, r.installer.clone(), r.community.clone(), resolver).await?))
+            Ok(json!(
+                r.modpacks
+                    .prepare_update(request, r.installer.clone(), r.community.clone(), resolver)
+                    .await?
+            ))
         }
         "modpacks.update.plan" => Ok(json!(r.modpacks.updates.plan(text(&p, "token")?)?)),
         "modpacks.update.discard" => {
@@ -971,13 +1086,19 @@ async fn dispatch(app: tauri::AppHandle, r: Arc<Runtime>, op: &str, p: Value) ->
             let mut payload = p.clone();
             payload["root"] = json!(root);
             let request: ApplyRequest = decode(payload)?;
-            Ok(json!(r.modpacks.updates.start(request, r.installer.clone())?))
+            Ok(json!(r
+                .modpacks
+                .updates
+                .start(request, r.installer.clone())?))
         }
         "modpacks.update.restore" => {
             let root = r.target_root(&p)?;
             let id = text(&p, "id")?.to_owned();
             let backup = text(&p, "backupId")?.to_owned();
-            Ok(json!(tokio::task::spawn_blocking(move || modpack_update::restore(&root, &id, &backup)).await??))
+            Ok(json!(
+                tokio::task::spawn_blocking(move || modpack_update::restore(&root, &id, &backup))
+                    .await??
+            ))
         }
         "modpacks.install" => {
             let mut request: ModpackRequest = decode(p)?;

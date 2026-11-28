@@ -14,7 +14,7 @@ import {
   TabList,
   TabPanel,
 } from "../components";
-import type { Project, ResourceFile } from "../types";
+import type { DatapackBrowseTarget, Project, ResourceFile } from "../types";
 import { resourceTabNames, type ResourceTab } from "../navigation";
 import { ResourceSubpage } from "./ResourceSubpage";
 import { useTabContentTransition } from "../useTabContentTransition";
@@ -44,6 +44,7 @@ export function ProjectPage({
   view,
   onViewChange,
   initialTab = "description",
+  datapackTarget,
 }: {
   project: Project;
   kind: Exclude<ResourceTab, "minecraft">;
@@ -52,6 +53,7 @@ export function ProjectPage({
   view: ResourceView;
   onViewChange: (view: ResourceView) => void;
   initialTab?: "description" | "files";
+  datapackTarget?: DatapackBrowseTarget;
 }) {
   const app = useApp();
   const [detail, setDetail] = useState(project);
@@ -349,9 +351,14 @@ export function ProjectPage({
           title={detail.title}
           localizedName={detail.localizedName}
           kind={kind}
+          datapackTarget={datapackTarget}
           queued={queued}
           onQueued={(key) => setQueued((current) => [...current, key])}
-          onOpenDependency={async (dependency, target) => {
+          onOpenDependency={async (
+            dependency,
+            target,
+            selectedDatapackTarget,
+          ) => {
             if (!dependency.projectId) return;
             const project = await api<Project>("resources.detail", {
               source: detail.source,
@@ -376,6 +383,7 @@ export function ProjectPage({
                   returnTo: {
                     page: "resources",
                     tab: kind,
+                    datapackTarget,
                     returnTo:
                       app.route.page === "resources"
                         ? app.route.returnTo
@@ -407,6 +415,10 @@ export function ProjectPage({
                           ) || ""
                         : "",
                   },
+                  datapackTarget:
+                    dependencyKind === "datapack"
+                      ? selectedDatapackTarget
+                      : undefined,
                 });
               };
             } else {

@@ -19,6 +19,7 @@ import ReactMarkdown from "react-markdown";
 import { external } from "./api";
 import {
   Button,
+  CollapsiblePanel,
   Modal,
   PixelFrame,
   ResourceImage,
@@ -67,7 +68,7 @@ const icons: Record<HomeWidgetType, ReactNode> = {
 const widgetReorderOptions = {
   ...noticeReorderOptions,
   allowedControl:
-    ".notice-toggle, .home-announcement-toggle, .home-summary-action",
+    ".notice-toggle, .collapsible-panel-toggle, .home-summary-action",
   holdOnly: false,
   overlayClass: "home-widget-drag-overlay",
 };
@@ -153,38 +154,16 @@ function CustomAnnouncement({
     `HomeContent.announcement.${widget.id}`,
     false,
   );
-  const id = useId();
   return (
-    <article
-      className="panel has-surface home-widget-panel home-announcement"
-      data-open={open}
+    <CollapsiblePanel
+      className="home-widget-panel"
+      title={widget.title}
+      icon={FileText}
+      open={open}
+      onToggle={() => setOpen((value) => !value)}
     >
-      <PixelFrame />
-      <h2>
-        <button
-          type="button"
-          className="home-announcement-toggle"
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <FileText size={17} aria-hidden="true" />
-          <span>{widget.title}</span>
-          <ChevronDown size={18} aria-hidden="true" />
-        </button>
-      </h2>
-      <div
-        className="home-announcement-reveal"
-        aria-hidden={!open}
-        inert={!open}
-      >
-        <div>
-          <div id={id} className="home-widget-body">
-            <ContentMarkdown>{widget.content}</ContentMarkdown>
-          </div>
-        </div>
-      </div>
-    </article>
+      <ContentMarkdown>{widget.content}</ContentMarkdown>
+    </CollapsiblePanel>
   );
 }
 function FixedWidget({

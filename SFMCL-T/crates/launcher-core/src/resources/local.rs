@@ -78,7 +78,7 @@ pub(super) fn read_entry<R: Read + std::io::Seek>(
     entry.read_to_end(&mut bytes)?;
     Ok(bytes)
 }
-fn plain_text(value: &Value) -> String {
+pub(super) fn plain_text(value: &Value) -> String {
     if let Some(text) = value.as_str() {
         text.into()
     } else if let Some(array) = value.as_array() {

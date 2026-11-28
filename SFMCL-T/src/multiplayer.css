@@ -45,12 +45,13 @@
   :is(button, input, textarea):not([type="hidden"], [role="tab"]) {
   animation: multiplayer-control-in 320ms var(--multiplayer-motion-easing);
 }
-.multiplayer-page button:is(:hover, :focus-visible):not(:disabled) {
+.multiplayer-page
+  button:is(:hover, :focus-visible):not(:disabled, .collapsible-panel-toggle) {
   filter: drop-shadow(
     0 4px 0 color-mix(in srgb, var(--accent), transparent 82%)
   );
 }
-.multiplayer-page button:active:not(:disabled) {
+.multiplayer-page button:active:not(:disabled, .collapsible-panel-toggle) {
   scale: 0.97;
   transition-duration: 90ms;
 }
@@ -65,15 +66,19 @@
   outline-offset: 4px;
 }
 .multiplayer-page
-  button:is(:hover, :focus-visible):not(:disabled)
+  button:is(:hover, :focus-visible):not(:disabled, .collapsible-panel-toggle)
   > svg:not(.pixel-icon, .spin) {
   transform: rotate(-6deg) scale(1.1);
 }
-.multiplayer-page button > svg:not(.pixel-icon, .spin),
+.multiplayer-page
+  button:where(:not(.collapsible-panel-toggle))
+  > svg:not(.pixel-icon, .spin),
 .multiplayer-page .tab-content > svg {
   transition: transform 220ms var(--multiplayer-motion-easing);
 }
-.multiplayer-page button:active:not(:disabled) > svg:not(.pixel-icon, .spin) {
+.multiplayer-page
+  button:active:not(:disabled, .collapsible-panel-toggle)
+  > svg:not(.pixel-icon, .spin) {
   transform: scale(0.94);
 }
 .multiplayer-page :is(.pixel-input, .pixel-select-trigger) {
@@ -167,7 +172,7 @@
 }
 .multiplayer-page > .page-heading {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   column-gap: 20px;
   row-gap: 0;
 }
@@ -213,6 +218,15 @@
 }
 .multiplayer-service-tabs {
   margin: 0;
+}
+.multiplayer-terracotta-options {
+  margin-block: 16px;
+}
+.multiplayer-terracotta-options .collapsible-panel-toggle {
+  padding-block: 10px;
+}
+.multiplayer-terracotta-options .multiplayer-field:last-child {
+  margin-bottom: 0;
 }
 .multiplayer-service-tabs .tab-items {
   width: 100%;
@@ -330,6 +344,22 @@
 .multiplayer-official-code small {
   display: block;
   margin-bottom: 6px;
+}
+.multiplayer-official-code[data-terracotta] {
+  flex-wrap: wrap;
+}
+.multiplayer-official-code[data-terracotta] code {
+  font-size: clamp(14px, 3.5cqw, 20px);
+  letter-spacing: 0.035em;
+  overflow-wrap: anywhere;
+}
+@container multiplayer (max-width: 550px) {
+  .multiplayer-session-heading {
+    flex-wrap: wrap;
+  }
+  .multiplayer-service-tabs .tab-items > button {
+    padding-inline: 6px;
+  }
 }
 .multiplayer-official-code code {
   font-size: 22px;
@@ -530,6 +560,15 @@
 }
 .multiplayer-room .tabs {
   margin-bottom: 24px;
+}
+.multiplayer-room:has(.error-banner[data-tone="info"]) > .tabs {
+  margin-bottom: 12px;
+}
+.multiplayer-room .error-banner[data-tone="info"] .inline-error {
+  margin-block: 0;
+}
+.multiplayer-room .error-banner[data-tone="info"] + .multiplayer-terracotta-options {
+  margin-block-start: 12px;
 }
 .multiplayer-room .tab-items {
   width: 100%;

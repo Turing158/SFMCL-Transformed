@@ -43,6 +43,8 @@ pub struct JobSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mod_update_path: Option<std::path::PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub datapack_world: Option<std::path::PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch: Option<LaunchContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crash_report: Option<crate::minecraft::crash::CrashReport>,
@@ -60,6 +62,9 @@ pub struct Job {
 impl Job {
     pub(crate) fn set_mod_update_path(&self, path: std::path::PathBuf) {
         self.update(|snapshot| snapshot.mod_update_path = Some(path));
+    }
+    pub(crate) fn set_datapack_world(&self, path: std::path::PathBuf) {
+        self.update(|snapshot| snapshot.datapack_world = Some(path));
     }
     pub fn initialize_commands(&self, pre_launch: bool, post_exit: bool) {
         use crate::minecraft::commands::{CommandRun, CommandRuns};
@@ -304,6 +309,7 @@ impl Jobs {
                 log: vec![],
                 created_at: now(),
                 mod_update_path: None,
+                datapack_world: None,
                 launch: None,
                 crash_report: None,
                 command_runs: None,

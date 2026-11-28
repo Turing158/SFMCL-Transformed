@@ -4,6 +4,7 @@ import { api, desktop } from "./api";
 import { usePageActive } from "./PageActivity";
 import { useApp } from "./store";
 
+export type MultiplayerService = "official" | "terracotta" | "custom";
 export type MultiplayerSnapshot = {
   state:
     | "idle"
@@ -18,6 +19,10 @@ export type MultiplayerSnapshot = {
   componentVersion: string;
   tunnelReady: boolean;
   tunnelVersion: string;
+  terracottaReady: boolean;
+  terracottaVersion: string;
+  terracottaUnavailable?: string | null;
+  terracottaPhase?: string | null;
   componentJobId: string | null;
   role: "host" | "guest" | null;
   name: string;
@@ -33,7 +38,7 @@ export type MultiplayerSnapshot = {
     local: boolean;
   }[];
   error: string | null;
-  service?: "official" | "custom" | null;
+  service?: MultiplayerService | null;
   inviteCode?: string | null;
 };
 type InvitationPreview = { name: string; gameVersion: string; server: string };
@@ -44,6 +49,8 @@ const initial: MultiplayerSnapshot = {
   componentVersion: "2.6.4",
   tunnelReady: false,
   tunnelVersion: "2026.10.7",
+  terracottaReady: false,
+  terracottaVersion: "0.4.2",
   componentJobId: null,
   role: null,
   name: "",
@@ -61,7 +68,7 @@ export function useMultiplayer() {
     "useMultiplayer.mode",
     "create",
   );
-  const [service, setService] = useSessionState<"official" | "custom">(
+  const [service, setService] = useSessionState<MultiplayerService>(
     "useMultiplayer.service",
     "official",
   );
@@ -79,11 +86,20 @@ export function useMultiplayer() {
     "",
   );
   // Credentials stay in memory; never persist or log the draft.
-  const [invitation, setInvitation] = useSessionState(
-    "useMultiplayer.invitation",
+  const [drafts, setDrafts] = useSessionState("useMultiplayer.invitations", {
+    official: "",
+    terracotta: "",
+    custom: "",
+  });
+  const invitation = drafts[service];
+  const [oldRoom, setOldRoom] = useSessionState(
+    "useMultiplayer.terracotta.room",
     "",
   );
-  const invitationDrafts = useRef({ official: "", custom: "" });
+  const [nodes, setNodes] = useSessionState(
+    "useMultiplayer.terracotta.nodes",
+    "",
+  );
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
   const [snapshot, setSnapshot] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -154,11 +170,13 @@ export function useMultiplayer() {
   }, [active, snapshot.error, snapshot.sessionId, reportError]);
   useEffect(() => {
     if (snapshot.role === "guest" && snapshot.state === "ready") {
-      setInvitation("");
+      const current = snapshot.service ?? service;
+      setDrafts((previous) =>
+        previous[current] ? { ...previous, [current]: "" } : previous,
+      );
       setPreview(null);
-      invitationDrafts.current[service] = "";
     }
-  }, [snapshot.role, snapshot.state, service]);
+  }, [snapshot.role, snapshot.state, snapshot.service, service, setDrafts]);
   async function action(operation: string, payload: unknown = {}) {
     if (pending.current) return;
     pending.current = true;
@@ -171,8 +189,9 @@ export function useMultiplayer() {
       setStatusUnavailable(false);
       statusErrorReported.current = false;
       if (operation === "multiplayer.leave") {
-        invitationDrafts.current[service] = "";
-        setInvitation("");
+        const current = snapshot.service ?? service;
+        setDrafts((previous) => ({ ...previous, [current]: "" }));
+        if (current === "terracotta") setOldRoom("");
         setPreview(null);
       }
       return result;
@@ -186,16 +205,15 @@ export function useMultiplayer() {
   function changeInvitation(value: string) {
     previewGeneration.current++;
     setInspecting(false);
-    invitationDrafts.current[service] = value;
-    setInvitation(value);
+    setDrafts((previous) => ({ ...previous, [service]: value }));
     setPreview(null);
   }
-  function changeService(value: "official" | "custom") {
+  function changeService(value: MultiplayerService) {
     previewGeneration.current++;
     setInspecting(false);
-    invitationDrafts.current[service] = invitation;
     setService(value);
-    setInvitation(invitationDrafts.current[value]);
+    portGeneration.current++;
+    setCheckingPort(false);
     setPreview(null);
   }
   function changePort(value: string) {
@@ -271,6 +289,10 @@ export function useMultiplayer() {
     setHostLaunchId,
     invitation,
     changeInvitation,
+    oldRoom,
+    setOldRoom,
+    nodes,
+    setNodes,
     preview,
     inspect,
     snapshot,

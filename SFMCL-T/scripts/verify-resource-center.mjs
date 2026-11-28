@@ -959,10 +959,23 @@ try {
       loader: "datapack",
     });
     await page.locator("button.project-file").press("Enter");
-    await expect(dialog.getByRole("tab")).toHaveText(["下载到文件夹"]);
+    await expect(dialog.getByRole("tab")).toHaveText(["安装到存档", "下载到文件夹"]);
     await expect(
       dialog.getByRole("combobox", { name: "本地游戏版本" }),
-    ).toHaveCount(0);
+    ).toContainText("1.20.1-Fabric");
+    const install = dialog.getByRole("button", { name: "开始安装", exact: true });
+    await expect(install).toBeDisabled();
+    await select("目标存档", "1.20.1-Fabric 我的世界 · backup · 1.19.4");
+    await expect(dialog).toContainText("上次由 Minecraft 1.19.4 保存");
+    await expect(install).toBeEnabled();
+    await install.click();
+    await expect(dialog).toHaveCount(0);
+    expect(await last("resources.datapacks.install")).toMatchObject({
+      target: { versionId: "1.20.1-Fabric", worldId: "backup" },
+      file: { path: "test-0.zip" },
+    });
+    await page.locator("button.project-file").click();
+    await dialog.getByRole("tab", { name: "下载到文件夹", exact: true }).click();
     await expect(dialog).toContainText("存档的 datapacks 文件夹");
     await expect(submitDownload).toBeDisabled();
     await page.evaluate(() => {
@@ -1009,6 +1022,7 @@ try {
     });
     expect(await last("resources.download")).not.toHaveProperty("versionId");
     await page.locator("button.project-file").click();
+    await dialog.getByRole("tab", { name: "下载到文件夹", exact: true }).click();
     await dialog
       .getByRole("button", { name: "选择文件夹", exact: true })
       .click();
@@ -1022,7 +1036,7 @@ try {
     await settled();
   }
   checks.push(
-    "Datapack browsing supports both sources and game-version filtering, requests only datapack files, downloads ZIPs to a chosen folder, explains the world directory, and handles cancel, failure/retry, duplicates and narrow layouts",
+    "Datapacks from both sources install to the selected world or download to a folder. The dialog distinguishes same-named worlds and supports cancel, retry, duplicate folder downloads and narrow layouts.",
   );
 
   await page.evaluate(() => {
@@ -1051,7 +1065,7 @@ try {
   );
   await expect(page.locator("button.project-file")).toHaveCount(1);
   await page.locator("button.project-file").click();
-  await expect(dialog.getByRole("tab")).toHaveText(["下载到文件夹"]);
+  await expect(dialog.getByRole("tab")).toHaveText(["安装到存档", "下载到文件夹"]);
   await page.keyboard.press("Escape");
   await backToList();
   await expect(

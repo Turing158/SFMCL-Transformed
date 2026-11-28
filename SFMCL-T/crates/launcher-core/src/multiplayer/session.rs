@@ -2,7 +2,7 @@ use super::{
     components,
     engine::{self, Engine, Member},
     invitation::{self, Invitation},
-    minecraft, official, tunnel,
+    minecraft, official, terracotta, tunnel,
 };
 use crate::{
     downloads::DownloadManager,
@@ -18,6 +18,9 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 
+#[path = "terracotta/session.rs"]
+mod terracotta_session;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -27,6 +30,10 @@ pub struct Snapshot {
     pub component_version: &'static str,
     pub tunnel_ready: bool,
     pub tunnel_version: String,
+    pub terracotta_version: &'static str,
+    pub terracotta_ready: bool,
+    pub terracotta_unavailable: Option<String>,
+    pub terracotta_phase: Option<String>,
     pub component_job_id: Option<String>,
     pub role: Option<String>,
     pub name: String,
@@ -39,6 +46,16 @@ pub struct Snapshot {
     pub invite_code: Option<String>,
 }
 impl Snapshot {
+    fn cleared(&self) -> Self {
+        Self {
+            component_ready: self.component_ready,
+            tunnel_ready: self.tunnel_ready,
+            tunnel_version: self.tunnel_version.clone(),
+            terracotta_ready: self.terracotta_ready,
+            terracotta_unavailable: self.terracotta_unavailable.clone(),
+            ..Default::default()
+        }
+    }
     pub fn has_room(&self) -> bool {
         self.session_id.is_some() && self.role.is_some() && self.state != "preparing"
     }
@@ -53,6 +70,10 @@ impl Default for Snapshot {
             component_version: components::VERSION,
             tunnel_ready: false,
             tunnel_version: tunnel::VERSION.into(),
+            terracotta_version: terracotta::component::VERSION,
+            terracotta_ready: false,
+            terracotta_unavailable: None,
+            terracotta_phase: None,
             component_job_id: None,
             role: None,
             name: String::new(),
@@ -138,6 +159,11 @@ impl Multiplayer {
         let snapshot = Snapshot {
             component_ready: components::installed(&directory),
             tunnel_ready: tunnel::installed(&directory),
+            terracotta_unavailable: terracotta::component::release()
+                .err()
+                .map(|e| e.to_string()),
+            terracotta_ready: terracotta::component::release()
+                .is_ok_and(|r| r.installed(&directory)),
             ..Default::default()
         };
         Arc::new(Self {
@@ -200,9 +226,6 @@ impl Multiplayer {
         let id = uuid::Uuid::new_v4().to_string();
         let cancel = CancellationToken::new();
         let done = CancellationToken::new();
-        let previous_ready = state.snapshot.component_ready;
-        let previous_tunnel_ready = state.snapshot.tunnel_ready;
-        let previous_tunnel_version = state.snapshot.tunnel_version.clone();
         let prepare_tunnel =
             prepare_tunnel || (host && invite.as_ref().is_some_and(Invitation::uses_tunnel));
         let job = self.jobs.create(
@@ -231,9 +254,6 @@ impl Multiplayer {
         state.snapshot = Snapshot {
             state: "preparing".into(),
             session_id: Some(id.clone()),
-            component_ready: previous_ready,
-            tunnel_ready: previous_tunnel_ready,
-            tunnel_version: previous_tunnel_version,
             component_job_id: Some(job.snapshot().id),
             role: invite
                 .as_ref()
@@ -259,7 +279,7 @@ impl Multiplayer {
                     .as_ref()
                     .map(|network| network.invite_code.clone())
             }),
-            ..Default::default()
+            ..state.snapshot.cleared()
         };
         state.active = Some(Active {
             id: id.clone(),
@@ -333,25 +353,23 @@ impl Multiplayer {
             } else {
                 outcome
             };
-            let mut state = manager.lock();
-            if state.active.as_ref().is_some_and(|active| active.id == id) {
-                state.active = None;
-                let ready = state.snapshot.component_ready;
-                state.snapshot = Snapshot {
-                    component_ready: ready,
-                    tunnel_ready: state.snapshot.tunnel_ready,
-                    tunnel_version: state.snapshot.tunnel_version.clone(),
-                    ..Default::default()
-                };
-                if let Err(error) = outcome {
-                    state.snapshot.state = "failed".into();
-                    state.snapshot.error = Some(error.to_string());
-                }
-            }
+            manager.finish(&id, outcome);
             done.cancel();
         });
         Ok(snapshot)
     }
+    fn finish(&self, id: &str, outcome: Result<()>) {
+        let mut state = self.lock();
+        if state.active.as_ref().is_some_and(|active| active.id == id) {
+            state.active = None;
+            state.snapshot = state.snapshot.cleared();
+            if let Err(error) = outcome {
+                state.snapshot.state = "failed".into();
+                state.snapshot.error = Some(error.to_string());
+            }
+        }
+    }
+
     pub fn prepare(self: &Arc<Self>, archive: Option<PathBuf>, tunnel: bool) -> Result<Snapshot> {
         self.begin(None, false, String::new(), archive, None, tunnel)
     }
@@ -427,6 +445,13 @@ impl Multiplayer {
             .as_ref()
             .filter(|active| active.id == id && active.host)
             .context("当前房间已失效")?;
+        if state.snapshot.service == Some("terracotta") {
+            return state
+                .snapshot
+                .invite_code
+                .clone()
+                .context("陶瓦邀请码尚未就绪");
+        }
         let invite = active.invite.as_ref().context("房间未创建")?;
         if let Some(network) = &invite.official {
             Ok(network.invite_code.clone())

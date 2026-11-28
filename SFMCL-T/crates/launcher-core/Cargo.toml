@@ -20,6 +20,7 @@ hex = "0.4"
 md-5 = "0.10"
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "multipart"] }
+same-file = "1"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -37,7 +38,7 @@ unrar = "0.5"
 tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_System_Memory", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_Graphics_Gdi"] }
+windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_System_Memory", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_SystemInformation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock"] }
 winreg = "0.56"
 
 [dev-dependencies]
